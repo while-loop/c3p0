@@ -28,7 +28,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
-    private var desiredUnitSystem: UnitSystem = UnitSystem.Metric
+    private var desiredUnitSystem: UnitSystem = UnitSystem.Imperial
     private var isSyncingUnitSystem = false
 
     private val SERVICE_UUID = UUID.fromString("0000fe00-0000-1000-8000-00805f9b34fb")

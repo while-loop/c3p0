@@ -31,7 +31,7 @@ class SettingsRepository @Inject constructor(
     val watchAddress: Flow<String?> = context.dataStore.data.map { it[Keys.WATCH_ADDRESS] }
     val unitSystem: Flow<UnitSystem> = context.dataStore.data.map { preferences ->
         preferences[Keys.UNIT_SYSTEM]?.let { runCatching { UnitSystem.valueOf(it) }.getOrNull() }
-            ?: UnitSystem.Metric
+            ?: UnitSystem.Imperial
     }
     val skipInactiveDeviceWarning: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.SKIP_INACTIVE_DEVICE_WARNING] ?: false

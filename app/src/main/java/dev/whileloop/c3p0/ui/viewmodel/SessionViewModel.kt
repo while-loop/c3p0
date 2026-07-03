@@ -75,7 +75,7 @@ class SessionViewModel @Inject constructor(
     val unitSystem = settingsRepository.unitSystem.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
-        UnitSystem.Metric
+        UnitSystem.Imperial
     )
 
     val skipInactiveDeviceWarning = settingsRepository.skipInactiveDeviceWarning.stateIn(
