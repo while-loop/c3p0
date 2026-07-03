@@ -34,6 +34,8 @@ class SessionViewModel @Inject constructor(
     private var elapsedJob: Job? = null
     private var heartRateHistoryJob: Job? = null
     private var statsStarted = false
+    private var activeHeartRateTotal = 0
+    private var activeHeartRateSampleCount = 0
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
     val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
@@ -216,6 +218,8 @@ class SessionViewModel @Inject constructor(
             _sessionElapsedSeconds.value = 0
             _heartRateHistory.value = emptyList()
             _averageHeartRate.value = 0
+            activeHeartRateTotal = 0
+            activeHeartRateSampleCount = 0
         }
 
         elapsedJob?.cancel()
@@ -229,11 +233,14 @@ class SessionViewModel @Inject constructor(
         heartRateHistoryJob?.cancel()
         heartRateHistoryJob = viewModelScope.launch {
             heartRateManager.heartRate.collect { heartRate ->
+                if (sessionManager.isSessionPaused.value) return@collect
                 if (heartRate <= 0) return@collect
 
                 val updated = (_heartRateHistory.value + heartRate).takeLast(MAX_HEART_RATE_SAMPLES)
                 _heartRateHistory.value = updated
-                _averageHeartRate.value = updated.average().toInt()
+                activeHeartRateTotal += heartRate
+                activeHeartRateSampleCount += 1
+                _averageHeartRate.value = activeHeartRateTotal / activeHeartRateSampleCount
             }
         }
     }
