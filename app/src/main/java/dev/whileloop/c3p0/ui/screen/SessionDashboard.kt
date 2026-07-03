@@ -162,7 +162,7 @@ fun SessionDashboard(
             heartRates = heartRateHistory,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .height(170.dp)
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -253,9 +253,10 @@ private fun HeartRateHistoryChart(
     heartRates: List<Int>,
     modifier: Modifier = Modifier
 ) {
-    val lineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val zoneColors = heartRateZoneColors()
+    val yAxisLabels = listOf(190, 160, 130, 100, 70)
 
     Column(modifier = modifier) {
         Row(
@@ -267,50 +268,126 @@ private fun HeartRateHistoryChart(
             Text("${heartRates.size} samples", style = MaterialTheme.typography.labelSmall, color = labelColor)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Canvas(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            val width = size.width
-            val height = size.height
-            val padding = 8.dp.toPx()
-            val chartHeight = height - padding * 2
-            val chartWidth = width - padding * 2
-
-            repeat(3) { index ->
-                val y = padding + chartHeight * index / 2f
-                drawLine(
-                    color = gridColor,
-                    start = androidx.compose.ui.geometry.Offset(padding, y),
-                    end = androidx.compose.ui.geometry.Offset(width - padding, y),
-                    strokeWidth = 1.dp.toPx()
-                )
+            Column(
+                modifier = Modifier
+                    .width(36.dp)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                yAxisLabels.forEach { label ->
+                    Text(
+                        text = label.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = labelColor
+                    )
+                }
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Canvas(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f)
+            ) {
+                val width = size.width
+                val height = size.height
+                val padding = 8.dp.toPx()
+                val chartHeight = height - padding * 2
+                val chartWidth = width - padding * 2
+                val minHr = CHART_MIN_HEART_RATE
+                val maxHr = CHART_MAX_HEART_RATE
+                val range = maxHr - minHr
 
-            if (heartRates.size < 2) return@Canvas
+                yAxisLabels.forEach { label ->
+                    val y = padding + chartHeight - ((label - minHr).toFloat() / range * chartHeight)
+                    drawLine(
+                        color = gridColor,
+                        start = androidx.compose.ui.geometry.Offset(padding, y),
+                        end = androidx.compose.ui.geometry.Offset(width - padding, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
 
-            val minHr = (heartRates.minOrNull() ?: 60).coerceAtMost(60)
-            val maxHr = (heartRates.maxOrNull() ?: 180).coerceAtLeast(180)
-            val range = (maxHr - minHr).coerceAtLeast(1)
-            val xStep = chartWidth / (heartRates.size - 1).coerceAtLeast(1)
-            var previousX = padding
-            var previousY = padding + chartHeight - ((heartRates.first() - minHr).toFloat() / range * chartHeight)
+                if (heartRates.size < 2) return@Canvas
 
-            heartRates.drop(1).forEachIndexed { index, heartRate ->
-                val x = padding + xStep * (index + 1)
-                val y = padding + chartHeight - ((heartRate - minHr).toFloat() / range * chartHeight)
-                drawLine(
-                    color = lineColor,
-                    start = androidx.compose.ui.geometry.Offset(previousX, previousY),
-                    end = androidx.compose.ui.geometry.Offset(x, y),
-                    strokeWidth = 3.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                previousX = x
-                previousY = y
+                val xStep = chartWidth / (heartRates.size - 1).coerceAtLeast(1)
+                var previousX = padding
+                var previousY = heartRateY(heartRates.first(), minHr, range, padding, chartHeight)
+
+                heartRates.drop(1).forEachIndexed { index, heartRate ->
+                    val x = padding + xStep * (index + 1)
+                    val y = heartRateY(heartRate, minHr, range, padding, chartHeight)
+                    drawLine(
+                        color = zoneColors[heartRateZone(heartRate)],
+                        start = androidx.compose.ui.geometry.Offset(previousX, previousY),
+                        end = androidx.compose.ui.geometry.Offset(x, y),
+                        strokeWidth = 3.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    previousX = x
+                    previousY = y
+                }
             }
         }
+        Spacer(modifier = Modifier.height(6.dp))
+        HeartRateZoneLegend(zoneColors)
+    }
+}
+
+@Composable
+private fun heartRateZoneColors(): List<Color> = listOf(
+    MaterialTheme.colorScheme.outline,
+    Color(0xFF3B82F6),
+    Color(0xFF22C55E),
+    Color(0xFFF59E0B),
+    Color(0xFFEF4444)
+)
+
+@Composable
+private fun HeartRateZoneLegend(zoneColors: List<Color>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        zoneColors.forEachIndexed { index, color ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Z$index", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+private fun heartRateY(
+    heartRate: Int,
+    minHeartRate: Int,
+    range: Int,
+    padding: Float,
+    chartHeight: Float
+): Float {
+    val clampedHeartRate = heartRate.coerceIn(minHeartRate, minHeartRate + range)
+    return padding + chartHeight - ((clampedHeartRate - minHeartRate).toFloat() / range * chartHeight)
+}
+
+private fun heartRateZone(heartRate: Int): Int {
+    val percentOfMax = heartRate.toFloat() / CHART_MAX_HEART_RATE
+    return when {
+        percentOfMax < 0.50f -> 0
+        percentOfMax < 0.60f -> 1
+        percentOfMax < 0.70f -> 2
+        percentOfMax < 0.80f -> 3
+        else -> 4
     }
 }
 
@@ -442,3 +519,6 @@ fun formatElapsedTime(seconds: Int): String {
 
 private fun heartRateValue(heartRate: Int): String =
     if (heartRate > 0) heartRate.toString() else "---"
+
+private const val CHART_MIN_HEART_RATE = 50
+private const val CHART_MAX_HEART_RATE = 190
