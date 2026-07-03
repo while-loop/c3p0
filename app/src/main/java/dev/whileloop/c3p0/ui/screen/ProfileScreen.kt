@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,6 +37,8 @@ fun ProfileScreen(
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
+    val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
+    val isRefreshingWeight by viewModel.isRefreshingWeight.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
     val watchAddress by viewModel.watchAddress.collectAsState()
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
@@ -45,7 +49,11 @@ fun ProfileScreen(
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
-        viewModel.toggleHealthConnect(granted.containsAll(healthConnectPermissions))
+        val enabled = granted.containsAll(healthConnectPermissions)
+        viewModel.toggleHealthConnect(enabled)
+        if (enabled) {
+            viewModel.refreshWeightFromHealthConnect()
+        }
     }
 
     LaunchedEffect(launchHealthConnectPermissions) {
@@ -131,18 +139,41 @@ fun ProfileScreen(
         Text("Integrations", style = MaterialTheme.typography.titleMedium)
         ListItem(
             headlineContent = { Text("Health Connect") },
-            supportingContent = { Text("Sync training sessions") },
+            supportingContent = {
+                Text(
+                    bodyWeightKg?.let { "Sync training sessions. Weight: ${formatWeight(it, unitSystem)}" }
+                        ?: "Sync training sessions. Weight not synced"
+                )
+            },
             trailingContent = {
-                Switch(
-                    checked = isHealthConnectEnabled,
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            showHealthConnectPermissionSheet = true
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            if (isHealthConnectEnabled) {
+                                viewModel.refreshWeightFromHealthConnect()
+                            } else {
+                                showHealthConnectPermissionSheet = true
+                            }
+                        },
+                        enabled = !isRefreshingWeight
+                    ) {
+                        if (isRefreshingWeight) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            viewModel.toggleHealthConnect(false)
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh Health Connect weight")
                         }
                     }
-                )
+                    Switch(
+                        checked = isHealthConnectEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                showHealthConnectPermissionSheet = true
+                            } else {
+                                viewModel.toggleHealthConnect(false)
+                            }
+                        }
+                    )
+                }
             }
         )
         ListItem(
@@ -252,3 +283,10 @@ private fun openHealthConnectStorePage(context: android.content.Context) {
         context.startActivity(webIntent)
     }
 }
+
+private fun formatWeight(weightKg: Double, unitSystem: UnitSystem): String =
+    if (unitSystem == UnitSystem.Imperial) {
+        String.format(java.util.Locale.US, "%.0f lb", weightKg * 2.2046226218)
+    } else {
+        String.format(java.util.Locale.US, "%.1f kg", weightKg)
+    }

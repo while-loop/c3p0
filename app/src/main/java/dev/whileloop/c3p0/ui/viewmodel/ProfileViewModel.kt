@@ -8,6 +8,7 @@ import dev.whileloop.c3p0.ble.manager.HeartRateManager
 import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
+import dev.whileloop.c3p0.health.HealthConnectManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +22,8 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val treadmillManager: TreadmillManager,
-    private val heartRateManager: HeartRateManager
+    private val heartRateManager: HeartRateManager,
+    private val healthConnectManager: HealthConnectManager
 ) : ViewModel() {
     private val _stepGoal = MutableStateFlow(10000)
     val stepGoal = _stepGoal.asStateFlow()
@@ -35,6 +37,9 @@ class ProfileViewModel @Inject constructor(
     private val _isGoogleDriveSyncEnabled = MutableStateFlow(false)
     val isGoogleDriveSyncEnabled = _isGoogleDriveSyncEnabled.asStateFlow()
 
+    private val _isRefreshingWeight = MutableStateFlow(false)
+    val isRefreshingWeight = _isRefreshingWeight.asStateFlow()
+
     val unitSystem = settingsRepository.unitSystem.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -45,6 +50,12 @@ class ProfileViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         false
+    )
+
+    val bodyWeightKg = settingsRepository.bodyWeightKg.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
     )
 
     val treadmillAddress = settingsRepository.treadmillAddress.stateIn(
@@ -129,6 +140,16 @@ class ProfileViewModel @Inject constructor(
     fun updateSkipInactiveDeviceWarning(skip: Boolean) {
         viewModelScope.launch {
             settingsRepository.saveSkipInactiveDeviceWarning(skip)
+        }
+    }
+
+    fun refreshWeightFromHealthConnect() {
+        viewModelScope.launch {
+            _isRefreshingWeight.value = true
+            healthConnectManager.readLatestWeightKg()?.let { weightKg ->
+                settingsRepository.saveBodyWeightKg(weightKg)
+            }
+            _isRefreshingWeight.value = false
         }
     }
 }

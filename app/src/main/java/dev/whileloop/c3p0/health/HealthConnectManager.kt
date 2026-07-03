@@ -7,12 +7,14 @@ import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import timber.log.Timber
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +52,28 @@ class HealthConnectManager @Inject constructor(
         }
     }
 
+    suspend fun readLatestWeightKg(): Double? {
+        if (!hasAllPermissions()) return null
+
+        return try {
+            val response = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = WeightRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        Instant.now().minus(730, ChronoUnit.DAYS),
+                        Instant.now()
+                    ),
+                    ascendingOrder = false,
+                    pageSize = 1
+                )
+            )
+            response.records.firstOrNull()?.weight?.inKilograms
+        } catch (e: Exception) {
+            Timber.e(e, "Error reading latest weight from Health Connect")
+            null
+        }
+    }
+
     suspend fun writeSession(startTime: Instant, endTime: Instant, steps: Int, distanceMeters: Double) {
         if (!hasAllPermissions()) return
 
@@ -82,7 +106,8 @@ class HealthConnectManager @Inject constructor(
             HealthPermission.getReadPermission(DistanceRecord::class),
             HealthPermission.getWritePermission(DistanceRecord::class),
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-            HealthPermission.getWritePermission(ExerciseSessionRecord::class)
+            HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+            HealthPermission.getReadPermission(WeightRecord::class)
         )
     }
 }

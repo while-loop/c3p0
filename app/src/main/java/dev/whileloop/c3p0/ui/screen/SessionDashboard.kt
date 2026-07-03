@@ -56,6 +56,7 @@ fun SessionDashboard(
     val averageHeartRate by viewModel.averageHeartRate.collectAsState()
     val heartRateHistory by viewModel.heartRateHistory.collectAsState()
     val sessionElapsedSeconds by viewModel.sessionElapsedSeconds.collectAsState()
+    val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
     var neverAskAgain by remember { mutableStateOf(false) }
@@ -74,7 +75,7 @@ fun SessionDashboard(
     }
     val displayedDistance = displayDistance(status.distance, unitSystem)
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
-    val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds)
+    val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds, bodyWeightKg)
 
     if (showPermissionSheet) {
         PermissionGuidanceBottomSheet(
@@ -521,7 +522,7 @@ fun formatElapsedTime(seconds: Int): String {
 private fun heartRateValue(heartRate: Int): String =
     if (heartRate > 0) heartRate.toString() else "---"
 
-private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int): Int {
+private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int, bodyWeightKg: Double?): Int {
     if (elapsedSeconds <= 0) return 0
 
     val met = when {
@@ -533,7 +534,7 @@ private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int): Int {
         else -> 6.3f
     }
     val hours = elapsedSeconds / 3600f
-    return (met * DEFAULT_BODY_WEIGHT_KG * hours).toInt()
+    return (met * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG).toFloat() * hours).toInt()
 }
 
 private const val CHART_MIN_HEART_RATE = 50

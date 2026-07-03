@@ -84,6 +84,12 @@ class SessionViewModel @Inject constructor(
         false
     )
 
+    val bodyWeightKg = settingsRepository.bodyWeightKg.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
     init {
         viewModelScope.launch {
             settingsRepository.unitSystem.distinctUntilChanged().collect { storedUnitSystem ->
