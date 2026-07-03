@@ -4,6 +4,11 @@ import android.content.Context
 import dev.whileloop.c3p0.ble.controller.BleConnection
 import dev.whileloop.c3p0.ble.model.*
 import dev.whileloop.c3p0.data.model.UnitSystem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +21,8 @@ class WalkingPadManagerImpl @Inject constructor(
 ) : TreadmillManager {
 
     private var connection: BleConnection? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var connectionStateJob: Job? = null
     private val _status = MutableStateFlow(TreadmillStatus())
     override val status: StateFlow<TreadmillStatus> = _status.asStateFlow()
 
@@ -41,15 +48,22 @@ class WalkingPadManagerImpl @Inject constructor(
         // For simplicity in this impl, we just call connect and return true
         val result = connection?.connect() ?: false
         if (result) {
-            // Start observing connection state
-            // connection.connectionState.collect { ... } 
-            // For now just manually update
             _connectionState.value = ConnectionState.CONNECTING
+            connection?.let { bleConnection ->
+                connectionStateJob?.cancel()
+                connectionStateJob = scope.launch {
+                    bleConnection.connectionState.collect { state ->
+                        _connectionState.value = state
+                    }
+                }
+            }
         }
         return result
     }
 
     override suspend fun disconnect() {
+        connectionStateJob?.cancel()
+        connectionStateJob = null
         connection?.disconnect()
         connection = null
         _connectionState.value = ConnectionState.DISCONNECTED

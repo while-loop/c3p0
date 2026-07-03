@@ -2,6 +2,11 @@ package dev.whileloop.c3p0.ble.manager
 
 import android.content.Context
 import dev.whileloop.c3p0.ble.controller.BleConnection
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +18,8 @@ class GarminManagerImpl @Inject constructor(
 ) : HeartRateManager {
 
     private var connection: BleConnection? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var connectionStateJob: Job? = null
     private val _heartRate = MutableStateFlow(0)
     override val heartRate: StateFlow<Int> = _heartRate.asStateFlow()
 
@@ -34,14 +41,24 @@ class GarminManagerImpl @Inject constructor(
         val result = connection?.connect() ?: false
         if (result) {
             _connectionState.value = ConnectionState.CONNECTING
-            // In a real app, we should wait for connection and then enable notifications
-            // For now, we'll assume it works
-            connection?.enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
+            connection?.let { bleConnection ->
+                connectionStateJob?.cancel()
+                connectionStateJob = scope.launch {
+                    bleConnection.connectionState.collect { state ->
+                        _connectionState.value = state
+                        if (state == ConnectionState.CONNECTED) {
+                            bleConnection.enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
+                        }
+                    }
+                }
+            }
         }
         return result
     }
 
     override suspend fun disconnect() {
+        connectionStateJob?.cancel()
+        connectionStateJob = null
         connection?.disconnect()
         connection = null
         _connectionState.value = ConnectionState.DISCONNECTED

@@ -35,6 +35,10 @@ fun ProfileScreen(
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
+    val treadmillAddress by viewModel.treadmillAddress.collectAsState()
+    val watchAddress by viewModel.watchAddress.collectAsState()
+    val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
+    val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     var launchHealthConnectPermissions by remember { mutableStateOf(false) }
@@ -101,6 +105,24 @@ fun ProfileScreen(
                 Button(onClick = onNavigateToPairing) {
                     Text("Pair")
                 }
+            }
+        )
+        ListItem(
+            headlineContent = { Text("WalkingPad") },
+            supportingContent = {
+                Text(treadmillAddress ?: "No device selected")
+            },
+            trailingContent = {
+                Text(viewModel.connectionLabel(treadmillConnectionState))
+            }
+        )
+        ListItem(
+            headlineContent = { Text("Watch") },
+            supportingContent = {
+                Text(watchAddress ?: "No device selected")
+            },
+            trailingContent = {
+                Text(viewModel.connectionLabel(watchConnectionState))
             }
         )
 

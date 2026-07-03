@@ -3,6 +3,8 @@ package dev.whileloop.c3p0.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.whileloop.c3p0.ble.manager.ConnectionState
+import dev.whileloop.c3p0.ble.manager.HeartRateManager
 import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
@@ -16,7 +18,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val treadmillManager: TreadmillManager
+    private val treadmillManager: TreadmillManager,
+    private val heartRateManager: HeartRateManager
 ) : ViewModel() {
     private val _stepGoal = MutableStateFlow(10000)
     val stepGoal = _stepGoal.asStateFlow()
@@ -41,6 +44,38 @@ class ProfileViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(5000),
         false
     )
+
+    val treadmillAddress = settingsRepository.treadmillAddress.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
+    val watchAddress = settingsRepository.watchAddress.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
+    val treadmillConnectionState = treadmillManager.connectionState.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        treadmillManager.connectionState.value
+    )
+
+    val watchConnectionState = heartRateManager.connectionState.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        heartRateManager.connectionState.value
+    )
+
+    fun connectionLabel(state: ConnectionState): String =
+        when (state) {
+            ConnectionState.CONNECTED -> "Connected"
+            ConnectionState.CONNECTING -> "Connecting"
+            ConnectionState.DISCONNECTING -> "Disconnecting"
+            ConnectionState.DISCONNECTED -> "Not connected"
+        }
 
     fun updateStepGoal(goal: Int) {
         _stepGoal.value = goal
