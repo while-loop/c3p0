@@ -11,6 +11,17 @@ This is an Android app project intended to run from Android Studio on Windows. P
 - ADB: `C:\Users\anthony\AppData\Local\Android\Sdk\platform-tools\adb.exe`
 - Available AVD: `Pixel_9_Pro_XL`
 
+## Git
+
+Always use the Git installation inside WSL for this repository. Windows Git is not configured for the user's SSH credentials.
+
+From PowerShell, run Git commands through WSL with the repo path translated to `/mnt/c`:
+
+```powershell
+wsl git -C /mnt/c/Users/anthony/dev/c3p0 status --short --branch
+wsl git -C /mnt/c/Users/anthony/dev/c3p0 push origin main
+```
+
 Before running Gradle commands in PowerShell, scope Java to the current command/session:
 
 ```powershell
@@ -85,6 +96,7 @@ When `sys.boot_completed` returns `1`, install or test against the emulator:
 ## Notes For Future Agents
 
 - Do not edit `local.properties`; Android Studio generates it and it is machine-specific.
+- Always use WSL Git for status, diff, commit, fetch, pull, and push.
 - If `java` is missing or `JAVA_HOME` is malformed, use the Android Studio JBR path above for the current shell.
 - If emulator commands fail because no device is running, start `Pixel_9_Pro_XL` first and wait for boot completion before running connected tests.
 - Keep build/test fixes scoped to the Android Gradle project unless the user explicitly asks for wider cleanup.
