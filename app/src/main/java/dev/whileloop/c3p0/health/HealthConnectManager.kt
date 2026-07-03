@@ -102,7 +102,6 @@ class HealthConnectManager @Inject constructor(
             HealthPermission.getReadPermission(StepsRecord::class),
             HealthPermission.getWritePermission(StepsRecord::class),
             HealthPermission.getReadPermission(HeartRateRecord::class),
-            HealthPermission.getWritePermission(HeartRateRecord::class),
             HealthPermission.getReadPermission(DistanceRecord::class),
             HealthPermission.getWritePermission(DistanceRecord::class),
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),
