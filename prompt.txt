@@ -1,0 +1,45 @@
+This is a brand new app, C3P0.
+
+I have a WalkingPad C2 and what to create my own companion app for it.
+I also have a Garmin Venu 3 and want to connect to it too.
+Both apps use Bluetooth.
+
+I want the app to create and manage my walking sessions. The app should be able to control and read from the WalkingPad.
+
+And it should also export the sessions (distance, steps, etc) to Health Connect, not Google Fit.
+
+I also want to use Android's backup/sync using the user's Google account Google Drive to keep state saved in the cloud. I dont have backend servers for this.
+
+I added screenshots of something I'd want the app to look like.
+
+Features:
+- Normalized steps vs raw steps
+  - Normalzed Steps = Normalized steps excludes all data origins that overlap with walking sessions in the app
+  - This is needed because my watch could also track steps while the treadmill is counting steps. Both will send data to Health Connect
+  - So I want the app to be able to pull from Health Connect and exlcude all steps that aren;'t C3P0 to get accurate steps for this session and previous sessions and historical steps charts
+- Weekly l/monthly charts for normalized/raw steps
+- Ability to set daily step goals
+- Auto-stop session and treadmill when the daily goal is hit. (with the ability for an N miniute cooldown where speed gradually goes to 1mph to end the session)
+- Auto Adjust Speed
+  - Garmin connect to keep L2 heart rate
+  - I want the app to also connect to my watch and be able to control the treadmill speed to keep my heart rate in Zone 2. This should be smooth and the app wont be going dramatically up and down to make my HR change. a want a smooth curve while the app checks when it needs to change ethe speed.
+
+I also want thinks to be reusable and use Android/Kotlin best practices. A shared bluetooth controlller since we're connecting to 2 devices. Observalbles/subs/coroutines to listen to BLE updates. Mocks so I can easily test. Interfaces of the boundaries of the Treadmill manager/listener and Watch HR listener.
+
+With that, things like testing the algorithm for auto-speed zone 2 should be doable in tests with static data and an expected result.
+
+Create a plan and keep it in a folder in this repo. I want future agents/convos to reference the goal of this project. Im not using issue mgmt software, so ideally the repo could also be used as one for future agents.
+
+Do update  @AGENTS.md to also accomdate for project tracking and what this project is.
+
+Here are some example repos that connect to the WalkingPad
+https://github.com/ph4r05/ph4-walkingpad
+https://github.com/CodeJawn/walkingpad
+https://github.com/huserben/walkingpad
+
+And Garmin:
+https://github.com/orrmany/ArduinoSportsTracker
+https://github.com/mjsir911/GarminBLE
+https://github.com/rikard-engstrom/esp32-ble-hrm-garmin
+
+Do your own research too for WalkingPad and Garmin connectvitiy via Bluetooth

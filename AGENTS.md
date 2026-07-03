@@ -1,9 +1,17 @@
 # Repository Guidelines
 
 ## Project Overview
-- This is an Android application project named `C3P0`.
+- This is an Android application project named `C3P0`, a companion app for WalkingPad (C2) and Garmin (Venu 3).
 - The app module lives in `app/` with namespace/application ID `dev.whileloop.c3p0`.
 - Build configuration uses Kotlin DSL Gradle files and a version catalog in `gradle/libs.versions.toml`.
+
+## Core Goals
+- **WalkingPad Control**: BLE connection to control and monitor WalkingPad C2.
+- **Garmin Integration**: BLE connection to Garmin Venu 3 for HR monitoring.
+- **Auto-Speed (Zone 2)**: Adjust treadmill speed based on heart rate.
+- **Health Connect**: Export sessions and calculate "Normalized Steps" (excluding overlapping data).
+- **Cloud Sync**: Google Drive integration for state backup/sync (no backend).
+- **Architecture**: Shared BLE controller, Room DB, Jetpack Compose, Clean Architecture.
 
 ## Code Style
 - Follow Kotlin official style (`kotlin.code.style=official`).
@@ -27,6 +35,11 @@
 - For unit tests, use `./gradlew testDebugUnitTest` when tests exist or are added.
 - For instrumentation tests, use `./gradlew connectedDebugAndroidTest` only when a device/emulator is available.
 - If validation cannot run due to missing SDK, network, or device constraints, report the exact blocker.
+
+## Project Tracking
+- This repository serves as the primary project tracker.
+- Roadmap and tasks are located in the `roadmap/` directory.
+- Use `roadmap/GOALS.md` for high-level objectives and `roadmap/TASKS.md` for detailed task tracking.
 
 ## Git Hygiene
 - Do not commit, create branches, or rewrite history unless explicitly asked.
