@@ -24,8 +24,9 @@ class PairingViewModel @Inject constructor(
     private val treadmillManager: TreadmillManager,
     private val heartRateManager: HeartRateManager
 ) : ViewModel() {
-    private val _devices = MutableStateFlow(setOf<BleDevice>())
+    private val _devices = MutableStateFlow<List<BleDevice>>(emptyList())
     val devices = _devices.asStateFlow()
+    private val devicesByAddress = linkedMapOf<String, BleDevice>()
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning = _isScanning.asStateFlow()
@@ -64,7 +65,7 @@ class PairingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 scanner.scan().collect { device ->
-                    _devices.value = _devices.value + device
+                    addOrUpdateDevice(device)
                 }
             } catch (e: SecurityException) {
                 Timber.e(e, "BLE scan failed because permission was denied")
@@ -107,4 +108,18 @@ class PairingViewModel @Inject constructor(
 
     private fun BleDevice.isWalkingPad(): Boolean =
         name?.contains("WalkingPad", ignoreCase = true) == true
+
+    private fun addOrUpdateDevice(device: BleDevice) {
+        val existing = devicesByAddress[device.address]
+        val updated = if (existing == null) {
+            device
+        } else {
+            device.copy(name = device.name ?: existing.name)
+        }
+
+        devicesByAddress[device.address] = updated
+        _devices.value = devicesByAddress.values
+            .sortedByDescending { it.rssi }
+            .toList()
+    }
 }

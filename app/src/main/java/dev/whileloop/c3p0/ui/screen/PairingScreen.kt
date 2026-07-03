@@ -74,7 +74,7 @@ fun PairingScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(devices.sortedByDescending { it.rssi }) { device ->
+            items(devices) { device ->
                 val connectionLabel = viewModel.deviceConnectionLabel(device)
                 ListItem(
                     headlineContent = { Text(device.name ?: "Unknown Device") },
