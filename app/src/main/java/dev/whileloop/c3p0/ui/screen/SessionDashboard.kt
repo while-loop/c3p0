@@ -74,6 +74,7 @@ fun SessionDashboard(
     }
     val displayedDistance = displayDistance(status.distance, unitSystem)
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
+    val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds)
 
     if (showPermissionSheet) {
         PermissionGuidanceBottomSheet(
@@ -140,19 +141,19 @@ fun SessionDashboard(
         // Stats Grid
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCard("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit, Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             StatCard("Steps", status.steps.toString(), "steps", Modifier.weight(1f))
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCard("Elapsed", formatElapsedTime(sessionElapsedSeconds), "", Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(16.dp))
-            StatCard("Energy", "---", "kcal", Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(10.dp))
+            StatCard("Calories", estimatedCalories.toString(), "kcal", Modifier.weight(1f))
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCard("Heart Rate", heartRateValue(currentHeartRate), "bpm", Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             StatCard("Avg HR", heartRateValue(averageHeartRate), "bpm", Modifier.weight(1f))
         }
 
@@ -494,11 +495,11 @@ fun StatusIndicator(label: String, isConnected: Boolean) {
 @Composable
 fun StatCard(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium)
             Text(
                 text = value,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(unit, style = MaterialTheme.typography.labelSmall)
@@ -520,5 +521,21 @@ fun formatElapsedTime(seconds: Int): String {
 private fun heartRateValue(heartRate: Int): String =
     if (heartRate > 0) heartRate.toString() else "---"
 
+private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int): Int {
+    if (elapsedSeconds <= 0) return 0
+
+    val met = when {
+        speedKmh < 1f -> 1.8f
+        speedKmh < 3.2f -> 2.8f
+        speedKmh < 4.8f -> 3.5f
+        speedKmh < 5.6f -> 4.3f
+        speedKmh < 6.4f -> 5.0f
+        else -> 6.3f
+    }
+    val hours = elapsedSeconds / 3600f
+    return (met * DEFAULT_BODY_WEIGHT_KG * hours).toInt()
+}
+
 private const val CHART_MIN_HEART_RATE = 50
 private const val CHART_MAX_HEART_RATE = 190
+private const val DEFAULT_BODY_WEIGHT_KG = 70f
