@@ -2,6 +2,10 @@ package dev.whileloop.c3p0.health
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
@@ -21,11 +25,17 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun hasAllPermissions(): Boolean {
-        // Mocking permission check for now
-        return true
+        return try {
+            healthConnectClient.permissionController.getGrantedPermissions().containsAll(PERMISSIONS)
+        } catch (e: Exception) {
+            Timber.e(e, "Error checking Health Connect permissions")
+            false
+        }
     }
 
     suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepsRecord> {
+        if (!hasAllPermissions()) return emptyList()
+
         return try {
             val response = healthConnectClient.readRecords(
                 ReadRecordsRequest(
@@ -41,6 +51,8 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun writeSession(startTime: Instant, endTime: Instant, steps: Int, distanceMeters: Double) {
+        if (!hasAllPermissions()) return
+
         try {
             val device = Device(
                 manufacturer = "KingSmith",
@@ -59,5 +71,18 @@ class HealthConnectManager @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Error writing session to Health Connect")
         }
+    }
+
+    companion object {
+        val PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getReadPermission(StepsRecord::class),
+            HealthPermission.getWritePermission(StepsRecord::class),
+            HealthPermission.getReadPermission(HeartRateRecord::class),
+            HealthPermission.getWritePermission(HeartRateRecord::class),
+            HealthPermission.getReadPermission(DistanceRecord::class),
+            HealthPermission.getWritePermission(DistanceRecord::class),
+            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+            HealthPermission.getWritePermission(ExerciseSessionRecord::class)
+        )
     }
 }

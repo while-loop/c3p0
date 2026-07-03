@@ -39,15 +39,21 @@ class SessionManager @Inject constructor(
 
     fun startSession() {
         if (sessionJob?.isActive == true) return
-        _isSessionActive.value = true
 
         // Start Foreground Service
         val intent = Intent(context, dev.whileloop.c3p0.service.SessionService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: SecurityException) {
+            Timber.e(e, "Unable to start session service without required permissions")
+            return
         }
+
+        _isSessionActive.value = true
 
         sessionJob = scope.launch {
             startTime = Instant.now()

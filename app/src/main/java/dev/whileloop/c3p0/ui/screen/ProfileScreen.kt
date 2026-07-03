@@ -1,12 +1,18 @@
 package dev.whileloop.c3p0.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
+import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
+import dev.whileloop.c3p0.ui.permission.healthConnectPermissions
+import dev.whileloop.c3p0.ui.permission.permissionGuidance
 import dev.whileloop.c3p0.ui.viewmodel.ProfileViewModel
 
 @Composable
@@ -18,6 +24,27 @@ fun ProfileScreen(
     val age by viewModel.age.collectAsState()
     val isHealthConnectEnabled by viewModel.isHealthConnectEnabled.collectAsState()
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
+    val healthConnectPermissions = remember { healthConnectPermissions() }
+    var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
+    val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        viewModel.toggleHealthConnect(granted.containsAll(healthConnectPermissions))
+    }
+
+    if (showHealthConnectPermissionSheet) {
+        PermissionGuidanceBottomSheet(
+            guidance = permissionGuidance(PermissionRequestKind.HealthConnect),
+            onContinue = {
+                showHealthConnectPermissionSheet = false
+                healthConnectPermissionLauncher.launch(healthConnectPermissions)
+            },
+            onDismiss = {
+                showHealthConnectPermissionSheet = false
+                viewModel.toggleHealthConnect(false)
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -46,7 +73,16 @@ fun ProfileScreen(
             headlineContent = { Text("Health Connect") },
             supportingContent = { Text("Sync training sessions") },
             trailingContent = {
-                Switch(checked = isHealthConnectEnabled, onCheckedChange = { viewModel.toggleHealthConnect(it) })
+                Switch(
+                    checked = isHealthConnectEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            showHealthConnectPermissionSheet = true
+                        } else {
+                            viewModel.toggleHealthConnect(false)
+                        }
+                    }
+                )
             }
         )
         ListItem(
