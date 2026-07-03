@@ -73,6 +73,34 @@ Instrumentation tests require a running emulator or connected Android device:
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
+## Confirm Build And Test Status
+
+To confirm the app compiles, run the debug assemble task:
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+```
+
+To confirm the full app build is healthy, run:
+
+```powershell
+.\gradlew.bat build
+```
+
+To confirm tests, run local unit tests first:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+If a virtual device or Android device is available, also run instrumentation tests:
+
+```powershell
+.\gradlew.bat :app:connectedDebugAndroidTest
+```
+
+When reporting verification back to the user, explicitly say which commands passed, which commands were skipped, and why. A successful `:app:assembleDebug` confirms the debug app compiles. A successful `build` confirms assemble, local tests, lint/check tasks, and release packaging for this Gradle project.
+
 ## Start A Virtual Device
 
 List available Android virtual devices:
