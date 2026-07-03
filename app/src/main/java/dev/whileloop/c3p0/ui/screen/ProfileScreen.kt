@@ -1,5 +1,8 @@
 package dev.whileloop.c3p0.ui.screen
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,7 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.whileloop.c3p0.data.model.UnitSystem
@@ -23,6 +28,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
     onNavigateToPairing: () -> Unit
 ) {
+    val context = LocalContext.current
     val stepGoal by viewModel.stepGoal.collectAsState()
     val age by viewModel.age.collectAsState()
     val isHealthConnectEnabled by viewModel.isHealthConnectEnabled.collectAsState()
@@ -31,10 +37,36 @@ fun ProfileScreen(
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
+    var launchHealthConnectPermissions by remember { mutableStateOf(false) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
         viewModel.toggleHealthConnect(granted.containsAll(healthConnectPermissions))
+    }
+
+    LaunchedEffect(launchHealthConnectPermissions) {
+        if (!launchHealthConnectPermissions) return@LaunchedEffect
+
+        launchHealthConnectPermissions = false
+        when (HealthConnectClient.getSdkStatus(context)) {
+            HealthConnectClient.SDK_AVAILABLE -> {
+                healthConnectPermissionLauncher.launch(healthConnectPermissions)
+            }
+
+            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
+                openHealthConnectStorePage(context)
+                viewModel.toggleHealthConnect(false)
+            }
+
+            else -> {
+                Toast.makeText(
+                    context,
+                    "Health Connect is not available on this device.",
+                    Toast.LENGTH_LONG
+                ).show()
+                viewModel.toggleHealthConnect(false)
+            }
+        }
     }
 
     if (showHealthConnectPermissionSheet) {
@@ -42,7 +74,7 @@ fun ProfileScreen(
             guidance = permissionGuidance(PermissionRequestKind.HealthConnect),
             onContinue = {
                 showHealthConnectPermissionSheet = false
-                healthConnectPermissionLauncher.launch(healthConnectPermissions)
+                launchHealthConnectPermissions = true
             },
             onDismiss = {
                 showHealthConnectPermissionSheet = false
@@ -178,5 +210,23 @@ fun ProfileScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         Text("Target Zone 2 HR: $zone2Min - $zone2Max bpm", style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+private fun openHealthConnectStorePage(context: android.content.Context) {
+    val playStoreIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("market://details?id=com.google.android.apps.healthdata")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    val webIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    runCatching {
+        context.startActivity(playStoreIntent)
+    }.recoverCatching {
+        context.startActivity(webIntent)
     }
 }
