@@ -1,48 +1,90 @@
-# Repository Guidelines
+# Agent Notes
 
-## Project Overview
-- This is an Android application project named `C3P0`, a companion app for WalkingPad (C2) and Garmin (Venu 3).
-- The app module lives in `app/` with namespace/application ID `dev.whileloop.c3p0`.
-- Build configuration uses Kotlin DSL Gradle files and a version catalog in `gradle/libs.versions.toml`.
+This is an Android app project intended to run from Android Studio on Windows. Prefer the checked-in Gradle wrapper and the Android Studio packaged JBR/SDK instead of assuming system `java`, `gradle`, `adb`, or `emulator` are on `PATH`.
 
-## Core Goals
-- **WalkingPad Control**: BLE connection to control and monitor WalkingPad C2.
-- **Garmin Integration**: BLE connection to Garmin Venu 3 for HR monitoring.
-- **Auto-Speed (Zone 2)**: Adjust treadmill speed based on heart rate.
-- **Health Connect**: Export sessions and calculate "Normalized Steps" (excluding overlapping data).
-- **Cloud Sync**: Google Drive integration for state backup/sync (no backend).
-- **Architecture**: Shared BLE controller, Room DB, Jetpack Compose, Clean Architecture.
+## Local Tooling
 
-## Code Style
-- Follow Kotlin official style (`kotlin.code.style=official`).
-- Keep changes minimal and consistent with existing Android/Jetpack Compose patterns.
-- Prefer clear, descriptive names; avoid one-letter variables except for conventional short-lived lambda parameters.
-- Do not add license headers or broad refactors unless explicitly requested.
+- Project root: `C:\Users\anthony\dev\c3p0`
+- Android Studio JBR: `C:\Users\anthony\AppData\Local\Programs\Android Studio\jbr`
+- Android SDK: `C:\Users\anthony\AppData\Local\Android\Sdk`
+- Emulator: `C:\Users\anthony\AppData\Local\Android\Sdk\emulator\emulator.exe`
+- ADB: `C:\Users\anthony\AppData\Local\Android\Sdk\platform-tools\adb.exe`
+- Available AVD: `Pixel_9_Pro_XL`
 
-## Android Guidelines
-- Put app code under `app/src/main/` using the standard Android source layout.
-- Keep resources in the appropriate `res/` subdirectories and use existing naming conventions.
-- When adding Compose UI, prefer Material 3 components already declared in the catalog.
-- Keep package names aligned with `dev.whileloop.c3p0`.
+Before running Gradle commands in PowerShell, scope Java to the current command/session:
 
-## Dependencies
-- Manage dependency versions in `gradle/libs.versions.toml`.
-- Use catalog aliases from Gradle build files instead of hard-coded dependency strings.
-- Do not change Android Gradle Plugin, Kotlin, SDK, or Compose BOM versions unless the task requires it.
+```powershell
+$env:JAVA_HOME = 'C:\Users\anthony\AppData\Local\Programs\Android Studio\jbr'
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+```
 
-## Validation
-- For build verification, prefer `./gradlew assembleDebug`.
-- For unit tests, use `./gradlew testDebugUnitTest` when tests exist or are added.
-- For instrumentation tests, use `./gradlew connectedDebugAndroidTest` only when a device/emulator is available.
-- If validation cannot run due to missing SDK, network, or device constraints, report the exact blocker.
+## Build
 
-## Project Tracking
-- This repository serves as the primary project tracker.
-- Roadmap, tasks, and implementation plans are located in the `roadmap/` directory.
-- Use `roadmap/GOALS.md` for high-level objectives and `roadmap/TASKS.md` for detailed task tracking.
-- **Agents MUST update these files consistently** to reflect current progress, new findings, and completed tasks.
-- Persist finalized implementation plans to `roadmap/plans/` for historical reference and context for future agents.
+Run the full build from the repo root:
 
-## Git Hygiene
-- Do not commit, create branches, or rewrite history unless explicitly asked.
-- Do not modify unrelated files or generated build output.
+```powershell
+.\gradlew.bat build
+```
+
+Useful narrower build commands:
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:assembleRelease
+.\gradlew.bat :app:lint
+```
+
+## Test
+
+Run JVM/unit tests that do not require a device:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+Run all local unit test variants:
+
+```powershell
+.\gradlew.bat :app:test
+```
+
+Instrumentation tests require a running emulator or connected Android device:
+
+```powershell
+.\gradlew.bat :app:connectedDebugAndroidTest
+```
+
+## Start A Virtual Device
+
+List available Android virtual devices:
+
+```powershell
+& 'C:\Users\anthony\AppData\Local\Android\Sdk\emulator\emulator.exe' -list-avds
+```
+
+Start the packaged Android Studio virtual device:
+
+```powershell
+Start-Process -WindowStyle Hidden -FilePath 'C:\Users\anthony\AppData\Local\Android\Sdk\emulator\emulator.exe' -ArgumentList '-avd', 'Pixel_9_Pro_XL'
+```
+
+Wait for the device to boot:
+
+```powershell
+& 'C:\Users\anthony\AppData\Local\Android\Sdk\platform-tools\adb.exe' wait-for-device
+& 'C:\Users\anthony\AppData\Local\Android\Sdk\platform-tools\adb.exe' shell getprop sys.boot_completed
+```
+
+When `sys.boot_completed` returns `1`, install or test against the emulator:
+
+```powershell
+.\gradlew.bat :app:installDebug
+.\gradlew.bat :app:connectedDebugAndroidTest
+```
+
+## Notes For Future Agents
+
+- Do not edit `local.properties`; Android Studio generates it and it is machine-specific.
+- If `java` is missing or `JAVA_HOME` is malformed, use the Android Studio JBR path above for the current shell.
+- If emulator commands fail because no device is running, start `Pixel_9_Pro_XL` first and wait for boot completion before running connected tests.
+- Keep build/test fixes scoped to the Android Gradle project unless the user explicitly asks for wider cleanup.
