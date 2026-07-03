@@ -10,7 +10,11 @@ import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.manager.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -26,6 +30,17 @@ class SessionViewModel @Inject constructor(
     private val heartRateManager: HeartRateManager,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+    private var elapsedJob: Job? = null
+    private var heartRateHistoryJob: Job? = null
+
+    private val _sessionElapsedSeconds = MutableStateFlow(0)
+    val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
+
+    private val _heartRateHistory = MutableStateFlow<List<Int>>(emptyList())
+    val heartRateHistory = _heartRateHistory.asStateFlow()
+
+    private val _averageHeartRate = MutableStateFlow(0)
+    val averageHeartRate = _averageHeartRate.asStateFlow()
 
     val treadmillStatus = treadmillManager.status.stateIn(
         viewModelScope,
@@ -43,6 +58,12 @@ class SessionViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         heartRateManager.connectionState.value
+    )
+
+    val currentHeartRate = heartRateManager.heartRate.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        heartRateManager.heartRate.value
     )
 
     val isSessionActive = sessionManager.isSessionActive.stateIn(
@@ -81,6 +102,16 @@ class SessionViewModel @Inject constructor(
                         treadmillManager.setUnitSystem(storedUnitSystem)
                     }
                 }
+        }
+
+        viewModelScope.launch {
+            sessionManager.isSessionActive.collect { isActive ->
+                if (isActive) {
+                    startSessionStats()
+                } else {
+                    stopSessionStats()
+                }
+            }
         }
     }
 
@@ -122,5 +153,41 @@ class SessionViewModel @Inject constructor(
         viewModelScope.launch {
             treadmillManager.setMode(mode)
         }
+    }
+
+    private fun startSessionStats() {
+        _sessionElapsedSeconds.value = 0
+        _heartRateHistory.value = emptyList()
+        _averageHeartRate.value = 0
+
+        elapsedJob?.cancel()
+        elapsedJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                _sessionElapsedSeconds.value += 1
+            }
+        }
+
+        heartRateHistoryJob?.cancel()
+        heartRateHistoryJob = viewModelScope.launch {
+            heartRateManager.heartRate.collect { heartRate ->
+                if (heartRate <= 0) return@collect
+
+                val updated = (_heartRateHistory.value + heartRate).takeLast(MAX_HEART_RATE_SAMPLES)
+                _heartRateHistory.value = updated
+                _averageHeartRate.value = updated.average().toInt()
+            }
+        }
+    }
+
+    private fun stopSessionStats() {
+        elapsedJob?.cancel()
+        elapsedJob = null
+        heartRateHistoryJob?.cancel()
+        heartRateHistoryJob = null
+    }
+
+    companion object {
+        private const val MAX_HEART_RATE_SAMPLES = 180
     }
 }

@@ -2,9 +2,12 @@ package dev.whileloop.c3p0.ui.screen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
@@ -20,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,6 +52,10 @@ fun SessionDashboard(
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
+    val currentHeartRate by viewModel.currentHeartRate.collectAsState()
+    val averageHeartRate by viewModel.averageHeartRate.collectAsState()
+    val heartRateHistory by viewModel.heartRateHistory.collectAsState()
+    val sessionElapsedSeconds by viewModel.sessionElapsedSeconds.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
     var neverAskAgain by remember { mutableStateOf(false) }
@@ -105,6 +113,7 @@ fun SessionDashboard(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -136,12 +145,27 @@ fun SessionDashboard(
         }
         Spacer(modifier = Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            StatCard("Time", formatTime(status.time), "min", Modifier.weight(1f))
+            StatCard("Elapsed", formatElapsedTime(sessionElapsedSeconds), "", Modifier.weight(1f))
             Spacer(modifier = Modifier.width(16.dp))
             StatCard("Energy", "---", "kcal", Modifier.weight(1f))
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            StatCard("Heart Rate", heartRateValue(currentHeartRate), "bpm", Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(16.dp))
+            StatCard("Avg HR", heartRateValue(averageHeartRate), "bpm", Modifier.weight(1f))
+        }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        HeartRateHistoryChart(
+            heartRates = heartRateHistory,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
 
         // Speed Control
         Row(
@@ -221,6 +245,72 @@ fun SessionDashboard(
         }
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun HeartRateHistoryChart(
+    heartRates: List<Int>,
+    modifier: Modifier = Modifier
+) {
+    val lineColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Heart rate history", style = MaterialTheme.typography.titleSmall)
+            Text("${heartRates.size} samples", style = MaterialTheme.typography.labelSmall, color = labelColor)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            val width = size.width
+            val height = size.height
+            val padding = 8.dp.toPx()
+            val chartHeight = height - padding * 2
+            val chartWidth = width - padding * 2
+
+            repeat(3) { index ->
+                val y = padding + chartHeight * index / 2f
+                drawLine(
+                    color = gridColor,
+                    start = androidx.compose.ui.geometry.Offset(padding, y),
+                    end = androidx.compose.ui.geometry.Offset(width - padding, y),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
+
+            if (heartRates.size < 2) return@Canvas
+
+            val minHr = (heartRates.minOrNull() ?: 60).coerceAtMost(60)
+            val maxHr = (heartRates.maxOrNull() ?: 180).coerceAtLeast(180)
+            val range = (maxHr - minHr).coerceAtLeast(1)
+            val xStep = chartWidth / (heartRates.size - 1).coerceAtLeast(1)
+            var previousX = padding
+            var previousY = padding + chartHeight - ((heartRates.first() - minHr).toFloat() / range * chartHeight)
+
+            heartRates.drop(1).forEachIndexed { index, heartRate ->
+                val x = padding + xStep * (index + 1)
+                val y = padding + chartHeight - ((heartRate - minHr).toFloat() / range * chartHeight)
+                drawLine(
+                    color = lineColor,
+                    start = androidx.compose.ui.geometry.Offset(previousX, previousY),
+                    end = androidx.compose.ui.geometry.Offset(x, y),
+                    strokeWidth = 3.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                previousX = x
+                previousY = y
+            }
+        }
     }
 }
 
@@ -339,7 +429,16 @@ fun StatCard(label: String, value: String, unit: String, modifier: Modifier = Mo
     }
 }
 
-fun formatTime(seconds: Int): String {
-    val m = seconds / 60
-    return String.format(Locale.US, "%d", m)
+fun formatElapsedTime(seconds: Int): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val remainingSeconds = seconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, remainingSeconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, remainingSeconds)
+    }
 }
+
+private fun heartRateValue(heartRate: Int): String =
+    if (heartRate > 0) heartRate.toString() else "---"
