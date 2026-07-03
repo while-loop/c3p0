@@ -11,6 +11,8 @@ import dev.whileloop.c3p0.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -76,6 +78,30 @@ class ProfileViewModel @Inject constructor(
             ConnectionState.DISCONNECTING -> "Disconnecting"
             ConnectionState.DISCONNECTED -> "Not connected"
         }
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.treadmillAddress
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { address ->
+                    if (treadmillManager.connectionState.value == ConnectionState.DISCONNECTED) {
+                        treadmillManager.connect(address)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.watchAddress
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { address ->
+                    if (heartRateManager.connectionState.value == ConnectionState.DISCONNECTED) {
+                        heartRateManager.connect(address)
+                    }
+                }
+        }
+    }
 
     fun updateStepGoal(goal: Int) {
         _stepGoal.value = goal

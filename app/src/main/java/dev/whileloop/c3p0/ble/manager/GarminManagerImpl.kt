@@ -36,6 +36,9 @@ class GarminManagerImpl @Inject constructor(
                     handleHrNotification(data)
                 }
             }
+            onServicesDiscovered = {
+                enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
+            }
         }
         
         val result = connection?.connect() ?: false
@@ -46,9 +49,6 @@ class GarminManagerImpl @Inject constructor(
                 connectionStateJob = scope.launch {
                     bleConnection.connectionState.collect { state ->
                         _connectionState.value = state
-                        if (state == ConnectionState.CONNECTED) {
-                            bleConnection.enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
-                        }
                     }
                 }
             }

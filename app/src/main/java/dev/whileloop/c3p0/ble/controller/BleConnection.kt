@@ -41,6 +41,7 @@ class BleConnection(
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Timber.d("Services discovered for $address")
+                onServicesDiscovered?.invoke()
             } else {
                 Timber.w("onServicesDiscovered received: $status")
             }
@@ -53,9 +54,18 @@ class BleConnection(
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             onNotificationReceived?.invoke(characteristic.uuid, characteristic.value)
         }
+
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            onNotificationReceived?.invoke(characteristic.uuid, value)
+        }
     }
 
     var onNotificationReceived: ((UUID, ByteArray) -> Unit)? = null
+    var onServicesDiscovered: (() -> Unit)? = null
 
     @SuppressLint("MissingPermission")
     fun writeCharacteristic(serviceUuid: UUID, charUuid: UUID, data: ByteArray): Boolean {

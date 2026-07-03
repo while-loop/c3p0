@@ -113,6 +113,28 @@ class SessionViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            settingsRepository.treadmillAddress
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { address ->
+                    if (treadmillManager.connectionState.value == ConnectionState.DISCONNECTED) {
+                        treadmillManager.connect(address)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.watchAddress
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { address ->
+                    if (heartRateManager.connectionState.value == ConnectionState.DISCONNECTED) {
+                        heartRateManager.connect(address)
+                    }
+                }
+        }
     }
 
     fun startSession() {

@@ -42,6 +42,9 @@ class WalkingPadManagerImpl @Inject constructor(
                     handleNotification(data)
                 }
             }
+            onServicesDiscovered = {
+                enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID)
+            }
         }
         
         // In a real app, we'd wait for connection state to be CONNECTED
