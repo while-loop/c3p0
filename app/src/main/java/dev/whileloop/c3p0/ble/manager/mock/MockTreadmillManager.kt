@@ -5,6 +5,7 @@ import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.ble.model.TreadmillMode
 import dev.whileloop.c3p0.ble.model.TreadmillState
 import dev.whileloop.c3p0.ble.model.TreadmillStatus
+import dev.whileloop.c3p0.data.model.UnitSystem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,6 +52,8 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
         _status.value = _status.value.copy(mode = mode)
         return true
     }
+
+    override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean = true
     
     // Helper to simulate walking
     suspend fun simulateWalking() {

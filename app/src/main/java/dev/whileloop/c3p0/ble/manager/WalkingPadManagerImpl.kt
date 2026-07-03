@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.ble.manager
 import android.content.Context
 import dev.whileloop.c3p0.ble.controller.BleConnection
 import dev.whileloop.c3p0.ble.model.*
+import dev.whileloop.c3p0.data.model.UnitSystem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,10 +75,30 @@ class WalkingPadManagerImpl @Inject constructor(
         return sendCommand(byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x02.toByte(), m, 0x00, 0xFD.toByte()))
     }
 
+    override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean {
+        val useMiles = if (unitSystem == UnitSystem.Imperial) 1 else 0
+        return setPreferenceInt(PREF_UNITS, useMiles)
+    }
+
     private fun sendCommand(cmd: ByteArray): Boolean {
         val fixed = fixCrc(cmd)
         Timber.d("Sending command: ${fixed.joinToString { it.toString(16) }}")
         return connection?.writeCharacteristic(SERVICE_UUID, WRITE_CHAR_UUID, fixed) ?: false
+    }
+
+    private fun setPreferenceInt(key: Int, value: Int, type: Int = 0): Boolean {
+        val command = byteArrayOf(
+            0xF7.toByte(),
+            0xA6.toByte(),
+            key.toByte(),
+            type.toByte(),
+            ((value shr 16) and 0xFF).toByte(),
+            ((value shr 8) and 0xFF).toByte(),
+            (value and 0xFF).toByte(),
+            0x00,
+            0xFD.toByte()
+        )
+        return sendCommand(command)
     }
 
     private fun fixCrc(cmd: ByteArray): ByteArray {
@@ -114,5 +135,9 @@ class WalkingPadManagerImpl @Inject constructor(
         val steps = (data[11].toInt() and 0xFF shl 16) or (data[12].toInt() and 0xFF shl 8) or (data[13].toInt() and 0xFF)
 
         _status.value = TreadmillStatus(state, speed, mode, time, distance, steps)
+    }
+
+    companion object {
+        private const val PREF_UNITS = 8
     }
 }

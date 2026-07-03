@@ -2,6 +2,8 @@ package dev.whileloop.c3p0.ui.screen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -9,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
 import dev.whileloop.c3p0.ui.permission.healthConnectPermissions
@@ -24,6 +27,8 @@ fun ProfileScreen(
     val age by viewModel.age.collectAsState()
     val isHealthConnectEnabled by viewModel.isHealthConnectEnabled.collectAsState()
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
+    val unitSystem by viewModel.unitSystem.collectAsState()
+    val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
@@ -49,6 +54,7 @@ fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         Text("Profile Settings", style = MaterialTheme.typography.headlineMedium)
@@ -90,6 +96,42 @@ fun ProfileScreen(
             supportingContent = { Text("Backup app data to cloud") },
             trailingContent = {
                 Switch(checked = isGoogleDriveSyncEnabled, onCheckedChange = { viewModel.toggleGoogleDriveSync(it) })
+            }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text("Display", style = MaterialTheme.typography.titleMedium)
+        ListItem(
+            headlineContent = { Text("Units") },
+            supportingContent = { Text(if (unitSystem == UnitSystem.Metric) "Kilometers and km/h" else "Miles and mph") }
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = unitSystem == UnitSystem.Metric,
+                onClick = { viewModel.updateUnitSystem(UnitSystem.Metric) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Metric")
+            }
+            SegmentedButton(
+                selected = unitSystem == UnitSystem.Imperial,
+                onClick = { viewModel.updateUnitSystem(UnitSystem.Imperial) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Imperial")
+            }
+        }
+        ListItem(
+            headlineContent = { Text("Inactive device warning") },
+            supportingContent = { Text("Warn before starting if the pad or watch is not active") },
+            trailingContent = {
+                Switch(
+                    checked = !skipInactiveDeviceWarning,
+                    onCheckedChange = { enabled -> viewModel.updateSkipInactiveDeviceWarning(!enabled) }
+                )
             }
         )
 

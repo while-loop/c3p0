@@ -20,7 +20,7 @@ sealed class Screen(val route: String) {
 fun NavGraph(navController: NavHostController) {
     NavHost(navController = navController, startDestination = Screen.Walk.route) {
         composable(Screen.Walk.route) {
-            SessionDashboard()
+            SessionDashboard(onNavigateToPairing = { navController.navigate(Screen.Pairing.route) })
         }
         composable(Screen.Stats.route) {
             StatsScreen()
