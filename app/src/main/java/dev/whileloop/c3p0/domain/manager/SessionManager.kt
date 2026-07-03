@@ -35,6 +35,9 @@ class SessionManager @Inject constructor(
     private val _isSessionActive = MutableStateFlow(false)
     val isSessionActive = _isSessionActive.asStateFlow()
 
+    private val _isSessionPaused = MutableStateFlow(false)
+    val isSessionPaused = _isSessionPaused.asStateFlow()
+
     private var autoSpeedController: AutoSpeedController? = null
 
     fun startSession() {
@@ -54,6 +57,7 @@ class SessionManager @Inject constructor(
         }
 
         _isSessionActive.value = true
+        _isSessionPaused.value = false
 
         sessionJob = scope.launch {
             startTime = Instant.now()
@@ -74,6 +78,8 @@ class SessionManager @Inject constructor(
                     cadence = (status.speed * 1.5).toInt() // mock cadence
                 )
             }.collect { metric ->
+                if (_isSessionPaused.value) return@collect
+
                 sessionRepository.addMetric(metric)
                 
                 if (_isAutoSpeedEnabled.value) {
@@ -83,9 +89,28 @@ class SessionManager @Inject constructor(
         }
     }
 
+    fun pauseSession() {
+        if (_isSessionActive.value.not() || _isSessionPaused.value) return
+
+        scope.launch {
+            treadmillManager.stop()
+            _isSessionPaused.value = true
+        }
+    }
+
+    fun resumeSession() {
+        if (_isSessionActive.value.not() || _isSessionPaused.value.not()) return
+
+        scope.launch {
+            treadmillManager.start()
+            _isSessionPaused.value = false
+        }
+    }
+
     fun stopSession() {
         sessionJob?.cancel()
         _isSessionActive.value = false
+        _isSessionPaused.value = false
         
         // Stop Foreground Service
         context.stopService(Intent(context, dev.whileloop.c3p0.service.SessionService::class.java))

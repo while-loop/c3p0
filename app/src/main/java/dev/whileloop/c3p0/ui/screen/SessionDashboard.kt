@@ -4,16 +4,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +44,7 @@ import dev.whileloop.c3p0.ui.permission.hasPermissions
 import dev.whileloop.c3p0.ui.permission.permissionGuidance
 import dev.whileloop.c3p0.ui.permission.sessionPermissions
 import dev.whileloop.c3p0.ui.viewmodel.SessionViewModel
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @Composable
@@ -50,6 +57,7 @@ fun SessionDashboard(
     val connectionState by viewModel.connectionState.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isSessionActive by viewModel.isSessionActive.collectAsState()
+    val isSessionPaused by viewModel.isSessionPaused.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val currentHeartRate by viewModel.currentHeartRate.collectAsState()
@@ -206,8 +214,24 @@ fun SessionDashboard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isSessionActive) {
-                 Button(onClick = { viewModel.stopSession() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = {
+                            if (isSessionPaused) {
+                                viewModel.resumeSession()
+                            } else {
+                                viewModel.pauseSession()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (isSessionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = if (isSessionPaused) "Resume" else "Pause"
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isSessionPaused) "Resume" else "Pause")
+                    }
+                    LongPressStopButton(onStop = { viewModel.stopSession() })
                 }
             } else {
                 Button(
@@ -247,6 +271,39 @@ fun SessionDashboard(
         }
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun LongPressStopButton(
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isHolding by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isHolding) {
+        if (isHolding) {
+            delay(STOP_HOLD_DURATION_MS)
+            isHolding = false
+            onStop()
+        }
+    }
+
+    Button(
+        onClick = {},
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+        modifier = modifier.pointerInput(onStop) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                isHolding = true
+                waitForUpOrCancellation()
+                isHolding = false
+            }
+        }
+    ) {
+        Icon(Icons.Default.Stop, contentDescription = "Stop")
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(if (isHolding) "Keep holding" else "Hold 5s")
     }
 }
 
@@ -540,3 +597,4 @@ private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int, bodyWeightKg:
 private const val CHART_MIN_HEART_RATE = 50
 private const val CHART_MAX_HEART_RATE = 190
 private const val DEFAULT_BODY_WEIGHT_KG = 70f
+private const val STOP_HOLD_DURATION_MS = 5000L

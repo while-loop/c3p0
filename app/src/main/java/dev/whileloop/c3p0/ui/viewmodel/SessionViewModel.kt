@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -32,6 +33,7 @@ class SessionViewModel @Inject constructor(
 ) : ViewModel() {
     private var elapsedJob: Job? = null
     private var heartRateHistoryJob: Job? = null
+    private var statsStarted = false
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
     val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
@@ -70,6 +72,12 @@ class SessionViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         sessionManager.isSessionActive.value
+    )
+
+    val isSessionPaused = sessionManager.isSessionPaused.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        sessionManager.isSessionPaused.value
     )
 
     val unitSystem = settingsRepository.unitSystem.stateIn(
@@ -111,11 +119,20 @@ class SessionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            sessionManager.isSessionActive.collect { isActive ->
-                if (isActive) {
-                    startSessionStats()
-                } else {
-                    stopSessionStats()
+            combine(sessionManager.isSessionActive, sessionManager.isSessionPaused) { isActive, isPaused ->
+                isActive to isPaused
+            }.collect { (isActive, isPaused) ->
+                when {
+                    isActive && !isPaused -> {
+                        startSessionStats(reset = !statsStarted)
+                        statsStarted = true
+                    }
+                    else -> {
+                        stopSessionStats()
+                        if (!isActive) {
+                            statsStarted = false
+                        }
+                    }
                 }
             }
         }
@@ -157,6 +174,17 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    fun pauseSession() {
+        sessionManager.pauseSession()
+    }
+
+    fun resumeSession() {
+        viewModelScope.launch {
+            treadmillManager.setUnitSystem(settingsRepository.unitSystem.first())
+            sessionManager.resumeSession()
+        }
+    }
+
     fun updateSkipInactiveDeviceWarning(skip: Boolean) {
         viewModelScope.launch {
             settingsRepository.saveSkipInactiveDeviceWarning(skip)
@@ -183,10 +211,12 @@ class SessionViewModel @Inject constructor(
         }
     }
 
-    private fun startSessionStats() {
-        _sessionElapsedSeconds.value = 0
-        _heartRateHistory.value = emptyList()
-        _averageHeartRate.value = 0
+    private fun startSessionStats(reset: Boolean) {
+        if (reset) {
+            _sessionElapsedSeconds.value = 0
+            _heartRateHistory.value = emptyList()
+            _averageHeartRate.value = 0
+        }
 
         elapsedJob?.cancel()
         elapsedJob = viewModelScope.launch {
