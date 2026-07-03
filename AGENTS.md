@@ -38,8 +38,10 @@
 
 ## Project Tracking
 - This repository serves as the primary project tracker.
-- Roadmap and tasks are located in the `roadmap/` directory.
+- Roadmap, tasks, and implementation plans are located in the `roadmap/` directory.
 - Use `roadmap/GOALS.md` for high-level objectives and `roadmap/TASKS.md` for detailed task tracking.
+- **Agents MUST update these files consistently** to reflect current progress, new findings, and completed tasks.
+- Persist finalized implementation plans to `roadmap/plans/` for historical reference and context for future agents.
 
 ## Git Hygiene
 - Do not commit, create branches, or rewrite history unless explicitly asked.
