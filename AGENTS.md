@@ -15,6 +15,8 @@ This is an Android app project intended to run from Android Studio on Windows. P
 
 Always use the Git installation inside WSL for this repository. Windows Git is not configured for the user's SSH credentials.
 
+When the user asks for code changes and the work is complete, commit and push the changes to `origin/main` unless the user explicitly says not to.
+
 From PowerShell, run Git commands through WSL with the repo path translated to `/mnt/c`:
 
 ```powershell

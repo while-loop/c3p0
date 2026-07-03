@@ -21,6 +21,8 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+    private var desiredUnitSystem: UnitSystem = UnitSystem.Metric
+    private var isSyncingUnitSystem = false
 
     private val SERVICE_UUID = UUID.fromString("0000fe00-0000-1000-8000-00805f9b34fb")
     private val NOTIFY_CHAR_UUID = UUID.fromString("0000fe01-0000-1000-8000-00805f9b34fb")
@@ -76,6 +78,11 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean {
+        desiredUnitSystem = unitSystem
+        return applyUnitSystem(unitSystem)
+    }
+
+    private fun applyUnitSystem(unitSystem: UnitSystem): Boolean {
         val useMiles = if (unitSystem == UnitSystem.Imperial) 1 else 0
         return setPreferenceInt(PREF_UNITS, useMiles)
     }
@@ -133,8 +140,31 @@ class WalkingPadManagerImpl @Inject constructor(
         val time = (data[5].toInt() and 0xFF shl 16) or (data[6].toInt() and 0xFF shl 8) or (data[7].toInt() and 0xFF)
         val distance = (data[8].toInt() and 0xFF shl 16) or (data[9].toInt() and 0xFF shl 8) or (data[10].toInt() and 0xFF)
         val steps = (data[11].toInt() and 0xFF shl 16) or (data[12].toInt() and 0xFF shl 8) or (data[13].toInt() and 0xFF)
+        val unitSystem = parseUnitSystem(data)
 
-        _status.value = TreadmillStatus(state, speed, mode, time, distance, steps)
+        _status.value = TreadmillStatus(state, speed, mode, time, distance, steps, unitSystem)
+        syncUnitSystemIfNeeded(unitSystem)
+    }
+
+    private fun parseUnitSystem(data: ByteArray): UnitSystem? {
+        val unitByte = data.getOrNull(18)?.toInt()?.and(0xFF) ?: return null
+        return when (unitByte) {
+            0 -> UnitSystem.Metric
+            1 -> UnitSystem.Imperial
+            else -> null
+        }
+    }
+
+    private fun syncUnitSystemIfNeeded(reportedUnitSystem: UnitSystem?) {
+        if (reportedUnitSystem == null || reportedUnitSystem == desiredUnitSystem || isSyncingUnitSystem) return
+
+        Timber.w("WalkingPad unit system diverged. Stored=$desiredUnitSystem, reported=$reportedUnitSystem")
+        isSyncingUnitSystem = true
+        try {
+            applyUnitSystem(desiredUnitSystem)
+        } finally {
+            isSyncingUnitSystem = false
+        }
     }
 
     companion object {

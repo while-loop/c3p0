@@ -11,7 +11,10 @@ import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.manager.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -59,6 +62,27 @@ class SessionViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(5000),
         false
     )
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.unitSystem.distinctUntilChanged().collect { storedUnitSystem ->
+                treadmillManager.setUnitSystem(storedUnitSystem)
+            }
+        }
+
+        viewModelScope.launch {
+            treadmillManager.status
+                .map { it.unitSystem }
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { reportedUnitSystem ->
+                    val storedUnitSystem = settingsRepository.unitSystem.first()
+                    if (reportedUnitSystem != storedUnitSystem) {
+                        treadmillManager.setUnitSystem(storedUnitSystem)
+                    }
+                }
+        }
+    }
 
     fun startSession() {
         viewModelScope.launch {
