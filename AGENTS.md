@@ -29,6 +29,14 @@ $env:JAVA_HOME = 'C:\Users\anthony\AppData\Local\Programs\Android Studio\jbr'
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 ```
 
+Use the Android Studio SDK tools directly or add them to the current PowerShell session:
+
+```powershell
+$env:ANDROID_HOME = 'C:\Users\anthony\AppData\Local\Android\Sdk'
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:Path = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:Path"
+```
+
 ## Build
 
 Run the full build from the repo root:
@@ -92,6 +100,36 @@ When `sys.boot_completed` returns `1`, install or test against the emulator:
 .\gradlew.bat :app:installDebug
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
+
+## Run The App
+
+Run from Android Studio when possible: open the repo at `C:\Users\anthony\dev\c3p0`, select the `app` run configuration, select the `Pixel_9_Pro_XL` device, and press Run.
+
+To run from PowerShell, use the packaged Android Studio runtime and SDK paths:
+
+```powershell
+$env:JAVA_HOME = 'C:\Users\anthony\AppData\Local\Programs\Android Studio\jbr'
+$env:ANDROID_HOME = 'C:\Users\anthony\AppData\Local\Android\Sdk'
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:Path"
+```
+
+Start the emulator if needed:
+
+```powershell
+Start-Process -WindowStyle Hidden -FilePath "$env:ANDROID_HOME\emulator\emulator.exe" -ArgumentList '-avd', 'Pixel_9_Pro_XL'
+& "$env:ANDROID_HOME\platform-tools\adb.exe" wait-for-device
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell getprop sys.boot_completed
+```
+
+After `sys.boot_completed` returns `1`, install and launch the debug app:
+
+```powershell
+.\gradlew.bat :app:installDebug
+& "$env:ANDROID_HOME\platform-tools\adb.exe" shell am start -n dev.whileloop.c3p0/.MainActivity
+```
+
+The application id is `dev.whileloop.c3p0`.
 
 ## Notes For Future Agents
 
