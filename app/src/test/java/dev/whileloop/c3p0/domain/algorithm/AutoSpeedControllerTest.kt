@@ -66,6 +66,22 @@ class AutoSpeedControllerTest {
     }
 
     @Test
+    fun belowZoneUsesSmallerStepBandsBeforeMaxAdjustment() {
+        assertEquals(0.1f * KM_PER_MILE, belowZoneAdjustmentFor(avgHr = 112), 0.0001f)
+        assertEquals(0.2f * KM_PER_MILE, belowZoneAdjustmentFor(avgHr = 109), 0.0001f)
+        assertEquals(0.3f * KM_PER_MILE, belowZoneAdjustmentFor(avgHr = 106), 0.0001f)
+        assertEquals(0.5f * KM_PER_MILE, belowZoneAdjustmentFor(avgHr = 96), 0.0001f)
+    }
+
+    @Test
+    fun aboveZoneUsesSmallerStepBandsBeforeMaxAdjustment() {
+        assertEquals(-0.1f * KM_PER_MILE, aboveZoneAdjustmentFor(avgHr = 135), 0.0001f)
+        assertEquals(-0.2f * KM_PER_MILE, aboveZoneAdjustmentFor(avgHr = 138), 0.0001f)
+        assertEquals(-0.3f * KM_PER_MILE, aboveZoneAdjustmentFor(avgHr = 141), 0.0001f)
+        assertEquals(-0.5f * KM_PER_MILE, aboveZoneAdjustmentFor(avgHr = 151), 0.0001f)
+    }
+
+    @Test
     fun lowerZoneEdgeTrendingDownNudgesSpeedUp() {
         val adjustments = mutableListOf<Float>()
         val controller = edgeGuardController(adjustments)
@@ -130,6 +146,30 @@ class AutoSpeedControllerTest {
             addHrSample(hr = hr, speedKmh = speedKmh, timestamp = timestamp - 1_000)
         }
         addHrSample(hr = hr, speedKmh = speedKmh, timestamp = timestamp)
+    }
+
+    private fun belowZoneAdjustmentFor(avgHr: Int): Float =
+        singleAdjustmentFor(hr = avgHr)
+
+    private fun aboveZoneAdjustmentFor(avgHr: Int): Float =
+        singleAdjustmentFor(hr = avgHr)
+
+    private fun singleAdjustmentFor(hr: Int): Float {
+        val adjustments = mutableListOf<Float>()
+        val controller = AutoSpeedController(
+            targetHr = 123,
+            zoneMinHr = 114,
+            zoneMaxHr = 133,
+            adjustmentIntervalSeconds = 30
+        ).apply {
+            onSpeedAdjustmentRequired = { adjustment -> adjustments += adjustment }
+        }
+
+        controller.addHrSample(hr = hr, speedKmh = 4.0f, timestamp = 100)
+        controller.addHrSample(hr = hr, speedKmh = 4.0f, timestamp = 30_100)
+
+        assertEquals(1, adjustments.size)
+        return adjustments.first()
     }
 
     private companion object {

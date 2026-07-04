@@ -68,7 +68,7 @@ class AutoSpeedController(
             aboveZoneAdjustment(avgHr, avgSpeed, learnedZone2Speed)
         }
         
-        if (abs(adjustment) < MIN_ADJUSTMENT_KMH) {
+        if (abs(adjustment) + MIN_ADJUSTMENT_EPSILON_KMH < MIN_ADJUSTMENT_KMH) {
             Timber.d("Zone 2 adjustment below minimum. avgHr=$avgHr speed=$avgSpeed learned=$learnedZone2Speed")
             return
         }
@@ -107,9 +107,11 @@ class AutoSpeedController(
                 null
             }
         }
-        val proportionalTarget = avgSpeed + proportionalStep(zoneMinHr - avgHr)
+        val errorBpm = zoneMinHr - avgHr
+        val stepLimit = adjustmentStep(errorBpm)
+        val proportionalTarget = avgSpeed + stepLimit
         val desiredSpeed = maxOf(learnedFloor ?: minSpeed, proportionalTarget).coerceIn(minSpeed, maxSpeed)
-        return (desiredSpeed - avgSpeed).coerceIn(0f, maxAdjustment)
+        return (desiredSpeed - avgSpeed).coerceIn(0f, stepLimit)
     }
 
     private fun aboveZoneAdjustment(avgHr: Double, avgSpeed: Float, learnedZone2Speed: Float?): Float {
@@ -120,13 +122,23 @@ class AutoSpeedController(
                 null
             }
         }
-        val proportionalTarget = avgSpeed - proportionalStep(avgHr - zoneMaxHr)
+        val errorBpm = avgHr - zoneMaxHr
+        val stepLimit = adjustmentStep(errorBpm)
+        val proportionalTarget = avgSpeed - stepLimit
         val desiredSpeed = minOf(learnedCeiling ?: maxSpeed, proportionalTarget).coerceIn(minSpeed, maxSpeed)
-        return (desiredSpeed - avgSpeed).coerceIn(-maxAdjustment, 0f)
+        return (desiredSpeed - avgSpeed).coerceIn(-stepLimit, 0f)
     }
 
-    private fun proportionalStep(errorBpm: Double): Float =
-        ((errorBpm / 6.0).toFloat() * MAX_ADJUSTMENT_KMH).coerceIn(MIN_ADJUSTMENT_KMH, maxAdjustment)
+    private fun adjustmentStep(errorBpm: Double): Float {
+        val step = when {
+            errorBpm <= SMALL_ERROR_BPM -> 0.1f * KM_PER_MILE
+            errorBpm <= MEDIUM_ERROR_BPM -> 0.2f * KM_PER_MILE
+            errorBpm <= LARGE_ERROR_BPM -> 0.3f * KM_PER_MILE
+            errorBpm <= EXTRA_LARGE_ERROR_BPM -> 0.4f * KM_PER_MILE
+            else -> 0.5f * KM_PER_MILE
+        }
+        return minOf(step, maxAdjustment).coerceAtLeast(MIN_ADJUSTMENT_KMH)
+    }
 
     private fun zoneEdgeGuardBandBpm(): Double =
         maxOf(MIN_EDGE_GUARD_BPM, (zoneMaxHr - zoneMinHr) * EDGE_GUARD_ZONE_FRACTION)
@@ -190,7 +202,12 @@ class AutoSpeedController(
         private const val DEFAULT_ZONE_HALF_WIDTH_BPM = 5
         private const val KM_PER_MILE = 1.60934f
         private const val MIN_ADJUSTMENT_KMH = 0.1f * KM_PER_MILE
+        private const val MIN_ADJUSTMENT_EPSILON_KMH = 0.001f
         private const val MAX_ADJUSTMENT_KMH = 0.5f * KM_PER_MILE
+        private const val SMALL_ERROR_BPM = 3.0
+        private const val MEDIUM_ERROR_BPM = 6.0
+        private const val LARGE_ERROR_BPM = 10.0
+        private const val EXTRA_LARGE_ERROR_BPM = 15.0
         private const val EDGE_GUARD_ADJUSTMENT_KMH = 0.1f * KM_PER_MILE
         private const val EDGE_GUARD_INTERVAL_MILLIS = 45_000L
         private const val EDGE_GUARD_TREND_WINDOW_MILLIS = 2 * 60 * 1000L

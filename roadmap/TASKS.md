@@ -14,6 +14,7 @@
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
 - [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust aggressively outside Zone 2 while using only slow 0.1 mph edge-guard nudges inside Zone 2.
 - [x] **Zone 2 Max Speed Setting**: Added a Profile max-speed slider for Zone 2, defaulted to 3.5 mph, and clamped controller speed adjustments to the saved cap.
+- [x] **Zone 2 Step Bands**: Reduced out-of-zone speed changes to HR-error-based 0.1/0.2/0.3/0.4/0.5 mph bands so moderate misses do not always jump by 0.5 mph.
 - [x] **Dynamic HR Chart Scale**: Scaled the live heart-rate chart to observed HR plus Zone 2 bounds with 10% padding and aligned y-axis labels to the dynamic grid.
 - [x] **Zone 2 Controller Tests**: Added unit coverage for in-zone no-op behavior, learned speed bias, and trend-gated edge guard adjustments.
 - [x] **Default Session Mode Setting**: Added a Profile setting for Manual, Automatic, or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
