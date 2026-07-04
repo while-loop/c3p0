@@ -30,7 +30,8 @@ class PairingViewModel @Inject constructor(
     val devices = _devices.asStateFlow()
     private val devicesByAddress = linkedMapOf<String, BleDevice>()
     private val deviceDisplayOrder = mutableListOf<String>()
-    private var sortJob: Job? = null
+    private val scanStatsByAddress = mutableMapOf<String, ScanStats>()
+    private var revealJob: Job? = null
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning = _isScanning.asStateFlow()
@@ -66,7 +67,7 @@ class PairingViewModel @Inject constructor(
         if (_isScanning.value) return
 
         _isScanning.value = true
-        startSortTimer()
+        startRevealTimer()
         viewModelScope.launch {
             try {
                 scanner.scan().collect { device ->
@@ -76,9 +77,9 @@ class PairingViewModel @Inject constructor(
                 Timber.e(e, "BLE scan failed because permission was denied")
             } finally {
                 _isScanning.value = false
-                sortJob?.cancel()
-                sortJob = null
-                sortDevicesBySignal()
+                revealJob?.cancel()
+                revealJob = null
+                revealQualifiedDevices(maxDevices = Int.MAX_VALUE)
             }
         }
     }
@@ -119,33 +120,45 @@ class PairingViewModel @Inject constructor(
 
     private fun addOrUpdateDevice(device: BleDevice) {
         val existing = devicesByAddress[device.address]
-        val updated = if (existing == null) {
-            deviceDisplayOrder += device.address
-            device
-        } else {
-            device.copy(name = device.name ?: existing.name)
-        }
+        val stats = scanStatsByAddress.getOrPut(device.address) { ScanStats() }
+        stats.eventCount += 1
+        stats.rssiTotal += device.rssi
+
+        val updated = device.copy(name = device.name ?: existing?.name)
 
         devicesByAddress[device.address] = updated
-        publishDevicesInDisplayOrder()
+        if (device.address in deviceDisplayOrder) {
+            publishDevicesInDisplayOrder()
+        }
     }
 
-    private fun startSortTimer() {
-        sortJob?.cancel()
-        sortJob = viewModelScope.launch {
+    private fun startRevealTimer() {
+        revealJob?.cancel()
+        revealJob = viewModelScope.launch {
             while (_isScanning.value) {
-                delay(SORT_REFRESH_INTERVAL_MS)
-                sortDevicesBySignal()
+                delay(REVEAL_INTERVAL_MS)
+                revealQualifiedDevices(maxDevices = 1)
             }
         }
     }
 
-    private fun sortDevicesBySignal() {
-        deviceDisplayOrder.sortWith(
-            compareByDescending<String> { devicesByAddress[it]?.rssi ?: Int.MIN_VALUE }
-                .thenBy { devicesByAddress[it]?.name ?: "" }
-                .thenBy { it }
-        )
+    private fun revealQualifiedDevices(maxDevices: Int) {
+        val qualified = devicesByAddress.keys
+            .filter { address ->
+                address !in deviceDisplayOrder &&
+                    (scanStatsByAddress[address]?.eventCount ?: 0) >= MIN_SCAN_EVENTS_BEFORE_DISPLAY
+            }
+            .sortedWith(
+                compareByDescending<String> { scanStatsByAddress[it]?.eventCount ?: 0 }
+                    .thenByDescending { scanStatsByAddress[it]?.averageRssi ?: Int.MIN_VALUE.toDouble() }
+                    .thenBy { devicesByAddress[it]?.name ?: "" }
+                    .thenBy { it }
+            )
+            .take(maxDevices)
+
+        if (qualified.isEmpty()) return
+
+        deviceDisplayOrder += qualified
         publishDevicesInDisplayOrder()
     }
 
@@ -154,6 +167,15 @@ class PairingViewModel @Inject constructor(
     }
 
     companion object {
-        private const val SORT_REFRESH_INTERVAL_MS = 5_000L
+        private const val MIN_SCAN_EVENTS_BEFORE_DISPLAY = 3
+        private const val REVEAL_INTERVAL_MS = 500L
+    }
+
+    private data class ScanStats(
+        var eventCount: Int = 0,
+        var rssiTotal: Int = 0
+    ) {
+        val averageRssi: Double
+            get() = if (eventCount > 0) rssiTotal.toDouble() / eventCount else Int.MIN_VALUE.toDouble()
     }
 }

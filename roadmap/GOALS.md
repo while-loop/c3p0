@@ -7,7 +7,7 @@
 - [x] Implement `GarminManager` for Venu 3 (read heart rate).
 - [x] Create mock implementations for testing BLE logic without hardware.
 - [x] Implement persistent pairing to remember device addresses.
-- [x] Deduplicate BLE scan results by device address and batch closest-first RSSI sorting every 5 seconds.
+- [x] Deduplicate BLE scan results by device address and reveal qualified devices in a stable order after repeated scan events.
 - [x] Show selected and connected status in pairing/profile surfaces.
 - [x] Reconnect saved treadmill/watch addresses when opening session or profile screens.
 
