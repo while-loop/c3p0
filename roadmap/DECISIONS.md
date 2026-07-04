@@ -3,7 +3,7 @@
 ## 1. Bluetooth (BLE) Architecture
 - **Shared Controller**: We use a modular BLE architecture where `BleConnection` handles the low-level GATT logic and `TreadmillManager` / `HeartRateManager` handle the high-level protocol parsing.
 - **Mocks**: Every manager has a mock implementation (`MockTreadmillManager`) to allow UI and logic development without physical hardware.
-- **Pairing List Semantics**: BLE scan results are deduplicated by device address and sorted by RSSI so the nearest physical device appears first. Pairing and profile surfaces show selected and connected status separately because a saved device is not necessarily connected.
+- **Pairing List Semantics**: BLE scan results are deduplicated by device address. The pairing list re-sorts by RSSI every 5 seconds so nearby devices rise to the top without rows jumping on every advertisement; newly discovered devices append to the bottom until the next sort tick. Pairing and profile surfaces show selected and connected status separately because a saved device is not necessarily connected.
 - **Saved Device Reconnect**: Session and profile surfaces attempt to reconnect saved treadmill/watch addresses when opened so the app can recognize devices that are already paired with Android.
 - **Reconnect Cleanup**: Managers close any existing GATT connection before connecting to a new saved or selected address.
 - **WalkingPad Command Bounds**: Speed changes are clamped in the UI, auto-speed controller handoff, mock manager, and real BLE manager so no caller can send an out-of-range speed.

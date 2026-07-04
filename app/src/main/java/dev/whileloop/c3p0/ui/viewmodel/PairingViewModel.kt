@@ -9,6 +9,8 @@ import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.ble.model.BleDevice
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +29,8 @@ class PairingViewModel @Inject constructor(
     private val _devices = MutableStateFlow<List<BleDevice>>(emptyList())
     val devices = _devices.asStateFlow()
     private val devicesByAddress = linkedMapOf<String, BleDevice>()
+    private val deviceDisplayOrder = mutableListOf<String>()
+    private var sortJob: Job? = null
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning = _isScanning.asStateFlow()
@@ -62,6 +66,7 @@ class PairingViewModel @Inject constructor(
         if (_isScanning.value) return
 
         _isScanning.value = true
+        startSortTimer()
         viewModelScope.launch {
             try {
                 scanner.scan().collect { device ->
@@ -71,6 +76,9 @@ class PairingViewModel @Inject constructor(
                 Timber.e(e, "BLE scan failed because permission was denied")
             } finally {
                 _isScanning.value = false
+                sortJob?.cancel()
+                sortJob = null
+                sortDevicesBySignal()
             }
         }
     }
@@ -112,14 +120,40 @@ class PairingViewModel @Inject constructor(
     private fun addOrUpdateDevice(device: BleDevice) {
         val existing = devicesByAddress[device.address]
         val updated = if (existing == null) {
+            deviceDisplayOrder += device.address
             device
         } else {
             device.copy(name = device.name ?: existing.name)
         }
 
         devicesByAddress[device.address] = updated
-        _devices.value = devicesByAddress.values
-            .sortedByDescending { it.rssi }
-            .toList()
+        publishDevicesInDisplayOrder()
+    }
+
+    private fun startSortTimer() {
+        sortJob?.cancel()
+        sortJob = viewModelScope.launch {
+            while (_isScanning.value) {
+                delay(SORT_REFRESH_INTERVAL_MS)
+                sortDevicesBySignal()
+            }
+        }
+    }
+
+    private fun sortDevicesBySignal() {
+        deviceDisplayOrder.sortWith(
+            compareByDescending<String> { devicesByAddress[it]?.rssi ?: Int.MIN_VALUE }
+                .thenBy { devicesByAddress[it]?.name ?: "" }
+                .thenBy { it }
+        )
+        publishDevicesInDisplayOrder()
+    }
+
+    private fun publishDevicesInDisplayOrder() {
+        _devices.value = deviceDisplayOrder.mapNotNull { devicesByAddress[it] }
+    }
+
+    companion object {
+        private const val SORT_REFRESH_INTERVAL_MS = 5_000L
     }
 }
