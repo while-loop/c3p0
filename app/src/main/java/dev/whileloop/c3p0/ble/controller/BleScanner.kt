@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import dev.whileloop.c3p0.ble.diagnostic.BleErrorReporter
 import dev.whileloop.c3p0.ble.model.BleDevice
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -19,7 +20,8 @@ import javax.inject.Singleton
 
 @Singleton
 class BleScanner @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val errorReporter: BleErrorReporter
 ) {
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter = bluetoothManager.adapter
@@ -28,6 +30,7 @@ class BleScanner @Inject constructor(
     fun scan(): Flow<BleDevice> = callbackFlow {
         if (!hasScanPermission()) {
             Timber.w("BLE scan requested without required permissions")
+            errorReporter.report("Bluetooth scan", "Missing Bluetooth scan permissions")
             close()
             return@callbackFlow
         }
@@ -35,6 +38,7 @@ class BleScanner @Inject constructor(
         val scanner = adapter?.bluetoothLeScanner
         if (scanner == null) {
             Timber.e("BluetoothLeScanner is null")
+            errorReporter.report("Bluetooth scan", "BluetoothLeScanner is null")
             close()
             return@callbackFlow
         }
@@ -46,6 +50,7 @@ class BleScanner @Inject constructor(
                     device.name
                 } catch (e: SecurityException) {
                     Timber.e(e, "Unable to read BLE device name without permission")
+                    errorReporter.report("Bluetooth scan", "Unable to read BLE device name", e.message)
                     null
                 }
                 trySend(BleDevice(name, device.address, result.rssi))
@@ -53,6 +58,7 @@ class BleScanner @Inject constructor(
 
             override fun onScanFailed(errorCode: Int) {
                 Timber.e("Scan failed with error code: $errorCode")
+                errorReporter.report("Bluetooth scan", "Scan failed", "errorCode=$errorCode")
                 close()
             }
         }
@@ -62,6 +68,7 @@ class BleScanner @Inject constructor(
             scanner.startScan(callback)
         } catch (e: SecurityException) {
             Timber.e(e, "Unable to start BLE scan without permission")
+            errorReporter.report("Bluetooth scan", "Unable to start BLE scan", e.message)
             close(e)
             return@callbackFlow
         }
@@ -72,6 +79,7 @@ class BleScanner @Inject constructor(
                 scanner.stopScan(callback)
             } catch (e: SecurityException) {
                 Timber.e(e, "Unable to stop BLE scan without permission")
+                errorReporter.report("Bluetooth scan", "Unable to stop BLE scan", e.message)
             }
         }
     }

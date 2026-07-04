@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.ble.manager
 import android.content.Context
 import android.os.SystemClock
 import dev.whileloop.c3p0.ble.controller.BleConnection
+import dev.whileloop.c3p0.ble.diagnostic.BleErrorReporter
 import dev.whileloop.c3p0.ble.model.*
 import dev.whileloop.c3p0.data.model.UnitSystem
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +23,8 @@ import java.util.*
 import javax.inject.Inject
 
 class WalkingPadManagerImpl @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val errorReporter: BleErrorReporter
 ) : TreadmillManager {
 
     private var connection: BleConnection? = null
@@ -46,7 +48,7 @@ class WalkingPadManagerImpl @Inject constructor(
     override suspend fun connect(address: String): Boolean {
         connectionStateJob?.cancel()
         connection?.close()
-        connection = BleConnection(context, address).apply {
+        connection = BleConnection(context, address, errorReporter).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == NOTIFY_CHAR_UUID) {
                     handleNotification(data)
@@ -55,7 +57,15 @@ class WalkingPadManagerImpl @Inject constructor(
             onServicesDiscovered = {
                 val notificationsEnabled = enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID)
                 Timber.d("WalkingPad notifications enabled: $notificationsEnabled")
-                startStatusPolling()
+                if (notificationsEnabled) {
+                    startStatusPolling()
+                } else {
+                    errorReporter.report(
+                        "WalkingPad Bluetooth",
+                        "WalkingPad notifications were not enabled",
+                        "address=$address"
+                    )
+                }
             }
         }
         
@@ -73,6 +83,9 @@ class WalkingPadManagerImpl @Inject constructor(
                     }
                 }
             }
+        }
+        if (!result) {
+            errorReporter.report("WalkingPad Bluetooth", "Connect request failed", "address=$address")
         }
         return result
     }
@@ -167,6 +180,11 @@ class WalkingPadManagerImpl @Inject constructor(
             lastCommandElapsedMillis = SystemClock.elapsedRealtime()
         } else {
             Timber.w("WalkingPad command write was not accepted by Android Bluetooth stack")
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "Command write was not accepted by Android Bluetooth",
+                fixed.toHexString()
+            )
         }
         sent
     }

@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.ble.manager
 import android.content.Context
 import android.os.SystemClock
 import dev.whileloop.c3p0.ble.controller.BleConnection
+import dev.whileloop.c3p0.ble.diagnostic.BleErrorReporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,7 +16,8 @@ import java.util.*
 import javax.inject.Inject
 
 class GarminManagerImpl @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val errorReporter: BleErrorReporter
 ) : HeartRateManager {
 
     private var connection: BleConnection? = null
@@ -36,14 +38,21 @@ class GarminManagerImpl @Inject constructor(
     override suspend fun connect(address: String): Boolean {
         connectionStateJob?.cancel()
         connection?.close()
-        connection = BleConnection(context, address).apply {
+        connection = BleConnection(context, address, errorReporter).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == HR_MEASUREMENT_CHAR_UUID) {
                     handleHrNotification(data)
                 }
             }
             onServicesDiscovered = {
-                enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
+                val notificationsEnabled = enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
+                if (!notificationsEnabled) {
+                    errorReporter.report(
+                        "Watch Bluetooth",
+                        "Heart-rate notifications were not enabled",
+                        "address=$address"
+                    )
+                }
             }
         }
         
@@ -58,6 +67,9 @@ class GarminManagerImpl @Inject constructor(
                     }
                 }
             }
+        }
+        if (!result) {
+            errorReporter.report("Watch Bluetooth", "Connect request failed", "address=$address")
         }
         return result
     }
