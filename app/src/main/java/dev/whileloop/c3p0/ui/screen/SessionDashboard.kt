@@ -42,6 +42,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.model.TreadmillMode
+import dev.whileloop.c3p0.ble.model.TreadmillState
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
@@ -312,6 +313,10 @@ fun SessionDashboard(
             Spacer(modifier = Modifier.height(12.dp))
             val sessionModeCount = if (supportsNativeAutoMode) 3 else 2
             val zone2ModeIndex = if (supportsNativeAutoMode) 2 else 1
+            val canChangeNativeAutoMode =
+                isPadReady &&
+                    status.state != TreadmillState.ACTIVE &&
+                    (!isSessionActive || isSessionPaused)
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
@@ -325,7 +330,7 @@ fun SessionDashboard(
                     SegmentedButton(
                         selected = status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
                         onClick = { viewModel.setMode(TreadmillMode.AUTO) },
-                        enabled = isPadReady,
+                        enabled = canChangeNativeAutoMode,
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
                     ) {
                         Text("Automatic")
