@@ -155,7 +155,7 @@ private fun DeviceRoleBottomSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(20.dp))
-            Button(
+            OutlinedButton(
                 onClick = { onRoleSelected(PairingDeviceRole.Pad) },
                 modifier = Modifier.fillMaxWidth()
             ) {
