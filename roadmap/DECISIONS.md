@@ -11,6 +11,7 @@
 - **Bluetooth Error Visibility**: BLE scan, connection, service discovery, notification, command-write failures, missing WalkingPad status replies, and WalkingPad commands that do not appear in subsequent status are reported through a singleton error reporter and shown as persistent stacked error cards in the root UI. Errors do not auto-dismiss, making transient asynchronous failures visible for troubleshooting.
 - **WalkingPad Command Bounds**: Speed changes are clamped in the UI, auto-speed controller handoff, mock manager, and real BLE manager so no caller can send an out-of-range speed.
 - **WalkingPad Moving Speed Floor**: Normal manual, FTMS, and Zone 2 speed requests floor to 1 mph (`1.60934 km/h`) because the walking belt can stop when commanded below that threshold. Explicit stop remains a separate zero-speed/stop command path.
+- **WalkingPad Start Timing**: Session start sends the pad's start/resume command before applying the safe moving-speed target. The speed target is delayed until after the pad's hardware countdown so the belt does not begin moving before the countdown completes.
 - **WalkingPad Counter Decoding**: Status notifications decode 24-bit time, distance, and step counters explicitly to avoid operator-precedence ambiguity.
 
 ## 2. Session Management

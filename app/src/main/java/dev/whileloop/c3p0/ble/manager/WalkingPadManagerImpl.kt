@@ -141,32 +141,21 @@ class WalkingPadManagerImpl @Inject constructor(
         if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
             requestFtmsControl()
             val startSpeed = status.value.speed.coerceAtLeast(MIN_MOVING_SPEED_KMH)
-            sendFtmsTargetSpeed(startSpeed, verifyApplied = false)
-            return sendControlCommand(
-                label = "start belt",
-                cmd = byteArrayOf(FTMS_OP_START_OR_RESUME),
-                isApplied = { status ->
-                    status.state != TreadmillState.STOPPED &&
-                        status.state != TreadmillState.STANDBY &&
-                        status.speed >= MIN_MOVING_SPEED_KMH - SPEED_APPLIED_TOLERANCE_KMH
-                }
-            )
+            val started = sendCommand(byteArrayOf(FTMS_OP_START_OR_RESUME))
+            if (!started) return false
+            delay(START_COUNTDOWN_SPEED_DELAY_MS)
+            return sendFtmsTargetSpeed(startSpeed)
         } else {
             if (status.value.mode == TreadmillMode.STANDBY && !setMode(TreadmillMode.MANUAL)) {
                 return false
             }
-            if (status.value.speed < MIN_MOVING_SPEED_KMH) {
-                sendLegacySpeed(MIN_MOVING_SPEED_KMH, verifyApplied = false)
-            }
-            return sendControlCommand(
-                label = "start belt",
-                cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()),
-                isApplied = { status ->
-                    status.state != TreadmillState.STOPPED &&
-                        status.state != TreadmillState.STANDBY &&
-                        status.speed >= MIN_MOVING_SPEED_KMH - SPEED_APPLIED_TOLERANCE_KMH
-                }
+            val startSpeed = status.value.speed.coerceAtLeast(MIN_MOVING_SPEED_KMH)
+            val started = sendCommand(
+                byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte())
             )
+            if (!started) return false
+            delay(START_COUNTDOWN_SPEED_DELAY_MS)
+            return sendLegacySpeed(startSpeed)
         }
     }
 
@@ -661,6 +650,7 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PREF_UNITS = 8
         private const val MIN_MOVING_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
+        private const val START_COUNTDOWN_SPEED_DELAY_MS = 3_200L
         private const val INITIAL_POLL_DELAY_MS = 250L
         private const val MIN_COMMAND_SPACING_MS = 700L
         private const val STATUS_POLL_INTERVAL_MS = 750L
