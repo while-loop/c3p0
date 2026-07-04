@@ -13,9 +13,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
@@ -35,6 +38,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
     private var lastRawNotificationHex: String? = null
+    private val protocolReady = MutableStateFlow(false)
     private val _status = MutableStateFlow(TreadmillStatus())
     override val status: StateFlow<TreadmillStatus> = _status.asStateFlow()
 
@@ -50,6 +54,9 @@ class WalkingPadManagerImpl @Inject constructor(
     override suspend fun connect(address: String): Boolean {
         connectionStateJob?.cancel()
         connection?.close()
+        stopStatusPolling()
+        protocolReady.value = false
+        _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(context, address, errorReporter).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == NOTIFY_CHAR_UUID) {
@@ -60,7 +67,12 @@ class WalkingPadManagerImpl @Inject constructor(
                 val notificationsEnabled = enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID)
                 Timber.d("WalkingPad notifications enabled: $notificationsEnabled")
                 if (notificationsEnabled) {
-                    startStatusPolling()
+                    scope.launch {
+                        delay(PROTOCOL_READY_DELAY_MS)
+                        protocolReady.value = true
+                        _connectionState.value = ConnectionState.CONNECTED
+                        startStatusPolling()
+                    }
                 } else {
                     errorReporter.report(
                         "WalkingPad Bluetooth",
@@ -78,9 +90,18 @@ class WalkingPadManagerImpl @Inject constructor(
                 connectionStateJob?.cancel()
                 connectionStateJob = scope.launch {
                     bleConnection.connectionState.collect { state ->
-                        _connectionState.value = state
-                        if (state == ConnectionState.DISCONNECTED) {
-                            stopStatusPolling()
+                        when (state) {
+                            ConnectionState.CONNECTED -> {
+                                if (!protocolReady.value) {
+                                    _connectionState.value = ConnectionState.CONNECTING
+                                }
+                            }
+                            ConnectionState.DISCONNECTED -> {
+                                protocolReady.value = false
+                                _connectionState.value = ConnectionState.DISCONNECTED
+                                stopStatusPolling()
+                            }
+                            else -> _connectionState.value = state
                         }
                     }
                 }
@@ -96,6 +117,7 @@ class WalkingPadManagerImpl @Inject constructor(
         connectionStateJob?.cancel()
         connectionStateJob = null
         stopStatusPolling()
+        protocolReady.value = false
         connection?.disconnect()
         connection = null
         _connectionState.value = ConnectionState.DISCONNECTED
@@ -182,6 +204,16 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private suspend fun sendCommand(cmd: ByteArray): Boolean = commandMutex.withLock {
+        if (!awaitProtocolReady()) {
+            val fixed = fixCrc(cmd.copyOf())
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "WalkingPad protocol is not ready",
+                "command=${fixed.toHexString()} connection=${connectionState.value}"
+            )
+            return@withLock false
+        }
+
         val now = SystemClock.elapsedRealtime()
         val elapsedSinceLastCommand = now - lastCommandElapsedMillis
         if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < MIN_COMMAND_SPACING_MS) {
@@ -203,6 +235,12 @@ class WalkingPadManagerImpl @Inject constructor(
         }
         sent
     }
+
+    private suspend fun awaitProtocolReady(): Boolean =
+        protocolReady.value ||
+            withTimeoutOrNull(PROTOCOL_READY_TIMEOUT_MS) {
+                protocolReady.filter { it }.first()
+            } == true
 
     private suspend fun sendControlCommand(
         label: String,
@@ -361,5 +399,7 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val STATUS_POLL_INTERVAL_MS = 750L
         private const val COMMAND_REPLY_TIMEOUT_MS = 2_500L
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
+        private const val PROTOCOL_READY_DELAY_MS = 500L
+        private const val PROTOCOL_READY_TIMEOUT_MS = 5_000L
     }
 }
