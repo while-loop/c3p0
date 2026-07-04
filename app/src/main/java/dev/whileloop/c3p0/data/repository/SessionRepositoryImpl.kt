@@ -35,6 +35,10 @@ class SessionRepositoryImpl @Inject constructor(
         return sessionDao.getAllSessions()
     }
 
+    override suspend fun getSessionsBetween(startTime: Instant, endTime: Instant): List<SessionEntity> {
+        return sessionDao.getSessionsBetween(startTime, endTime)
+    }
+
     override fun getMetricsForSession(sessionId: Long): Flow<List<SessionMetricEntity>> {
         return sessionDao.getMetricsForSession(sessionId)
     }

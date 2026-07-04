@@ -8,6 +8,7 @@ import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.repository.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.whileloop.c3p0.data.repository.SettingsRepository
+import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
 import dev.whileloop.c3p0.domain.usecase.StepNormalizationUseCase
 import kotlinx.coroutines.Job
@@ -49,6 +50,19 @@ class StatsViewModel @Inject constructor(
     private val _normalizedSteps = MutableStateFlow<NormalizedStepsResult?>(null)
     val normalizedSteps = _normalizedSteps.asStateFlow()
 
+    private val _dailyStepHistory = MutableStateFlow<List<DailyStepHistory>>(emptyList())
+    val dailyStepHistory = _dailyStepHistory.asStateFlow()
+
+    private val _canReadHealthConnectSteps = MutableStateFlow(false)
+    val canReadHealthConnectSteps = _canReadHealthConnectSteps.asStateFlow()
+
+    private val _isStepHistoryLoading = MutableStateFlow(false)
+    val isStepHistoryLoading = _isStepHistoryLoading.asStateFlow()
+
+    init {
+        refreshStepHistory()
+    }
+
     fun selectSession(session: SessionEntity) {
         _selectedSession.value = session
         selectedMetricsJob?.cancel()
@@ -73,5 +87,22 @@ class StatsViewModel @Inject constructor(
         _selectedSession.value = null
         _selectedSessionMetrics.value = emptyList()
         _normalizedSteps.value = null
+    }
+
+    fun refreshStepHistory() {
+        viewModelScope.launch {
+            _isStepHistoryLoading.value = true
+            try {
+                val canReadSteps = stepNormalizationUseCase.canReadStepHistory()
+                _canReadHealthConnectSteps.value = canReadSteps
+                _dailyStepHistory.value = if (canReadSteps) {
+                    stepNormalizationUseCase.getDailyStepHistory()
+                } else {
+                    emptyList()
+                }
+            } finally {
+                _isStepHistoryLoading.value = false
+            }
+        }
     }
 }

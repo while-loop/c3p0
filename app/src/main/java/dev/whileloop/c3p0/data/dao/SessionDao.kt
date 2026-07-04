@@ -19,6 +19,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions ORDER BY startTime DESC")
     fun getAllSessions(): Flow<List<SessionEntity>>
 
+    @Query("SELECT * FROM sessions WHERE startTime < :endTime AND endTime IS NOT NULL AND endTime > :startTime ORDER BY startTime ASC")
+    suspend fun getSessionsBetween(startTime: java.time.Instant, endTime: java.time.Instant): List<SessionEntity>
+
     @Query("SELECT * FROM sessions WHERE id = :id")
     suspend fun getSessionById(id: Long): SessionEntity?
 

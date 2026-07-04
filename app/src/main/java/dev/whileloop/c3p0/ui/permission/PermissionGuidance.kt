@@ -24,7 +24,8 @@ import dev.whileloop.c3p0.health.HealthConnectManager
 enum class PermissionRequestKind {
     BleScan,
     Session,
-    HealthConnect
+    HealthConnect,
+    HealthConnectSteps
 }
 
 data class PermissionGuidance(
@@ -54,6 +55,8 @@ fun sessionPermissions(): Array<String> = buildList {
 
 fun healthConnectPermissions(): Set<String> = HealthConnectManager.PERMISSIONS
 
+fun healthConnectStepHistoryPermissions(): Set<String> = HealthConnectManager.STEP_HISTORY_PERMISSIONS
+
 fun Context.hasPermissions(permissions: Array<String>): Boolean =
     permissions.all { permission ->
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
@@ -76,6 +79,12 @@ fun permissionGuidance(kind: PermissionRequestKind): PermissionGuidance =
         PermissionRequestKind.HealthConnect -> PermissionGuidance(
             title = "Sync with Health Connect",
             body = "C3P0 needs Health Connect access before it can read steps and body weight or write completed walking sessions.",
+            actionLabel = "Continue"
+        )
+
+        PermissionRequestKind.HealthConnectSteps -> PermissionGuidance(
+            title = "Read step history",
+            body = "C3P0 needs Health Connect step access to show historical totals and exclude other apps' steps during C3P0 sessions.",
             actionLabel = "Continue"
         )
     }

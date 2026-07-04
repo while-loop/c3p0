@@ -32,6 +32,10 @@ class HealthConnectManager @Inject constructor(
         return hasPermissions(PERMISSIONS)
     }
 
+    suspend fun hasStepHistoryPermission(): Boolean {
+        return hasPermissions(STEP_HISTORY_PERMISSIONS)
+    }
+
     private suspend fun hasPermissions(requiredPermissions: Set<String>): Boolean {
         return try {
             healthConnectClient.permissionController.getGrantedPermissions().containsAll(requiredPermissions)
@@ -42,7 +46,7 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepsRecord> {
-        if (!hasPermissions(READ_STEPS_PERMISSIONS)) return emptyList()
+        if (!hasPermissions(STEP_HISTORY_PERMISSIONS)) return emptyList()
 
         return try {
             val response = healthConnectClient.readRecords(
@@ -131,7 +135,7 @@ class HealthConnectManager @Inject constructor(
     }
 
     companion object {
-        private val READ_STEPS_PERMISSIONS: Set<String> = setOf(
+        val STEP_HISTORY_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(StepsRecord::class)
         )
         private val READ_WEIGHT_PERMISSIONS: Set<String> = setOf(
@@ -142,6 +146,6 @@ class HealthConnectManager @Inject constructor(
             HealthPermission.getWritePermission(DistanceRecord::class),
             HealthPermission.getWritePermission(ExerciseSessionRecord::class)
         )
-        val PERMISSIONS: Set<String> = READ_STEPS_PERMISSIONS + READ_WEIGHT_PERMISSIONS + WRITE_SESSION_PERMISSIONS
+        val PERMISSIONS: Set<String> = STEP_HISTORY_PERMISSIONS + READ_WEIGHT_PERMISSIONS + WRITE_SESSION_PERMISSIONS
     }
 }

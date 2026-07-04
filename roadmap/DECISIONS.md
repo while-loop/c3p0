@@ -23,6 +23,7 @@
 ## 3. Data Strategy
 - **Health Connect**: Chosen over Google Fit as the primary health data hub for modern Android devices. We write completed walking sessions, steps, and distance. We read body weight for calorie estimates and steps for normalization. We do not request or write heart-rate records; the watch should remain the source of HR data in Health Connect.
 - **Health Connect Permissions**: The profile toggle reflects actual granted permissions. Enabling shows the Health Connect permission flow; disabling opens Health Connect settings because apps cannot revoke Health Connect grants directly. Read/write code paths check only the permissions needed for that operation.
+- **Normalized Historical Steps**: Daily Health Connect history shows raw steps and normalized steps. Normalization subtracts non-C3P0 step records that overlap completed C3P0 sessions, with record counts prorated across day/session boundaries.
 - **DataStore**: Used for lightweight persistence like BLE device addresses, unit preferences, inactive-warning preference, backup toggle, profile age, daily step goal, and cached body weight. Room handles the heavy lifting for session history.
 - **Unit Source of Truth**: The app's stored unit setting is the source of truth. WalkingPad units are corrected when settings change, when a session starts/resumes/pauses, and when reported device units diverge.
 - **Auto Backup**: We rely on Android's native Google Drive Auto Backup to sync Room DB files and DataStore preferences. Backup rules include `c3p0.db`, `c3p0.db-shm`, `c3p0.db-wal`, `datastore/settings.preferences_pb`, and SharedPreferences.
@@ -35,7 +36,7 @@
 - **Permission Rationale**: Code paths that require Android permissions should show a bottom sheet explaining the request before invoking the system prompt.
 - **Session Dashboard Density**: Session stats are compact tiles because the screen now shows distance, steps, active time, calories, current HR, average HR, speed controls, device status, and the HR chart.
 - **Heart-Rate Chart**: The session chart includes y-axis labels and zone-colored line segments for Zone 0 through Zone 4.
-- **Stats History**: Tapping a historical session shows stored aggregates, metric-derived fallback summaries, and Health Connect normalized step counts when available.
+- **Stats History**: The History screen shows daily Health Connect raw/normalized step history and selected-session details with stored aggregates, metric-derived fallback summaries, and Health Connect normalized step counts when available.
 
 ## 5. CI & Distribution
 - **Debug APK Workflow**: GitHub Actions builds a debug APK on every push and uploads it as an artifact for remote install testing. Release APKs are deferred until signing keys exist.

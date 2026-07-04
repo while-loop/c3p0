@@ -1,19 +1,31 @@
 package dev.whileloop.c3p0.ui.screen
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.model.UnitSystem
+import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
+import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
+import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
+import dev.whileloop.c3p0.ui.permission.healthConnectStepHistoryPermissions
+import dev.whileloop.c3p0.ui.permission.permissionGuidance
 import dev.whileloop.c3p0.ui.viewmodel.StatsViewModel
 import java.time.Duration
 import java.time.ZoneId
@@ -24,11 +36,41 @@ import java.util.Locale
 fun StatsScreen(
     viewModel: StatsViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val sessions by viewModel.allSessions.collectAsState()
     val selectedSession by viewModel.selectedSession.collectAsState()
     val metrics by viewModel.selectedSessionMetrics.collectAsState()
     val normalizedSteps by viewModel.normalizedSteps.collectAsState()
+    val dailyStepHistory by viewModel.dailyStepHistory.collectAsState()
+    val canReadHealthConnectSteps by viewModel.canReadHealthConnectSteps.collectAsState()
+    val isStepHistoryLoading by viewModel.isStepHistoryLoading.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
+    var showStepPermissionSheet by remember { mutableStateOf(false) }
+    val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
+    val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) {
+        viewModel.refreshStepHistory()
+    }
+
+    if (showStepPermissionSheet) {
+        PermissionGuidanceBottomSheet(
+            guidance = permissionGuidance(PermissionRequestKind.HealthConnectSteps),
+            onContinue = {
+                showStepPermissionSheet = false
+                if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
+                    healthConnectPermissionLauncher.launch(stepHistoryPermissions)
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Health Connect is not available on this device.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+            onDismiss = { showStepPermissionSheet = false }
+        )
+    }
     
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
@@ -44,6 +86,16 @@ fun StatsScreen(
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+
+        HealthConnectStepHistoryCard(
+            rows = dailyStepHistory,
+            canReadSteps = canReadHealthConnectSteps,
+            isLoading = isStepHistoryLoading,
+            onEnable = { showStepPermissionSheet = true },
+            onRefresh = { viewModel.refreshStepHistory() }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         
         selectedSession?.let { session ->
             SessionDetailCard(session, metrics, normalizedSteps, unitSystem)
@@ -57,6 +109,75 @@ fun StatsScreen(
                 }
                 HorizontalDivider()
             }
+        }
+    }
+}
+
+@Composable
+private fun HealthConnectStepHistoryCard(
+    rows: List<DailyStepHistory>,
+    canReadSteps: Boolean,
+    isLoading: Boolean,
+    onEnable: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
+                TextButton(
+                    onClick = if (canReadSteps) onRefresh else onEnable,
+                    enabled = !isLoading
+                ) {
+                    Text(if (canReadSteps) "Refresh" else "Enable")
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            when {
+                isLoading -> Text("Loading step history...")
+                !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
+                rows.isEmpty() -> Text("No Health Connect step data found.")
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                    rows.forEach { row ->
+                        DailyStepHistoryRow(row)
+                        if (row != rows.last()) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                    }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyStepHistoryRow(row: DailyStepHistory) {
+    val formatter = DateTimeFormatter.ofPattern("MMM dd", Locale.US)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(row.date.format(formatter), fontWeight = FontWeight.SemiBold)
+            Text("${row.normalizedSteps} normalized", fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Raw HC ${row.rawSteps}", style = MaterialTheme.typography.bodySmall)
+            Text("C3P0 ${row.c3p0Steps}", style = MaterialTheme.typography.bodySmall)
+            Text("Excluded ${row.excludedOtherSessionSteps}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

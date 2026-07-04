@@ -19,6 +19,7 @@
 - [x] Remove app-side heart-rate read/write permissions from Health Connect; watches remain the source of HR records.
 - [x] Scope Health Connect permission checks by operation and surface Health Connect settings for revocation.
 - [x] Implement and surface "Normalized Steps" using Health Connect data in session history.
+- [x] Show daily Health Connect step history with raw and normalized totals.
 - [x] Ensure historical viewing of session aggregates and metric summaries (steps/HR/distance/time/SPM).
 
 ## Phase 3: Session Logic & Auto-Speed [COMPLETED]
