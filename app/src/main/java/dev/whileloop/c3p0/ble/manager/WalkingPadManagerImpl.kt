@@ -42,6 +42,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private var ftmsControlRequested = false
     private val protocolReady = MutableStateFlow(false)
     private val legacyProtocolReady = MutableStateFlow(false)
+    private val ksEncryptedProtocolReady = MutableStateFlow(false)
     private val ftmsProtocolReady = MutableStateFlow(false)
     private val _status = MutableStateFlow(TreadmillStatus())
     override val status: StateFlow<TreadmillStatus> = _status.asStateFlow()
@@ -69,6 +70,7 @@ class WalkingPadManagerImpl @Inject constructor(
         protocolReadyWatchdogJob?.cancel()
         protocolReady.value = false
         legacyProtocolReady.value = false
+        ksEncryptedProtocolReady.value = false
         ftmsProtocolReady.value = false
         ftmsControlRequested = false
         _supportsNativeAutoMode.value = false
@@ -103,6 +105,7 @@ class WalkingPadManagerImpl @Inject constructor(
                     if (hasLegacyService) {
                         activateLegacyProtocol(address)
                     }
+                    activateKsEncryptedProtocolIfAvailable()
                     if (hasLegacyService && hasFtmsService) {
                         delay(GATT_DESCRIPTOR_WRITE_DELAY_MS)
                     }
@@ -336,17 +339,8 @@ class WalkingPadManagerImpl @Inject constructor(
         }
 
     override suspend fun setMode(mode: TreadmillMode): Boolean {
-        if (mode == TreadmillMode.MANUAL && !legacyProtocolReady.value) {
+        if (mode == TreadmillMode.MANUAL && !legacyProtocolReady.value && !ksEncryptedProtocolReady.value) {
             return true
-        }
-
-        if (!legacyProtocolReady.value) {
-            errorReporter.report(
-                "WalkingPad Bluetooth",
-                "Native WalkingPad automatic mode is not available on this connection",
-                "mode=$mode services=${connection?.serviceSummary() ?: "none"}"
-            )
-            return false
         }
 
         if (mode == TreadmillMode.AUTO && status.value.state == TreadmillState.ACTIVE) {
@@ -358,6 +352,23 @@ class WalkingPadManagerImpl @Inject constructor(
             return false
         }
 
+        if (legacyProtocolReady.value) {
+            return setLegacyMode(mode)
+        }
+
+        if (ksEncryptedProtocolReady.value) {
+            return setKsEncryptedMode(mode)
+        }
+
+        errorReporter.report(
+            "WalkingPad Bluetooth",
+            "Native WalkingPad automatic mode is not available on this connection",
+            "mode=$mode services=${connection?.serviceSummary() ?: "none"}"
+        )
+        return false
+    }
+
+    private suspend fun setLegacyMode(mode: TreadmillMode): Boolean {
         val m = when (mode) {
             TreadmillMode.AUTO -> 0x00
             TreadmillMode.MANUAL -> 0x01
@@ -369,6 +380,25 @@ class WalkingPadManagerImpl @Inject constructor(
             protocol = WalkingPadProtocol.LegacyKingsmith,
             isApplied = { status -> status.mode == mode }
         )
+    }
+
+    private suspend fun setKsEncryptedMode(mode: TreadmillMode): Boolean {
+        val command = when (mode) {
+            TreadmillMode.AUTO -> KS_ENCRYPTED_AUTO_MODE_COMMAND
+            TreadmillMode.MANUAL -> KS_ENCRYPTED_MANUAL_MODE_COMMAND
+            TreadmillMode.STANDBY -> KS_ENCRYPTED_STANDBY_MODE_COMMAND
+        }
+        val sent = sendKsEncryptedCommandVariants(command)
+        if (sent) {
+            _status.value = status.value.copy(mode = mode)
+        } else {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "WalkingPad did not apply encrypted KS mode command",
+                "mode=$mode command=$command ksEncryptedWrites=${availableKsEncryptedWriteChars().joinToString().ifBlank { "none" }}"
+            )
+        }
+        return sent
     }
 
     override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean {
@@ -542,6 +572,22 @@ class WalkingPadManagerImpl @Inject constructor(
         sent
     }
 
+    private suspend fun sendKsEncryptedCommandVariants(command: String): Boolean {
+        val writeChars = availableKsEncryptedWriteChars()
+        if (writeChars.isEmpty()) return false
+
+        val payloads = ksEncryptedCommandPayloads(command)
+        var anySent = false
+        for (writeChar in writeChars) {
+            for (payload in payloads) {
+                if (sendKsEncryptedCommand(writeChar, payload)) {
+                    anySent = true
+                }
+            }
+        }
+        return anySent
+    }
+
     private suspend fun awaitProtocolReady(protocol: WalkingPadProtocol): Boolean {
         val readyFlow = when (protocol) {
             WalkingPadProtocol.LegacyKingsmith -> legacyProtocolReady
@@ -691,6 +737,16 @@ class WalkingPadManagerImpl @Inject constructor(
         }
     }
 
+    private fun activateKsEncryptedProtocolIfAvailable() {
+        val hasEncryptedControl = availableKsEncryptedWriteChars().isNotEmpty()
+        ksEncryptedProtocolReady.value = hasEncryptedControl
+        if (hasEncryptedControl) {
+            _supportsNativeAutoMode.value = true
+            markAnyProtocolReady()
+            Timber.d("WalkingPad encrypted KS control ready")
+        }
+    }
+
     private fun activateFtmsProtocol(address: String) {
         scope.launch {
             val treadmillNotificationsEnabled =
@@ -739,6 +795,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private fun resetProtocolState() {
         protocolReady.value = false
         legacyProtocolReady.value = false
+        ksEncryptedProtocolReady.value = false
         ftmsProtocolReady.value = false
         ftmsControlRequested = false
     }
@@ -806,7 +863,11 @@ class WalkingPadManagerImpl @Inject constructor(
         _status.value = status.value.copy(
             state = if (speed > SPEED_APPLIED_TOLERANCE_KMH) TreadmillState.ACTIVE else TreadmillState.STOPPED,
             speed = speed,
-            mode = if (legacyProtocolReady.value) status.value.mode else TreadmillMode.MANUAL,
+            mode = if (legacyProtocolReady.value || ksEncryptedProtocolReady.value) {
+                status.value.mode
+            } else {
+                TreadmillMode.MANUAL
+            },
             time = elapsedTime,
             distance = distance
         )
@@ -930,6 +991,9 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val FTMS_TREADMILL_METABOLIC_EQUIVALENT_FLAG = 0x0200
         private const val FTMS_TREADMILL_ELAPSED_TIME_FLAG = 0x0400
         private const val KS_ENCRYPTED_STOP_COMMAND = "props runState 0"
+        private const val KS_ENCRYPTED_AUTO_MODE_COMMAND = "props ControlMode 0"
+        private const val KS_ENCRYPTED_MANUAL_MODE_COMMAND = "props ControlMode 1"
+        private const val KS_ENCRYPTED_STANDBY_MODE_COMMAND = "props ControlMode 2"
         private const val KS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
         private const val KS_ENCRYPTED_COMMAND_TERMINATOR: Byte = 13
         private val KS_ENCRYPTED_WRITE_CHAR_UUID_SUBSTRINGS = listOf("0000fed7", "0001fed8", "0002fed7")
