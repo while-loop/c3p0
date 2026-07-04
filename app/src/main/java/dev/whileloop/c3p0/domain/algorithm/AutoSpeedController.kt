@@ -16,6 +16,7 @@ class AutoSpeedController(
     private val samples = mutableListOf<Sample>()
     private val observations = mutableListOf<Observation>()
     private var lastAdjustmentTime = 0L
+    private var lastZoneEdgeGuardTime = 0L
 
     fun addHrSample(hr: Int, speedKmh: Float, timestamp: Long) {
         samples.add(Sample(hr = hr, speedKmh = speedKmh.coerceIn(minSpeed, maxSpeed)))
@@ -45,8 +46,18 @@ class AutoSpeedController(
             timestamp = timestamp
         )
 
+        val edgeGuardAdjustment = zone2EdgeGuardAdjustment(avgHr, avgSpeed, timestamp)
+        if (edgeGuardAdjustment != null) {
+            Timber.d(
+                "Zone 2 edge guard adjustment. avgHr=$avgHr zone=$zoneMinHr-$zoneMaxHr " +
+                    "speed=$avgSpeed adjustment=$edgeGuardAdjustment"
+            )
+            onSpeedAdjustmentRequired?.invoke(edgeGuardAdjustment)
+            return
+        }
+
         if (avgHr >= zoneMinHr && avgHr <= zoneMaxHr) {
-            Timber.d("HR in Zone 2, no adjustment. avgHr=$avgHr speed=$avgSpeed")
+            Timber.d("HR safely in Zone 2, no adjustment. avgHr=$avgHr speed=$avgSpeed")
             return
         }
 
@@ -67,6 +78,24 @@ class AutoSpeedController(
                 "speed=$avgSpeed learned=$learnedZone2Speed adjustment=$adjustment"
         )
         onSpeedAdjustmentRequired?.invoke(adjustment)
+    }
+
+    private fun zone2EdgeGuardAdjustment(avgHr: Double, avgSpeed: Float, timestamp: Long): Float? {
+        if (avgHr < zoneMinHr || avgHr > zoneMaxHr) return null
+        if (timestamp - lastZoneEdgeGuardTime < EDGE_GUARD_INTERVAL_MILLIS) return null
+
+        val guardBandBpm = zoneEdgeGuardBandBpm()
+        val adjustment = when {
+            avgHr - zoneMinHr <= guardBandBpm ->
+                EDGE_GUARD_ADJUSTMENT_KMH.takeIf { avgSpeed + it <= maxSpeed }
+            zoneMaxHr - avgHr <= guardBandBpm ->
+                (-EDGE_GUARD_ADJUSTMENT_KMH).takeIf { avgSpeed + it >= minSpeed }
+            else -> null
+        }
+        if (adjustment != null) {
+            lastZoneEdgeGuardTime = timestamp
+        }
+        return adjustment
     }
 
     private fun belowZoneAdjustment(avgHr: Double, avgSpeed: Float, learnedZone2Speed: Float?): Float {
@@ -97,6 +126,9 @@ class AutoSpeedController(
 
     private fun proportionalStep(errorBpm: Double): Float =
         ((errorBpm / 6.0).toFloat() * MAX_ADJUSTMENT_KMH).coerceIn(MIN_ADJUSTMENT_KMH, maxAdjustment)
+
+    private fun zoneEdgeGuardBandBpm(): Double =
+        maxOf(MIN_EDGE_GUARD_BPM, (zoneMaxHr - zoneMinHr) * EDGE_GUARD_ZONE_FRACTION)
 
     private fun learnedZone2Speed(): Float? {
         val zone2 = observations.filter { it.zone == HeartRateZone.Zone2 }
@@ -144,6 +176,10 @@ class AutoSpeedController(
         private const val KM_PER_MILE = 1.60934f
         private const val MIN_ADJUSTMENT_KMH = 0.1f * KM_PER_MILE
         private const val MAX_ADJUSTMENT_KMH = 0.5f * KM_PER_MILE
+        private const val EDGE_GUARD_ADJUSTMENT_KMH = 0.1f * KM_PER_MILE
+        private const val EDGE_GUARD_INTERVAL_MILLIS = 45_000L
+        private const val EDGE_GUARD_ZONE_FRACTION = 0.05
+        private const val MIN_EDGE_GUARD_BPM = 2.0
         private const val LEARNED_STEP_KMH = 0.3f * KM_PER_MILE
         private const val LEARNED_SPEED_TOLERANCE_KMH = 0.1f * KM_PER_MILE
     }

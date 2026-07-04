@@ -11,7 +11,7 @@
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated FTMS control and unit-sync preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
-- [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust every 15 seconds with up to 0.5 mph moves.
+- [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust aggressively outside Zone 2 while using only slow 0.1 mph edge-guard nudges inside Zone 2.
 - [x] **Active Session Keep Awake**: Added a profile setting to keep the phone awake only while a session is active and unpaused.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
