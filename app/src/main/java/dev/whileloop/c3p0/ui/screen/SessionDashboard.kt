@@ -205,31 +205,18 @@ fun SessionDashboard(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Stats Grid
-        Row(modifier = Modifier.fillMaxWidth()) {
-            StatCard("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit, Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(10.dp))
-            StatCard("Steps", sessionSteps.toString(), "steps", Modifier.weight(1f))
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        StatCard(
-            "Steps to Goal",
-            normalizedStepsToGoal?.toString() ?: "---",
-            "normalized",
-            Modifier.fillMaxWidth()
+        AdaptiveStatGrid(
+            tiles = listOf(
+                StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
+                StatTile("Steps", sessionSteps.toString(), "steps"),
+                StatTile("Steps to Goal", normalizedStepsToGoal?.toString() ?: "---", "normalized"),
+                StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
+                StatTile("Calories", sessionCalories.toString(), "kcal"),
+                StatTile("Heart Rate", heartRateValue(currentHeartRate), "bpm"),
+                StatTile("Avg HR", heartRateValue(averageHeartRate), "bpm")
+            ),
+            modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            StatCard("Elapsed", formatElapsedTime(sessionElapsedSeconds), "", Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(10.dp))
-            StatCard("Calories", sessionCalories.toString(), "kcal", Modifier.weight(1f))
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            StatCard("Heart Rate", heartRateValue(currentHeartRate), "bpm", Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(10.dp))
-            StatCard("Avg HR", heartRateValue(averageHeartRate), "bpm", Modifier.weight(1f))
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -898,6 +885,45 @@ fun StatusIndicator(
     }
 }
 
+private data class StatTile(
+    val label: String,
+    val value: String,
+    val unit: String
+)
+
+@Composable
+private fun AdaptiveStatGrid(
+    tiles: List<StatTile>,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val columns = floor(((maxWidth + STAT_GRID_GAP) / (MIN_STAT_TILE_WIDTH + STAT_GRID_GAP)).toDouble())
+            .toInt()
+            .coerceIn(2, 3)
+
+        Column(verticalArrangement = Arrangement.spacedBy(STAT_GRID_GAP)) {
+            tiles.chunked(columns).forEach { rowTiles ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(STAT_GRID_GAP)
+                ) {
+                    rowTiles.forEach { tile ->
+                        StatCard(
+                            label = tile.label,
+                            value = tile.value,
+                            unit = tile.unit,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat(columns - rowTiles.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun StatCard(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
@@ -945,6 +971,8 @@ private const val CHART_MIN_VISIBLE_RANGE = 20
 private const val CHART_DOMAIN_PADDING_FRACTION = 0.05f
 private const val CHART_MAX_HEART_RATE = 190
 private val CHART_PADDING = 8.dp
+private val STAT_GRID_GAP = 10.dp
+private val MIN_STAT_TILE_WIDTH = 100.dp
 private const val STOP_HOLD_DURATION_MS = 3_000L
 private const val STOP_PROGRESS_FRAME_MS = 16L
 private const val STOP_HOLD_SCALE = 2f
