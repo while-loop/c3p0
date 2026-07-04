@@ -192,15 +192,41 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private suspend fun stopFtmsBelt(): Boolean {
         requestFtmsControl()
-        val zeroSpeedSent = sendFtmsTargetSpeed(0f, verifyApplied = false)
-        delay(FTMS_STOP_SEQUENCE_DELAY_MS)
-        val stopped = sendCommand(
+
+        val stopSent = sendCommand(
             cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_STOP),
             protocol = WalkingPadProtocol.FitnessMachineService
         )
-        delay(FTMS_STOP_SEQUENCE_DELAY_MS)
-        val zeroSpeedConfirmed = sendFtmsTargetSpeed(0f)
-        return stopped && (zeroSpeedSent || zeroSpeedConfirmed)
+        if (stopSent && awaitStatusApplied(FTMS_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)) {
+            return true
+        }
+
+        val pauseSent = sendCommand(
+            cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_PAUSE),
+            protocol = WalkingPadProtocol.FitnessMachineService
+        )
+        if (pauseSent && awaitStatusApplied(FTMS_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)) {
+            return true
+        }
+
+        val resetSent = sendCommand(
+            cmd = byteArrayOf(FTMS_OP_RESET),
+            protocol = WalkingPadProtocol.FitnessMachineService
+        )
+        if (resetSent && awaitStatusApplied(FTMS_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)) {
+            return true
+        }
+
+        errorReporter.report(
+            "WalkingPad Bluetooth",
+            "WalkingPad did not apply FTMS stop sequence",
+            commandFailureDetail(
+                protocol = WalkingPadProtocol.FitnessMachineService,
+                commandHex = "08 01; 08 02; 01",
+                status = status.value
+            )
+        )
+        return false
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
@@ -435,6 +461,15 @@ class WalkingPadManagerImpl @Inject constructor(
             } == true
     }
 
+    private suspend fun awaitStatusApplied(
+        timeoutMillis: Long,
+        isApplied: (TreadmillStatus) -> Boolean
+    ): Boolean =
+        isApplied(status.value) ||
+            withTimeoutOrNull(timeoutMillis) {
+                status.filter { isApplied(it) }.first()
+            } != null
+
     private suspend fun sendControlCommand(
         label: String,
         cmd: ByteArray,
@@ -490,6 +525,9 @@ class WalkingPadManagerImpl @Inject constructor(
                 append(it)
             }
         }
+
+    private fun isBeltStopped(status: TreadmillStatus): Boolean =
+        status.state == TreadmillState.STOPPED || status.speed <= SPEED_APPLIED_TOLERANCE_KMH
 
     private suspend fun setPreferenceInt(key: Int, value: Int, type: Int = 0): Boolean {
         val command = byteArrayOf(
@@ -740,13 +778,15 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PROTOCOL_READY_TIMEOUT_MS = 5_000L
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
         private const val GATT_DESCRIPTOR_WRITE_DELAY_MS = 400L
-        private const val FTMS_STOP_SEQUENCE_DELAY_MS = 250L
+        private const val FTMS_STOP_APPLY_TIMEOUT_MS = 2_000L
         private const val FTMS_OP_REQUEST_CONTROL: Byte = 0x00
+        private const val FTMS_OP_RESET: Byte = 0x01
         private const val FTMS_OP_SET_TARGET_SPEED: Byte = 0x02
         private const val FTMS_OP_START_OR_RESUME: Byte = 0x07
         private const val FTMS_OP_STOP_OR_PAUSE: Byte = 0x08
         private const val FTMS_OP_RESPONSE_CODE: Byte = 0x80.toByte()
         private const val FTMS_STOP: Byte = 0x01
+        private const val FTMS_PAUSE: Byte = 0x02
         private const val FTMS_TREADMILL_MORE_DATA_FLAG = 0x0001
         private const val FTMS_TREADMILL_AVERAGE_SPEED_FLAG = 0x0002
         private const val FTMS_TREADMILL_TOTAL_DISTANCE_FLAG = 0x0004
