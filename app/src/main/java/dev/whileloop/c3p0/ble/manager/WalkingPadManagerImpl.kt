@@ -49,8 +49,6 @@ class WalkingPadManagerImpl @Inject constructor(
             }
         }
         
-        // In a real app, we'd wait for connection state to be CONNECTED
-        // For simplicity in this impl, we just call connect and return true
         val result = connection?.connect() ?: false
         if (result) {
             _connectionState.value = ConnectionState.CONNECTING
@@ -83,7 +81,7 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
-        val s = (speed * 10).toInt().toByte()
+        val s = (speed.coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH) * 10).toInt().toByte()
         return sendCommand(byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte()))
     }
 
@@ -156,14 +154,19 @@ class WalkingPadManagerImpl @Inject constructor(
             else -> TreadmillMode.MANUAL
         }
         
-        val time = (data[5].toInt() and 0xFF shl 16) or (data[6].toInt() and 0xFF shl 8) or (data[7].toInt() and 0xFF)
-        val distance = (data[8].toInt() and 0xFF shl 16) or (data[9].toInt() and 0xFF shl 8) or (data[10].toInt() and 0xFF)
-        val steps = (data[11].toInt() and 0xFF shl 16) or (data[12].toInt() and 0xFF shl 8) or (data[13].toInt() and 0xFF)
+        val time = readUInt24(data, 5)
+        val distance = readUInt24(data, 8)
+        val steps = readUInt24(data, 11)
         val unitSystem = parseUnitSystem(data)
 
         _status.value = TreadmillStatus(state, speed, mode, time, distance, steps, unitSystem)
         syncUnitSystemIfNeeded(unitSystem)
     }
+
+    private fun readUInt24(data: ByteArray, offset: Int): Int =
+        ((data[offset].toInt() and 0xFF) shl 16) or
+            ((data[offset + 1].toInt() and 0xFF) shl 8) or
+            (data[offset + 2].toInt() and 0xFF)
 
     private fun parseUnitSystem(data: ByteArray): UnitSystem? {
         val unitByte = data.getOrNull(18)?.toInt()?.and(0xFF) ?: return null
@@ -188,5 +191,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     companion object {
         private const val PREF_UNITS = 8
+        private const val MIN_SPEED_KMH = 0f
+        private const val MAX_SPEED_KMH = 6f
     }
 }

@@ -44,7 +44,7 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
-        _status.value = _status.value.copy(speed = speed)
+        _status.value = _status.value.copy(speed = speed.coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH))
         return true
     }
 
@@ -53,7 +53,10 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
         return true
     }
 
-    override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean = true
+    override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean {
+        _status.value = _status.value.copy(unitSystem = unitSystem)
+        return true
+    }
     
     // Helper to simulate walking
     suspend fun simulateWalking() {
@@ -68,5 +71,10 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
             }
             delay(1000)
         }
+    }
+
+    companion object {
+        private const val MIN_SPEED_KMH = 0f
+        private const val MAX_SPEED_KMH = 6f
     }
 }

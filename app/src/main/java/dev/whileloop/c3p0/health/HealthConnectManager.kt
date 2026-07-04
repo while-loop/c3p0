@@ -29,8 +29,12 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun hasAllPermissions(): Boolean {
+        return hasPermissions(PERMISSIONS)
+    }
+
+    private suspend fun hasPermissions(requiredPermissions: Set<String>): Boolean {
         return try {
-            healthConnectClient.permissionController.getGrantedPermissions().containsAll(PERMISSIONS)
+            healthConnectClient.permissionController.getGrantedPermissions().containsAll(requiredPermissions)
         } catch (e: Exception) {
             Timber.e(e, "Error checking Health Connect permissions")
             false
@@ -38,7 +42,7 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepsRecord> {
-        if (!hasAllPermissions()) return emptyList()
+        if (!hasPermissions(READ_STEPS_PERMISSIONS)) return emptyList()
 
         return try {
             val response = healthConnectClient.readRecords(
@@ -55,7 +59,7 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun readLatestWeightKg(): Double? {
-        if (!hasAllPermissions()) return null
+        if (!hasPermissions(READ_WEIGHT_PERMISSIONS)) return null
 
         return try {
             val response = healthConnectClient.readRecords(
@@ -77,7 +81,7 @@ class HealthConnectManager @Inject constructor(
     }
 
     suspend fun writeSession(startTime: Instant, endTime: Instant, steps: Int, distanceMeters: Double) {
-        if (!hasAllPermissions()) return
+        if (!hasPermissions(WRITE_SESSION_PERMISSIONS)) return
         if (!endTime.isAfter(startTime)) return
 
         try {
@@ -127,14 +131,17 @@ class HealthConnectManager @Inject constructor(
     }
 
     companion object {
-        val PERMISSIONS: Set<String> = setOf(
-            HealthPermission.getReadPermission(StepsRecord::class),
-            HealthPermission.getWritePermission(StepsRecord::class),
-            HealthPermission.getReadPermission(DistanceRecord::class),
-            HealthPermission.getWritePermission(DistanceRecord::class),
-            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-            HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+        private val READ_STEPS_PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getReadPermission(StepsRecord::class)
+        )
+        private val READ_WEIGHT_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(WeightRecord::class)
         )
+        private val WRITE_SESSION_PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getWritePermission(StepsRecord::class),
+            HealthPermission.getWritePermission(DistanceRecord::class),
+            HealthPermission.getWritePermission(ExerciseSessionRecord::class)
+        )
+        val PERMISSIONS: Set<String> = READ_STEPS_PERMISSIONS + READ_WEIGHT_PERMISSIONS + WRITE_SESSION_PERMISSIONS
     }
 }

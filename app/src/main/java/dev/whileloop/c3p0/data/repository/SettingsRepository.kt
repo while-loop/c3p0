@@ -101,11 +101,16 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun requestBackupIfEnabled(minIntervalMillis: Long = 0L) {
+        val now = SystemClock.elapsedRealtime()
+        if (
+            minIntervalMillis > 0L &&
+            lastBackupRequestElapsedMillis > 0L &&
+            now - lastBackupRequestElapsedMillis < minIntervalMillis
+        ) {
+            return
+        }
+
         if (googleDriveSyncEnabled.first()) {
-            val now = SystemClock.elapsedRealtime()
-            if (minIntervalMillis > 0L && now - lastBackupRequestElapsedMillis < minIntervalMillis) {
-                return
-            }
             requestBackup()
         }
     }

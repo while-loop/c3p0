@@ -65,9 +65,12 @@ fun SessionDashboard(
     val averageHeartRate by viewModel.averageHeartRate.collectAsState()
     val heartRateHistory by viewModel.heartRateHistory.collectAsState()
     val sessionElapsedSeconds by viewModel.sessionElapsedSeconds.collectAsState()
+    val sessionDistance by viewModel.sessionDistance.collectAsState()
+    val sessionSteps by viewModel.sessionSteps.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
+    var pendingSessionAction by remember { mutableStateOf(SessionAction.Start) }
     var neverAskAgain by remember { mutableStateOf(false) }
     val permissions = remember { sessionPermissions() }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -76,13 +79,14 @@ fun SessionDashboard(
         if (grants.values.all { it }) {
             if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, skipInactiveDeviceWarning)) {
                 neverAskAgain = false
+                pendingSessionAction = SessionAction.Start
                 showInactiveDeviceSheet = true
             } else {
                 viewModel.startSession()
             }
         }
     }
-    val displayedDistance = displayDistance(status.distance, unitSystem)
+    val displayedDistance = displayDistance(sessionDistance, unitSystem)
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
     val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds, bodyWeightKg)
 
@@ -115,7 +119,10 @@ fun SessionDashboard(
                     viewModel.updateSkipInactiveDeviceWarning(true)
                 }
                 showInactiveDeviceSheet = false
-                viewModel.startSession()
+                when (pendingSessionAction) {
+                    SessionAction.Start -> viewModel.startSession()
+                    SessionAction.Resume -> viewModel.resumeSession()
+                }
             },
             onDismiss = { showInactiveDeviceSheet = false }
         )
@@ -152,7 +159,7 @@ fun SessionDashboard(
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCard("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit, Modifier.weight(1f))
             Spacer(modifier = Modifier.width(10.dp))
-            StatCard("Steps", status.steps.toString(), "steps", Modifier.weight(1f))
+            StatCard("Steps", sessionSteps.toString(), "steps", Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -219,7 +226,13 @@ fun SessionDashboard(
                     Button(
                         onClick = {
                             if (isSessionPaused) {
-                                viewModel.resumeSession()
+                                if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, skipInactiveDeviceWarning)) {
+                                    neverAskAgain = false
+                                    pendingSessionAction = SessionAction.Resume
+                                    showInactiveDeviceSheet = true
+                                } else {
+                                    viewModel.resumeSession()
+                                }
                             } else {
                                 viewModel.pauseSession()
                             }
@@ -240,6 +253,7 @@ fun SessionDashboard(
                         if (context.hasPermissions(permissions)) {
                             if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, skipInactiveDeviceWarning)) {
                                 neverAskAgain = false
+                                pendingSessionAction = SessionAction.Start
                                 showInactiveDeviceSheet = true
                             } else {
                                 viewModel.startSession()
@@ -536,6 +550,11 @@ private fun inactiveDeviceMessage(padActive: Boolean, watchActive: Boolean): Str
         !padActive -> "Your WalkingPad is not active. Pair it now, or continue without pad controls and live distance."
         else -> "Your watch is not active. Pair it now, or continue without live heart-rate data."
     }
+
+private enum class SessionAction {
+    Start,
+    Resume
+}
 
 @Composable
 fun StatusIndicator(label: String, isConnected: Boolean) {

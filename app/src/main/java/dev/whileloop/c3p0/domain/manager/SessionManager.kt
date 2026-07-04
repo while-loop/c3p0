@@ -94,9 +94,13 @@ class SessionManager @Inject constructor(
                 heartRateManager.heartRate
             ) { status, hr -> status to hr }
                 .collect { (status, hr) ->
-                if (_isSessionPaused.value) return@collect
-
                 val now = Instant.now()
+                if (_isSessionPaused.value) {
+                    previousMetricSteps = status.steps
+                    previousMetricTime = now
+                    return@collect
+                }
+
                 val cadence = calculateCadence(previousMetricSteps, status.steps, previousMetricTime, now)
                 previousMetricSteps = status.steps
                 previousMetricTime = now
@@ -104,7 +108,7 @@ class SessionManager @Inject constructor(
                 val metric = SessionMetricEntity(
                     sessionId = currentSessionId!!,
                     timestamp = now,
-                    heartRate = hr,
+                    heartRate = hr.takeIf { it > 0 },
                     speed = status.speed,
                     cadence = cadence
                 )
@@ -118,8 +122,8 @@ class SessionManager @Inject constructor(
                         maxHeartRate = maxOf(maxHeartRate, heartRate)
                     }
                 
-                if (_isAutoSpeedEnabled.value) {
-                    autoSpeedController?.addHrSample(metric.heartRate ?: 0, System.currentTimeMillis())
+                if (_isAutoSpeedEnabled.value && metric.heartRate != null) {
+                    autoSpeedController?.addHrSample(metric.heartRate, System.currentTimeMillis())
                 }
                 settingsRepository.requestBackupIfEnabled(SESSION_BACKUP_REQUEST_INTERVAL_MS)
             }
@@ -159,19 +163,24 @@ class SessionManager @Inject constructor(
         val start = startTime ?: return
         val end = Instant.now()
         accumulateActiveDuration(end)
+        val activeDuration = accumulatedActiveDuration
+        val finalStatus = treadmillManager.status.value
+        val totalDistance = counterDelta(startDistance, finalStatus.distance)
+        val totalSteps = counterDelta(startSteps, finalStatus.steps)
+        val distanceMeters = totalDistance * 10.0
+        val averageHeartRate = if (activeHeartRateSampleCount > 0) {
+            activeHeartRateTotal / activeHeartRateSampleCount
+        } else {
+            0
+        }
+        val sessionMaxHeartRate = maxHeartRate
+        currentSessionId = null
+        startTime = null
+        activeStartedAt = null
+        accumulatedActiveDuration = Duration.ZERO
 
         scope.launch {
-            val finalStatus = treadmillManager.status.value
             treadmillManager.stop()
-            val totalDistance = counterDelta(startDistance, finalStatus.distance)
-            val totalSteps = counterDelta(startSteps, finalStatus.steps)
-            val activeDuration = accumulatedActiveDuration
-            val distanceMeters = totalDistance * 10.0
-            val averageHeartRate = if (activeHeartRateSampleCount > 0) {
-                activeHeartRateTotal / activeHeartRateSampleCount
-            } else {
-                0
-            }
             val sessionStats = SessionEntity(
                 startTime = start,
                 endTime = end,
@@ -179,18 +188,14 @@ class SessionManager @Inject constructor(
                 totalSteps = totalSteps,
                 totalEnergy = estimateCalories(distanceMeters, activeDuration, settingsRepository.bodyWeightKg.first()),
                 averageHeartRate = averageHeartRate,
-                maxHeartRate = maxHeartRate
+                maxHeartRate = sessionMaxHeartRate
             )
             sessionRepository.endSession(id, sessionStats)
             
             // Write to Health Connect
             healthConnectManager.writeSession(start, end, totalSteps, distanceMeters)
             settingsRepository.requestBackupIfEnabled()
-            
-            currentSessionId = null
-            startTime = null
-            activeStartedAt = null
-            accumulatedActiveDuration = Duration.ZERO
+
             Timber.d("Session stopped and saved")
         }
     }
@@ -200,7 +205,9 @@ class SessionManager @Inject constructor(
             onSpeedAdjustmentRequired = { adjustment ->
                 scope.launch {
                     val currentSpeed = treadmillManager.status.value.speed
-                    treadmillManager.setSpeed(currentSpeed + adjustment)
+                    treadmillManager.setSpeed(
+                        (currentSpeed + adjustment).coerceIn(AUTO_SPEED_MIN_KMH, AUTO_SPEED_MAX_KMH)
+                    )
                 }
             }
         }
@@ -250,5 +257,7 @@ class SessionManager @Inject constructor(
     companion object {
         private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
         private const val DEFAULT_BODY_WEIGHT_KG = 70.0
+        private const val AUTO_SPEED_MIN_KMH = 1.0f
+        private const val AUTO_SPEED_MAX_KMH = 6.0f
     }
 }

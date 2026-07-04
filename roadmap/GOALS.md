@@ -3,6 +3,7 @@
 ## Phase 1: Foundation & BLE Communication [COMPLETED]
 - [x] Implement shared Bluetooth Controller with coroutines/Flow support.
 - [x] Implement `WalkingPadManager` for C2 (control speed, read stats).
+- [x] Clamp WalkingPad speed commands and decode status counters defensively.
 - [x] Implement `GarminManager` for Venu 3 (read heart rate).
 - [x] Create mock implementations for testing BLE logic without hardware.
 - [x] Implement persistent pairing to remember device addresses.
@@ -16,6 +17,7 @@
 - [x] Integrate Health Connect for writing completed walking sessions with steps and distance.
 - [x] Read latest body weight from Health Connect for calories estimates.
 - [x] Remove app-side heart-rate read/write permissions from Health Connect; watches remain the source of HR records.
+- [x] Scope Health Connect permission checks by operation and surface Health Connect settings for revocation.
 - [x] Implement and surface "Normalized Steps" using Health Connect data in session history.
 - [x] Ensure historical viewing of session aggregates and metric summaries (steps/HR/distance/time/SPM).
 
@@ -24,6 +26,7 @@
 - [x] Add pause/resume controls; pause stops active stats and metric collection.
 - [x] Require a 5-second long press to stop an active session.
 - [x] Warn before starting/resuming when the watch or WalkingPad is inactive, with options to pair, continue, or never ask again.
+- [x] Keep live and persisted session distance/step totals aligned to session-start deltas.
 - [x] Implement and wire Auto-Speed algorithm for Zone 2 HR training from the session Automatic mode.
 - [x] Implement Ongoing Notification via Foreground Service.
 - [x] Send WalkingPad start/stop commands when sessions start/stop.
@@ -42,5 +45,6 @@
 - [x] Integrate Google Drive via Android Auto Backup.
 - [x] Configure backup rules for Room DB, Room WAL/SHM files, DataStore preferences, and SharedPreferences.
 - [x] Persist the backup toggle and call `BackupManager.dataChanged()` on app cold start, settings changes, session progress, and session completion.
+- [x] Throttle session-progress backup requests without repeated DataStore reads.
 - [x] Implement Green/Gray connectivity status indicators in UI.
 - [x] Add GitHub Actions CI that builds debug APKs on every push and publishes the APK artifact.

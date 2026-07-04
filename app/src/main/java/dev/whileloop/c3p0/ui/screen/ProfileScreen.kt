@@ -2,6 +2,7 @@ package dev.whileloop.c3p0.ui.screen
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,9 @@ import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
@@ -31,6 +35,7 @@ fun ProfileScreen(
     onNavigateToPairing: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val stepGoal by viewModel.stepGoal.collectAsState()
     val age by viewModel.age.collectAsState()
     val isHealthConnectEnabled by viewModel.isHealthConnectEnabled.collectAsState()
@@ -58,6 +63,16 @@ fun ProfileScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshHealthConnectPermissionState()
+    }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshHealthConnectPermissionState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(launchHealthConnectPermissions) {
@@ -173,7 +188,12 @@ fun ProfileScreen(
                             if (enabled) {
                                 showHealthConnectPermissionSheet = true
                             } else {
-                                viewModel.toggleHealthConnect(false)
+                                Toast.makeText(
+                                    context,
+                                    "Turn off C3P0 access in Health Connect settings.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                openHealthConnectSettings(context)
                             }
                         }
                     )
@@ -308,6 +328,22 @@ private fun openHealthConnectStorePage(context: android.content.Context) {
         context.startActivity(webIntent)
     }
 }
+
+private fun openHealthConnectSettings(context: android.content.Context) {
+    runCatching {
+        context.startActivity(
+            Intent(healthConnectSettingsAction())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
+private fun healthConnectSettingsAction(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        "android.health.connect.action.HEALTH_HOME_SETTINGS"
+    } else {
+        "androidx.health.ACTION_HEALTH_CONNECT_SETTINGS"
+    }
 
 private fun formatWeight(weightKg: Double, unitSystem: UnitSystem): String =
     if (unitSystem == UnitSystem.Imperial) {

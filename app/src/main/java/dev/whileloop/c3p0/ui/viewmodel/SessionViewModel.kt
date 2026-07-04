@@ -36,9 +36,17 @@ class SessionViewModel @Inject constructor(
     private var statsStarted = false
     private var activeHeartRateTotal = 0
     private var activeHeartRateSampleCount = 0
+    private var sessionStartDistance = 0
+    private var sessionStartSteps = 0
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
     val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
+
+    private val _sessionDistance = MutableStateFlow(0)
+    val sessionDistance = _sessionDistance.asStateFlow()
+
+    private val _sessionSteps = MutableStateFlow(0)
+    val sessionSteps = _sessionSteps.asStateFlow()
 
     private val _heartRateHistory = MutableStateFlow<List<Int>>(emptyList())
     val heartRateHistory = _heartRateHistory.asStateFlow()
@@ -152,6 +160,17 @@ class SessionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            combine(treadmillManager.status, sessionManager.isSessionActive) { status, isActive ->
+                status to isActive
+            }.collect { (status, isActive) ->
+                if (isActive) {
+                    _sessionDistance.value = counterDelta(sessionStartDistance, status.distance)
+                    _sessionSteps.value = counterDelta(sessionStartSteps, status.steps)
+                }
+            }
+        }
+
+        viewModelScope.launch {
             settingsRepository.treadmillAddress
                 .filterNotNull()
                 .distinctUntilChanged()
@@ -211,14 +230,14 @@ class SessionViewModel @Inject constructor(
     fun incrementSpeed() {
         viewModelScope.launch {
             val current = treadmillStatus.value.speed
-            treadmillManager.setSpeed(current + 0.1f)
+            treadmillManager.setSpeed((current + SPEED_STEP_KMH).coerceAtMost(MAX_SPEED_KMH))
         }
     }
 
     fun decrementSpeed() {
         viewModelScope.launch {
             val current = treadmillStatus.value.speed
-            treadmillManager.setSpeed((current - 0.1f).coerceAtLeast(0f))
+            treadmillManager.setSpeed((current - SPEED_STEP_KMH).coerceAtLeast(MIN_SPEED_KMH))
         }
     }
 
@@ -255,6 +274,10 @@ class SessionViewModel @Inject constructor(
             _sessionElapsedSeconds.value = 0
             _heartRateHistory.value = emptyList()
             _averageHeartRate.value = 0
+            sessionStartDistance = treadmillStatus.value.distance
+            sessionStartSteps = treadmillStatus.value.steps
+            _sessionDistance.value = 0
+            _sessionSteps.value = 0
             activeHeartRateTotal = 0
             activeHeartRateSampleCount = 0
         }
@@ -291,5 +314,11 @@ class SessionViewModel @Inject constructor(
 
     companion object {
         private const val MAX_HEART_RATE_SAMPLES = 180
+        private const val SPEED_STEP_KMH = 0.1f
+        private const val MIN_SPEED_KMH = 0f
+        private const val MAX_SPEED_KMH = 6f
     }
+
+    private fun counterDelta(start: Int, end: Int): Int =
+        if (end >= start) end - start else end
 }
