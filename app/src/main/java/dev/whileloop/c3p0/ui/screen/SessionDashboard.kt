@@ -239,7 +239,7 @@ fun SessionDashboard(
                     text = String.format(Locale.US, "%.1f %s", displayedSpeed.value, displayedSpeed.unit),
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
                     fontSize = 24.sp,
-                    color = Color.Green,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold
                 )
             }
