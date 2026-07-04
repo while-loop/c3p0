@@ -8,6 +8,8 @@ import android.bluetooth.*
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import dev.whileloop.c3p0.ble.diagnostic.BleErrorReporter
 import dev.whileloop.c3p0.ble.manager.ConnectionState
@@ -19,10 +21,14 @@ import java.util.*
 class BleConnection(
     private val context: Context,
     private val address: String,
-    private val errorReporter: BleErrorReporter
+    private val errorReporter: BleErrorReporter,
+    private val requiredServiceUuid: UUID? = null,
+    private val refreshGattOnConnect: Boolean = false
 ) {
     private var bluetoothGatt: BluetoothGatt? = null
     private var discoveredServiceSummary: String = "none"
+    private var serviceDiscoveryAttempts = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState = _connectionState.asStateFlow()
 
@@ -36,7 +42,12 @@ class BleConnection(
                 BluetoothProfile.STATE_CONNECTED -> {
                     Timber.d("Connected to $address")
                     _connectionState.value = ConnectionState.CONNECTED
-                    gatt.discoverServices()
+                    serviceDiscoveryAttempts = 0
+                    if (refreshGattOnConnect) {
+                        val cacheRefreshed = refreshDeviceCache(gatt)
+                        Timber.d("GATT cache refresh requested for $address: $cacheRefreshed")
+                    }
+                    scheduleServiceDiscovery(gatt, SERVICE_DISCOVERY_DELAY_MS)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     Timber.d("Disconnected from $address")
@@ -49,13 +60,26 @@ class BleConnection(
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 discoveredServiceSummary = gatt.services
-                    .joinToString(separator = ",") { service -> service.uuid.toString() }
+                    .joinToString(separator = ";") { service -> service.toSummary() }
                     .ifBlank { "empty" }
                 Timber.d("Services discovered for $address")
+                val requiredService = requiredServiceUuid
+                if (requiredService != null && gatt.getService(requiredService) == null) {
+                    retryServiceDiscoveryOrReport(
+                        gatt = gatt,
+                        message = "Required BLE service not found",
+                        detail = "address=$address service=$requiredService services=$discoveredServiceSummary"
+                    )
+                    return
+                }
                 onServicesDiscovered?.invoke()
             } else {
                 Timber.w("onServicesDiscovered received: $status")
-                reportError("Service discovery failed", "address=$address status=$status")
+                retryServiceDiscoveryOrReport(
+                    gatt = gatt,
+                    message = "Service discovery failed",
+                    detail = "address=$address status=$status"
+                )
             }
         }
 
@@ -207,7 +231,13 @@ class BleConnection(
         Timber.d("Connecting to $address")
         _connectionState.value = ConnectionState.CONNECTING
         return try {
-            bluetoothGatt = device.connectGatt(context, false, gattCallback)
+            discoveredServiceSummary = "none"
+            serviceDiscoveryAttempts = 0
+            bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            } else {
+                device.connectGatt(context, false, gattCallback)
+            }
             true
         } catch (e: SecurityException) {
             Timber.e(e, "Unable to connect BLE device without permission")
@@ -231,6 +261,7 @@ class BleConnection(
 
     @SuppressLint("MissingPermission")
     fun close() {
+        mainHandler.removeCallbacksAndMessages(null)
         try {
             bluetoothGatt?.close()
         } catch (e: SecurityException) {
@@ -239,6 +270,65 @@ class BleConnection(
         }
         bluetoothGatt = null
     }
+
+    @SuppressLint("MissingPermission")
+    private fun scheduleServiceDiscovery(gatt: BluetoothGatt, delayMillis: Long) {
+        mainHandler.postDelayed(
+            {
+                if (bluetoothGatt !== gatt || _connectionState.value == ConnectionState.DISCONNECTING ||
+                    _connectionState.value == ConnectionState.DISCONNECTED
+                ) {
+                    return@postDelayed
+                }
+
+                serviceDiscoveryAttempts += 1
+                val started = try {
+                    gatt.discoverServices()
+                } catch (e: SecurityException) {
+                    Timber.e(e, "Unable to discover BLE services without permission")
+                    reportError("Unable to discover BLE services", e.message)
+                    false
+                }
+
+                if (!started) {
+                    retryServiceDiscoveryOrReport(
+                        gatt = gatt,
+                        message = "Service discovery was not accepted by Android Bluetooth",
+                        detail = "address=$address attempt=$serviceDiscoveryAttempts"
+                    )
+                }
+            },
+            delayMillis
+        )
+    }
+
+    private fun retryServiceDiscoveryOrReport(
+        gatt: BluetoothGatt,
+        message: String,
+        detail: String
+    ) {
+        if (serviceDiscoveryAttempts < MAX_SERVICE_DISCOVERY_ATTEMPTS) {
+            Timber.w("$message; retrying service discovery for $address: $detail")
+            scheduleServiceDiscovery(gatt, SERVICE_DISCOVERY_RETRY_DELAY_MS)
+            return
+        }
+
+        reportError(message, "$detail attempts=$serviceDiscoveryAttempts")
+        _connectionState.value = ConnectionState.DISCONNECTED
+        close()
+    }
+
+    @SuppressLint("DiscouragedPrivateApi")
+    private fun refreshDeviceCache(gatt: BluetoothGatt): Boolean =
+        runCatching {
+            gatt.javaClass.getMethod("refresh").invoke(gatt) as? Boolean ?: false
+        }.getOrDefault(false)
+
+    private fun BluetoothGattService.toSummary(): String =
+        "${uuid}[${characteristics.joinToString(separator = ",") { it.toSummary() }}]"
+
+    private fun BluetoothGattCharacteristic.toSummary(): String =
+        "${uuid}:${properties.toString(16)}"
 
     private fun reportError(message: String, detail: String? = null) {
         errorReporter.report(BLE_ERROR_SOURCE, message, detail)
@@ -253,6 +343,9 @@ class BleConnection(
 
     private companion object {
         private const val BLE_ERROR_SOURCE = "Bluetooth"
+        private const val SERVICE_DISCOVERY_DELAY_MS = 600L
+        private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1_000L
+        private const val MAX_SERVICE_DISCOVERY_ATTEMPTS = 5
         private val CLIENT_CHARACTERISTIC_CONFIG_UUID: UUID =
             UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }

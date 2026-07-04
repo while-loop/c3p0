@@ -59,7 +59,13 @@ class WalkingPadManagerImpl @Inject constructor(
         protocolReadyWatchdogJob?.cancel()
         protocolReady.value = false
         _connectionState.value = ConnectionState.CONNECTING
-        connection = BleConnection(context, address, errorReporter).apply {
+        connection = BleConnection(
+            context = context,
+            address = address,
+            errorReporter = errorReporter,
+            requiredServiceUuid = SERVICE_UUID,
+            refreshGattOnConnect = true
+        ).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == NOTIFY_CHAR_UUID) {
                     handleNotification(data)
@@ -229,7 +235,7 @@ class WalkingPadManagerImpl @Inject constructor(
             errorReporter.report(
                 "WalkingPad Bluetooth",
                 "WalkingPad protocol is not ready",
-                "command=${fixed.toHexString()} connection=${connectionState.value}"
+                "command=${fixed.toHexString()} connection=${connectionState.value} services=${connection?.serviceSummary() ?: "none"}"
             )
             return@withLock false
         }
