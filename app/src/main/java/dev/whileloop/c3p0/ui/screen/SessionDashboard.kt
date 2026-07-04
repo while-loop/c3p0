@@ -311,10 +311,10 @@ fun SessionDashboard(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            val sessionModeCount = if (supportsNativeAutoMode) 3 else 2
-            val zone2ModeIndex = if (supportsNativeAutoMode) 2 else 1
+            val sessionModeCount = 3
             val canChangeNativeAutoMode =
                 isPadReady &&
+                    supportsNativeAutoMode &&
                     status.state != TreadmillState.ACTIVE &&
                     (!isSessionActive || isSessionPaused)
             SingleChoiceSegmentedButtonRow {
@@ -326,21 +326,19 @@ fun SessionDashboard(
                 ) {
                     Text("Manual")
                 }
-                if (supportsNativeAutoMode) {
-                    SegmentedButton(
-                        selected = status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
-                        onClick = { viewModel.setMode(TreadmillMode.AUTO) },
-                        enabled = canChangeNativeAutoMode,
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
-                    ) {
-                        Text("Automatic")
-                    }
+                SegmentedButton(
+                    selected = supportsNativeAutoMode && status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
+                    onClick = { viewModel.setMode(TreadmillMode.AUTO) },
+                    enabled = canChangeNativeAutoMode,
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
+                ) {
+                    Text("Automatic")
                 }
                 SegmentedButton(
                     selected = isAutoSpeedEnabled,
                     onClick = { viewModel.enableZone2Mode() },
                     enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = zone2ModeIndex, count = sessionModeCount)
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = sessionModeCount)
                 ) {
                     Text("Zone 2")
                 }
