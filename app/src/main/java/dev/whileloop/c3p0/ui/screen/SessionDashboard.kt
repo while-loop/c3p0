@@ -60,6 +60,7 @@ fun SessionDashboard(
     val context = LocalContext.current
     val status by viewModel.treadmillStatus.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
+    val supportsNativeAutoMode by viewModel.supportsNativeAutoMode.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
@@ -309,28 +310,32 @@ fun SessionDashboard(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            val sessionModeCount = if (supportsNativeAutoMode) 3 else 2
+            val zone2ModeIndex = if (supportsNativeAutoMode) 2 else 1
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
                     onClick = { viewModel.setMode(TreadmillMode.MANUAL) },
                     enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = SESSION_MODE_COUNT)
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = sessionModeCount)
                 ) {
                     Text("Manual")
                 }
-                SegmentedButton(
-                    selected = status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
-                    onClick = { viewModel.setMode(TreadmillMode.AUTO) },
-                    enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = SESSION_MODE_COUNT)
-                ) {
-                    Text("Automatic")
+                if (supportsNativeAutoMode) {
+                    SegmentedButton(
+                        selected = status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
+                        onClick = { viewModel.setMode(TreadmillMode.AUTO) },
+                        enabled = isPadReady,
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
+                    ) {
+                        Text("Automatic")
+                    }
                 }
                 SegmentedButton(
                     selected = isAutoSpeedEnabled,
                     onClick = { viewModel.enableZone2Mode() },
                     enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = SESSION_MODE_COUNT)
+                    shape = SegmentedButtonDefaults.itemShape(index = zone2ModeIndex, count = sessionModeCount)
                 ) {
                     Text("Zone 2")
                 }
@@ -826,4 +831,3 @@ private val STOP_BUTTON_SIZE = 72.dp
 private val STOP_HOLD_ELEVATION = 24.dp
 private val STOP_RING_STROKE_WIDTH = 4.dp
 private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
-private const val SESSION_MODE_COUNT = 3

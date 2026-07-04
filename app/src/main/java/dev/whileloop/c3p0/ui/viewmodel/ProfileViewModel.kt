@@ -55,6 +55,18 @@ class ProfileViewModel @Inject constructor(
         false
     )
 
+    val noLoadStopEnabled = settingsRepository.noLoadStopEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
+    )
+
+    val noLoadStopTimeoutSeconds = settingsRepository.noLoadStopTimeoutSeconds.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        30
+    )
+
     val isGoogleDriveSyncEnabled = settingsRepository.googleDriveSyncEnabled.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -163,6 +175,12 @@ class ProfileViewModel @Inject constructor(
     fun updateSkipInactiveDeviceWarning(skip: Boolean) {
         viewModelScope.launch {
             settingsRepository.saveSkipInactiveDeviceWarning(skip)
+        }
+    }
+
+    fun updateNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
+        viewModelScope.launch {
+            settingsRepository.saveNoLoadStop(enabled, timeoutSeconds)
         }
     }
 

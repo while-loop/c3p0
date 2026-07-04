@@ -46,6 +46,10 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+    private val _supportsNativeAutoMode = MutableStateFlow(false)
+    override val supportsNativeAutoMode: StateFlow<Boolean> = _supportsNativeAutoMode.asStateFlow()
+
     private var desiredUnitSystem: UnitSystem = UnitSystem.Imperial
     private var isSyncingUnitSystem = false
 
@@ -62,6 +66,7 @@ class WalkingPadManagerImpl @Inject constructor(
         stopStatusPolling()
         protocolReadyWatchdogJob?.cancel()
         protocolReady.value = false
+        _supportsNativeAutoMode.value = false
         _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(
             context = context,
@@ -110,6 +115,7 @@ class WalkingPadManagerImpl @Inject constructor(
                             }
                             ConnectionState.DISCONNECTED -> {
                                 protocolReady.value = false
+                                _supportsNativeAutoMode.value = false
                                 _connectionState.value = ConnectionState.DISCONNECTED
                                 stopStatusPolling()
                                 protocolReadyWatchdogJob?.cancel()
@@ -132,6 +138,7 @@ class WalkingPadManagerImpl @Inject constructor(
         stopStatusPolling()
         protocolReadyWatchdogJob?.cancel()
         protocolReady.value = false
+        _supportsNativeAutoMode.value = false
         connection?.disconnect()
         connection = null
         _connectionState.value = ConnectionState.DISCONNECTED
@@ -449,6 +456,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun activateLegacyProtocol(address: String) {
         activeProtocol = WalkingPadProtocol.LegacyKingsmith
+        _supportsNativeAutoMode.value = true
         val notificationsEnabled = connection?.enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID) ?: false
         Timber.d("WalkingPad legacy notifications enabled: $notificationsEnabled")
         if (notificationsEnabled) {
@@ -470,6 +478,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun activateFtmsProtocol(address: String) {
         activeProtocol = WalkingPadProtocol.FitnessMachineService
+        _supportsNativeAutoMode.value = false
         scope.launch {
             val treadmillNotificationsEnabled =
                 connection?.enableNotifications(FTMS_SERVICE_UUID, FTMS_TREADMILL_DATA_UUID) ?: false

@@ -34,6 +34,8 @@ class SettingsRepository @Inject constructor(
         val GOOGLE_DRIVE_SYNC_ENABLED = booleanPreferencesKey("google_drive_sync_enabled")
         val STEP_GOAL = intPreferencesKey("step_goal")
         val AGE = intPreferencesKey("age")
+        val NO_LOAD_STOP_ENABLED = booleanPreferencesKey("no_load_stop_enabled")
+        val NO_LOAD_STOP_TIMEOUT_SECONDS = intPreferencesKey("no_load_stop_timeout_seconds")
     }
 
     val treadmillAddress: Flow<String?> = context.dataStore.data.map { it[Keys.TREADMILL_ADDRESS] }
@@ -56,6 +58,12 @@ class SettingsRepository @Inject constructor(
     }
     val age: Flow<Int> = context.dataStore.data.map {
         it[Keys.AGE] ?: DEFAULT_AGE
+    }
+    val noLoadStopEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.NO_LOAD_STOP_ENABLED] ?: false
+    }
+    val noLoadStopTimeoutSeconds: Flow<Int> = context.dataStore.data.map {
+        sanitizeNoLoadStopTimeout(it[Keys.NO_LOAD_STOP_TIMEOUT_SECONDS])
     }
 
     suspend fun saveTreadmillAddress(address: String) {
@@ -110,6 +118,14 @@ class SettingsRepository @Inject constructor(
         requestBackupIfEnabled()
     }
 
+    suspend fun saveNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
+        context.dataStore.edit {
+            it[Keys.NO_LOAD_STOP_ENABLED] = enabled
+            it[Keys.NO_LOAD_STOP_TIMEOUT_SECONDS] = sanitizeNoLoadStopTimeout(timeoutSeconds)
+        }
+        requestBackupIfEnabled()
+    }
+
     suspend fun requestBackupIfEnabled(minIntervalMillis: Long = 0L) {
         val now = SystemClock.elapsedRealtime()
         if (
@@ -136,5 +152,11 @@ class SettingsRepository @Inject constructor(
         private const val DEFAULT_AGE = 30
         private const val MIN_AGE = 1
         private const val MAX_AGE = 120
+        private const val DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS = 30
+        private val NO_LOAD_STOP_TIMEOUT_OPTIONS = setOf(5, 15, 30, 45, 60)
+
+        private fun sanitizeNoLoadStopTimeout(timeoutSeconds: Int?): Int =
+            timeoutSeconds?.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
+                ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
     }
 }

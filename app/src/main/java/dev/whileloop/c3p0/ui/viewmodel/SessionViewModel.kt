@@ -72,6 +72,12 @@ class SessionViewModel @Inject constructor(
         treadmillManager.connectionState.value
     )
 
+    val supportsNativeAutoMode = treadmillManager.supportsNativeAutoMode.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        treadmillManager.supportsNativeAutoMode.value
+    )
+
     val watchConnectionState = heartRateManager.connectionState.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),

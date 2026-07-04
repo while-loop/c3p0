@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 interface TreadmillManager {
     val status: StateFlow<TreadmillStatus>
     val connectionState: StateFlow<ConnectionState>
+    val supportsNativeAutoMode: StateFlow<Boolean>
 
     suspend fun connect(address: String): Boolean
     suspend fun disconnect()

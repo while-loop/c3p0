@@ -23,6 +23,8 @@
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
+- [x] **Protocol-Aware Session Modes**: Hide native Automatic mode for FTMS pads while keeping Manual and app-controlled Zone 2 available.
+- [x] **No-Load Stop Profile Setting**: Persist the WalkingPad no-load stop preference with 5/15/30/45/60 second options in Profile.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
 - [x] **Health Connect Weight**: Added weight refresh from Health Connect on cold start/resume and from the profile refresh button.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
@@ -40,3 +42,4 @@
 - [ ] **Elapsed vs Active Time**: Decide whether to display both wall-clock elapsed time and active/moving time. Current session timers pause with the session; many fitness apps keep elapsed wall-clock time separate from active time.
 - [ ] **Backup Restore Verification**: Manually verify Android Auto Backup restore behavior on a real signed install path; restore timing is controlled by Android and Google backup services.
 - [ ] **Unit Tests**: Add comprehensive test suite for `AutoSpeedController`.
+- [ ] **No-Load Stop Device Write**: Implement the actual WalkingPad no-load stop BLE preference once the proprietary KS Fit command/key is captured or documented.

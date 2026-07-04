@@ -20,6 +20,9 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
+    private val _supportsNativeAutoMode = MutableStateFlow(true)
+    override val supportsNativeAutoMode: StateFlow<Boolean> = _supportsNativeAutoMode.asStateFlow()
+
     override suspend fun connect(address: String): Boolean {
         _connectionState.value = ConnectionState.CONNECTING
         delay(1000)

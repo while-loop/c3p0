@@ -42,6 +42,8 @@ fun ProfileScreen(
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
+    val noLoadStopEnabled by viewModel.noLoadStopEnabled.collectAsState()
+    val noLoadStopTimeoutSeconds by viewModel.noLoadStopTimeoutSeconds.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
     val isRefreshingWeight by viewModel.isRefreshingWeight.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
@@ -152,6 +154,43 @@ fun ProfileScreen(
                 Text(viewModel.connectionLabel(watchConnectionState))
             }
         )
+        ListItem(
+            headlineContent = { Text("No-load stop") },
+            supportingContent = {
+                Text(
+                    if (noLoadStopEnabled) {
+                        "Stop after ${noLoadStopTimeoutSeconds}s without load"
+                    } else {
+                        "Off"
+                    }
+                )
+            },
+            trailingContent = {
+                Switch(
+                    checked = noLoadStopEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.updateNoLoadStop(enabled, noLoadStopTimeoutSeconds)
+                    }
+                )
+            }
+        )
+        if (noLoadStopEnabled) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                NO_LOAD_STOP_TIMEOUT_OPTIONS.forEachIndexed { index, seconds ->
+                    SegmentedButton(
+                        selected = noLoadStopTimeoutSeconds == seconds,
+                        onClick = { viewModel.updateNoLoadStop(true, seconds) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = NO_LOAD_STOP_TIMEOUT_OPTIONS.size
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("${seconds}s")
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -351,3 +390,5 @@ private fun formatWeight(weightKg: Double, unitSystem: UnitSystem): String =
     } else {
         String.format(java.util.Locale.US, "%.1f kg", weightKg)
     }
+
+private val NO_LOAD_STOP_TIMEOUT_OPTIONS = listOf(5, 15, 30, 45, 60)
