@@ -5,6 +5,7 @@
 - [x] **BLE Core**: Implemented `BleScanner`, `BleConnection`, and `BleModule` (DI).
 - [x] **WalkingPad Support**: Reverse-engineered C2 protocol, CRC calculation, and status parsing.
 - [x] **WalkingPad Guardrails**: Decode 24-bit counters explicitly and clamp speed commands at the BLE manager boundary.
+- [x] **FTMS Stop Reliability**: Explicitly zero the FTMS target speed around stop commands so the belt cannot keep a latched moving target.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 3-second circular long press with a progress ring.

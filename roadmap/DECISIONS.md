@@ -12,6 +12,7 @@
 - **WalkingPad Command Bounds**: Speed changes are clamped in the UI, auto-speed controller handoff, mock manager, and real BLE manager so no caller can send an out-of-range speed.
 - **WalkingPad Moving Speed Floor**: Normal manual, FTMS, and Zone 2 speed requests floor to 1 mph (`1.60934 km/h`) because the walking belt can stop when commanded below that threshold. Explicit stop remains a separate zero-speed/stop command path.
 - **WalkingPad Start Timing**: Session start sends the pad's start/resume command before applying the safe moving-speed target. The speed target is delayed until after the pad's hardware countdown so the belt does not begin moving before the countdown completes.
+- **FTMS Stop Sequence**: FTMS stop sends an explicit target speed of `0`, then the FTMS stop command, then a second target-speed `0` confirmation. Some pads can acknowledge stop/display stopped while retaining a nonzero belt target, so stop cannot rely on `Stop/Pause` alone.
 - **WalkingPad Counter Decoding**: Status notifications decode 24-bit time, distance, and step counters explicitly to avoid operator-precedence ambiguity.
 
 ## 2. Session Management
