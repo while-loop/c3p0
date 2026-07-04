@@ -1,6 +1,9 @@
 package dev.whileloop.c3p0.ui.screen
 
+import android.app.Activity
+import android.content.Context
 import android.os.SystemClock
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -67,7 +71,9 @@ fun SessionDashboard(
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
     val isAutoSpeedEnabled by viewModel.isAutoSpeedEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
+    val age by viewModel.age.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
+    val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
     val currentHeartRate by viewModel.currentHeartRate.collectAsState()
     val lastHeartRateReceivedAtMillis by viewModel.lastHeartRateReceivedAtMillis.collectAsState()
     val averageHeartRate by viewModel.averageHeartRate.collectAsState()
@@ -105,11 +111,27 @@ fun SessionDashboard(
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
     val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds, bodyWeightKg)
     val isPadReady = connectionState == ConnectionState.CONNECTED
+    val maxHeartRate = 220 - age
+    val zone2MinHeartRate = (maxHeartRate * 0.60f).toInt()
+    val zone2MaxHeartRate = (maxHeartRate * 0.70f).toInt()
+    val keepScreenAwake = keepScreenOnDuringActiveSession && isSessionActive && !isSessionPaused
 
     LaunchedEffect(Unit) {
         while (true) {
             currentElapsedMillis = SystemClock.elapsedRealtime()
             delay(1000)
+        }
+    }
+
+    DisposableEffect(context, keepScreenAwake) {
+        val window = context.findActivity()?.window
+        if (keepScreenAwake) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -211,6 +233,8 @@ fun SessionDashboard(
 
         HeartRateHistoryChart(
             heartRates = heartRateHistory,
+            zone2MinHeartRate = zone2MinHeartRate,
+            zone2MaxHeartRate = zone2MaxHeartRate,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp)
@@ -460,12 +484,18 @@ private fun LongPressStopButton(
 @Composable
 private fun HeartRateHistoryChart(
     heartRates: List<Int>,
+    zone2MinHeartRate: Int,
+    zone2MaxHeartRate: Int,
     modifier: Modifier = Modifier
 ) {
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val zone2Color = Color(0xFF16A34A)
     val zoneColors = heartRateZoneColors()
-    val yAxisLabels = listOf(190, 160, 130, 100, 70)
+    val yAxisLabels = (listOf(190, 160, zone2MaxHeartRate, zone2MinHeartRate, 130, 100, 70))
+        .map { it.coerceIn(CHART_MIN_HEART_RATE, CHART_MAX_HEART_RATE) }
+        .distinct()
+        .sortedDescending()
 
     Column(modifier = modifier) {
         Row(
@@ -493,7 +523,11 @@ private fun HeartRateHistoryChart(
                     Text(
                         text = label.toString(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = labelColor
+                        color = if (label == zone2MinHeartRate || label == zone2MaxHeartRate) {
+                            zone2Color
+                        } else {
+                            labelColor
+                        }
                     )
                 }
             }
@@ -519,6 +553,16 @@ private fun HeartRateHistoryChart(
                         start = androidx.compose.ui.geometry.Offset(padding, y),
                         end = androidx.compose.ui.geometry.Offset(width - padding, y),
                         strokeWidth = 1.dp.toPx()
+                    )
+                }
+                listOf(zone2MinHeartRate, zone2MaxHeartRate).forEach { heartRate ->
+                    val y = heartRateY(heartRate, minHr, range, padding, chartHeight)
+                    drawLine(
+                        color = zone2Color,
+                        start = androidx.compose.ui.geometry.Offset(padding, y),
+                        end = androidx.compose.ui.geometry.Offset(width - padding, y),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
                     )
                 }
 
@@ -744,6 +788,13 @@ private fun hasFreshHeartRateData(
     currentHeartRate > 0 &&
         lastHeartRateReceivedAtMillis > 0L &&
         nowElapsedMillis - lastHeartRateReceivedAtMillis <= HEART_RATE_FRESHNESS_WINDOW_MS
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is android.content.ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 private enum class SessionAction {
     Start,

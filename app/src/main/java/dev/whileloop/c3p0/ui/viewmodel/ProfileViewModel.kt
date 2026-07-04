@@ -55,6 +55,12 @@ class ProfileViewModel @Inject constructor(
         false
     )
 
+    val keepScreenOnDuringActiveSession = settingsRepository.keepScreenOnDuringActiveSession.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
+    )
+
     val noLoadStopEnabled = settingsRepository.noLoadStopEnabled.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -175,6 +181,12 @@ class ProfileViewModel @Inject constructor(
     fun updateSkipInactiveDeviceWarning(skip: Boolean) {
         viewModelScope.launch {
             settingsRepository.saveSkipInactiveDeviceWarning(skip)
+        }
+    }
+
+    fun updateKeepScreenOnDuringActiveSession(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveKeepScreenOnDuringActiveSession(enabled)
         }
     }
 

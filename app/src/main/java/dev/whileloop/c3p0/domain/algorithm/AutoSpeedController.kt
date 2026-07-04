@@ -9,8 +9,8 @@ class AutoSpeedController(
     private val zoneMaxHr: Int = targetHr + DEFAULT_ZONE_HALF_WIDTH_BPM,
     private val minSpeed: Float = 1.60934f,
     private val maxSpeed: Float = 6.0f,
-    private val adjustmentIntervalSeconds: Int = 30,
-    private val maxAdjustment: Float = 0.5f,
+    private val adjustmentIntervalSeconds: Int = 15,
+    private val maxAdjustment: Float = MAX_ADJUSTMENT_KMH,
     private val memoryWindowMillis: Long = 5 * 60 * 1000L
 ) {
     private val samples = mutableListOf<Sample>()
@@ -96,7 +96,7 @@ class AutoSpeedController(
     }
 
     private fun proportionalStep(errorBpm: Double): Float =
-        ((errorBpm / 4.0).toFloat() * 0.1f).coerceIn(MIN_ADJUSTMENT_KMH, maxAdjustment)
+        ((errorBpm / 6.0).toFloat() * MAX_ADJUSTMENT_KMH).coerceIn(MIN_ADJUSTMENT_KMH, maxAdjustment)
 
     private fun learnedZone2Speed(): Float? {
         val zone2 = observations.filter { it.zone == HeartRateZone.Zone2 }
@@ -141,8 +141,10 @@ class AutoSpeedController(
 
     private companion object {
         private const val DEFAULT_ZONE_HALF_WIDTH_BPM = 5
-        private const val MIN_ADJUSTMENT_KMH = 0.05f
-        private const val LEARNED_STEP_KMH = 0.2f
-        private const val LEARNED_SPEED_TOLERANCE_KMH = 0.1f
+        private const val KM_PER_MILE = 1.60934f
+        private const val MIN_ADJUSTMENT_KMH = 0.1f * KM_PER_MILE
+        private const val MAX_ADJUSTMENT_KMH = 0.5f * KM_PER_MILE
+        private const val LEARNED_STEP_KMH = 0.3f * KM_PER_MILE
+        private const val LEARNED_SPEED_TOLERANCE_KMH = 0.1f * KM_PER_MILE
     }
 }

@@ -136,6 +136,12 @@ class SessionViewModel @Inject constructor(
         false
     )
 
+    val keepScreenOnDuringActiveSession = settingsRepository.keepScreenOnDuringActiveSession.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
+    )
+
     val bodyWeightKg = settingsRepository.bodyWeightKg.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),

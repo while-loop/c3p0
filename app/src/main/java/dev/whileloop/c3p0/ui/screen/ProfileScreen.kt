@@ -42,6 +42,7 @@ fun ProfileScreen(
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
+    val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
     val isRefreshingWeight by viewModel.isRefreshingWeight.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
@@ -263,6 +264,16 @@ fun ProfileScreen(
                 Switch(
                     checked = !skipInactiveDeviceWarning,
                     onCheckedChange = { enabled -> viewModel.updateSkipInactiveDeviceWarning(!enabled) }
+                )
+            }
+        )
+        ListItem(
+            headlineContent = { Text("Keep screen awake") },
+            supportingContent = { Text("Prevent sleep during active sessions; paused sessions may sleep") },
+            trailingContent = {
+                Switch(
+                    checked = keepScreenOnDuringActiveSession,
+                    onCheckedChange = viewModel::updateKeepScreenOnDuringActiveSession
                 )
             }
         )

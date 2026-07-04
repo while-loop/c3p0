@@ -34,6 +34,7 @@ class SettingsRepository @Inject constructor(
         val GOOGLE_DRIVE_SYNC_ENABLED = booleanPreferencesKey("google_drive_sync_enabled")
         val STEP_GOAL = intPreferencesKey("step_goal")
         val AGE = intPreferencesKey("age")
+        val KEEP_SCREEN_ON_DURING_ACTIVE_SESSION = booleanPreferencesKey("keep_screen_on_during_active_session")
         val NO_LOAD_STOP_ENABLED = booleanPreferencesKey("no_load_stop_enabled")
         val NO_LOAD_STOP_TIMEOUT_SECONDS = intPreferencesKey("no_load_stop_timeout_seconds")
     }
@@ -58,6 +59,9 @@ class SettingsRepository @Inject constructor(
     }
     val age: Flow<Int> = context.dataStore.data.map {
         it[Keys.AGE] ?: DEFAULT_AGE
+    }
+    val keepScreenOnDuringActiveSession: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.KEEP_SCREEN_ON_DURING_ACTIVE_SESSION] ?: false
     }
     val noLoadStopEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.NO_LOAD_STOP_ENABLED] ?: false
@@ -115,6 +119,11 @@ class SettingsRepository @Inject constructor(
 
     suspend fun saveAge(age: Int) {
         context.dataStore.edit { it[Keys.AGE] = age.coerceIn(MIN_AGE, MAX_AGE) }
+        requestBackupIfEnabled()
+    }
+
+    suspend fun saveKeepScreenOnDuringActiveSession(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_ACTIVE_SESSION] = enabled }
         requestBackupIfEnabled()
     }
 
