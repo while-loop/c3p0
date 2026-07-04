@@ -56,6 +56,10 @@ fun ProfileScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.refreshHealthConnectPermissionState()
+    }
+
     LaunchedEffect(launchHealthConnectPermissions) {
         if (!launchHealthConnectPermissions) return@LaunchedEffect
 
@@ -249,7 +253,6 @@ fun ProfileScreen(
             headlineContent = { Text("Daily Step Goal") },
             supportingContent = { Text("$stepGoal steps") },
             trailingContent = {
-                // Simplified slider or buttons for now
                 Row {
                     IconButton(onClick = { viewModel.updateStepGoal(stepGoal - 500) }) {
                         Text("-")

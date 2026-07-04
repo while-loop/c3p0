@@ -13,9 +13,11 @@ import dev.whileloop.c3p0.health.HealthConnectManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
+import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 @Singleton
 class SessionManager @Inject constructor(
@@ -30,6 +32,13 @@ class SessionManager @Inject constructor(
     private var sessionJob: Job? = null
     private var currentSessionId: Long? = null
     private var startTime: Instant? = null
+    private var activeStartedAt: Instant? = null
+    private var accumulatedActiveDuration: Duration = Duration.ZERO
+    private var startDistance = 0
+    private var startSteps = 0
+    private var activeHeartRateTotal = 0
+    private var activeHeartRateSampleCount = 0
+    private var maxHeartRate = 0
 
     private val _isAutoSpeedEnabled = MutableStateFlow(false)
     val isAutoSpeedEnabled = _isAutoSpeedEnabled.asStateFlow()
@@ -63,26 +72,51 @@ class SessionManager @Inject constructor(
 
         sessionJob = scope.launch {
             startTime = Instant.now()
+            activeStartedAt = startTime
+            accumulatedActiveDuration = Duration.ZERO
+            val startStatus = treadmillManager.status.value
+            startDistance = startStatus.distance
+            startSteps = startStatus.steps
+            activeHeartRateTotal = 0
+            activeHeartRateSampleCount = 0
+            maxHeartRate = 0
             currentSessionId = sessionRepository.startSession()
+            treadmillManager.start()
             
             Timber.d("Session started: $currentSessionId")
+
+            var previousMetricSteps = startStatus.steps
+            var previousMetricTime = Instant.now()
 
             // Collect data and save metrics
             combine(
                 treadmillManager.status,
                 heartRateManager.heartRate
-            ) { status, hr ->
-                SessionMetricEntity(
-                    sessionId = currentSessionId!!,
-                    timestamp = Instant.now(),
-                    heartRate = hr,
-                    speed = status.speed,
-                    cadence = (status.speed * 1.5).toInt() // mock cadence
-                )
-            }.collect { metric ->
+            ) { status, hr -> status to hr }
+                .collect { (status, hr) ->
                 if (_isSessionPaused.value) return@collect
 
+                val now = Instant.now()
+                val cadence = calculateCadence(previousMetricSteps, status.steps, previousMetricTime, now)
+                previousMetricSteps = status.steps
+                previousMetricTime = now
+
+                val metric = SessionMetricEntity(
+                    sessionId = currentSessionId!!,
+                    timestamp = now,
+                    heartRate = hr,
+                    speed = status.speed,
+                    cadence = cadence
+                )
+
                 sessionRepository.addMetric(metric)
+                metric.heartRate
+                    ?.takeIf { it > 0 }
+                    ?.let { heartRate ->
+                        activeHeartRateTotal += heartRate
+                        activeHeartRateSampleCount += 1
+                        maxHeartRate = maxOf(maxHeartRate, heartRate)
+                    }
                 
                 if (_isAutoSpeedEnabled.value) {
                     autoSpeedController?.addHrSample(metric.heartRate ?: 0, System.currentTimeMillis())
@@ -97,6 +131,7 @@ class SessionManager @Inject constructor(
 
         scope.launch {
             treadmillManager.stop()
+            accumulateActiveDuration()
             _isSessionPaused.value = true
         }
     }
@@ -106,6 +141,7 @@ class SessionManager @Inject constructor(
 
         scope.launch {
             treadmillManager.start()
+            activeStartedAt = Instant.now()
             _isSessionPaused.value = false
         }
     }
@@ -114,6 +150,7 @@ class SessionManager @Inject constructor(
         sessionJob?.cancel()
         _isSessionActive.value = false
         _isSessionPaused.value = false
+        disableAutoSpeed()
         
         // Stop Foreground Service
         context.stopService(Intent(context, dev.whileloop.c3p0.service.SessionService::class.java))
@@ -121,24 +158,39 @@ class SessionManager @Inject constructor(
         val id = currentSessionId ?: return
         val start = startTime ?: return
         val end = Instant.now()
+        accumulateActiveDuration(end)
 
         scope.launch {
             val finalStatus = treadmillManager.status.value
+            treadmillManager.stop()
+            val totalDistance = counterDelta(startDistance, finalStatus.distance)
+            val totalSteps = counterDelta(startSteps, finalStatus.steps)
+            val activeDuration = accumulatedActiveDuration
+            val distanceMeters = totalDistance * 10.0
+            val averageHeartRate = if (activeHeartRateSampleCount > 0) {
+                activeHeartRateTotal / activeHeartRateSampleCount
+            } else {
+                0
+            }
             val sessionStats = SessionEntity(
                 startTime = start,
                 endTime = end,
-                totalDistance = finalStatus.distance,
-                totalSteps = finalStatus.steps,
-                totalEnergy = 0 // to be calculated
+                totalDistance = totalDistance,
+                totalSteps = totalSteps,
+                totalEnergy = estimateCalories(distanceMeters, activeDuration, settingsRepository.bodyWeightKg.first()),
+                averageHeartRate = averageHeartRate,
+                maxHeartRate = maxHeartRate
             )
             sessionRepository.endSession(id, sessionStats)
             
             // Write to Health Connect
-            healthConnectManager.writeSession(start, end, finalStatus.steps, finalStatus.distance * 10.0)
+            healthConnectManager.writeSession(start, end, totalSteps, distanceMeters)
             settingsRepository.requestBackupIfEnabled()
             
             currentSessionId = null
             startTime = null
+            activeStartedAt = null
+            accumulatedActiveDuration = Duration.ZERO
             Timber.d("Session stopped and saved")
         }
     }
@@ -160,7 +212,43 @@ class SessionManager @Inject constructor(
         autoSpeedController = null
     }
 
+    private fun accumulateActiveDuration(end: Instant = Instant.now()) {
+        val activeStart = activeStartedAt ?: return
+        if (end.isAfter(activeStart)) {
+            accumulatedActiveDuration = accumulatedActiveDuration.plus(Duration.between(activeStart, end))
+        }
+        activeStartedAt = null
+    }
+
+    private fun counterDelta(start: Int, end: Int): Int =
+        if (end >= start) end - start else end
+
+    private fun estimateCalories(distanceMeters: Double, activeDuration: Duration, bodyWeightKg: Double?): Int {
+        val activeHours = activeDuration.toMillis() / 3_600_000.0
+        if (activeHours <= 0.0) return 0
+
+        val averageSpeedKmh = (distanceMeters / 1000.0) / activeHours
+        val met = when {
+            averageSpeedKmh < 1.0 -> 1.8
+            averageSpeedKmh < 3.2 -> 2.8
+            averageSpeedKmh < 4.8 -> 3.5
+            averageSpeedKmh < 5.6 -> 4.3
+            averageSpeedKmh < 6.4 -> 5.0
+            else -> 6.3
+        }
+        return (met * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG) * activeHours).roundToInt()
+    }
+
+    private fun calculateCadence(previousSteps: Int, currentSteps: Int, previousTime: Instant, currentTime: Instant): Int {
+        val elapsedMinutes = Duration.between(previousTime, currentTime).toMillis() / 60_000.0
+        if (elapsedMinutes <= 0.0) return 0
+
+        val stepDelta = counterDelta(previousSteps, currentSteps)
+        return (stepDelta / elapsedMinutes).roundToInt().coerceAtLeast(0)
+    }
+
     companion object {
         private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
+        private const val DEFAULT_BODY_WEIGHT_KG = 70.0
     }
 }

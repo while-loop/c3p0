@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package dev.whileloop.c3p0.ble.controller
 
 import android.annotation.SuppressLint
@@ -45,10 +47,6 @@ class BleConnection(
             } else {
                 Timber.w("onServicesDiscovered received: $status")
             }
-        }
-
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            // To be implemented by subclasses/delegates
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -111,7 +109,12 @@ class BleConnection(
         }
 
         val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
-        val device = adapter.getRemoteDevice(address) ?: return false
+        val device = try {
+            adapter.getRemoteDevice(address)
+        } catch (e: IllegalArgumentException) {
+            Timber.e(e, "Invalid BLE address: $address")
+            return false
+        }
 
         Timber.d("Connecting to $address")
         _connectionState.value = ConnectionState.CONNECTING

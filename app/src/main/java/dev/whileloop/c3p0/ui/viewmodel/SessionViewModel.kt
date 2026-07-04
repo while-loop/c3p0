@@ -82,10 +82,22 @@ class SessionViewModel @Inject constructor(
         sessionManager.isSessionPaused.value
     )
 
+    val isAutoSpeedEnabled = sessionManager.isAutoSpeedEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        sessionManager.isAutoSpeedEnabled.value
+    )
+
     val unitSystem = settingsRepository.unitSystem.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         UnitSystem.Imperial
+    )
+
+    val age = settingsRepository.age.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        30
     )
 
     val skipInactiveDeviceWarning = settingsRepository.skipInactiveDeviceWarning.stateIn(
@@ -177,7 +189,10 @@ class SessionViewModel @Inject constructor(
     }
 
     fun pauseSession() {
-        sessionManager.pauseSession()
+        viewModelScope.launch {
+            treadmillManager.setUnitSystem(settingsRepository.unitSystem.first())
+            sessionManager.pauseSession()
+        }
     }
 
     fun resumeSession() {
@@ -210,7 +225,29 @@ class SessionViewModel @Inject constructor(
     fun setMode(mode: TreadmillMode) {
         viewModelScope.launch {
             treadmillManager.setMode(mode)
+            if (mode == TreadmillMode.MANUAL) {
+                sessionManager.disableAutoSpeed()
+            }
         }
+    }
+
+    fun enableAutoSpeed() {
+        viewModelScope.launch {
+            treadmillManager.setMode(TreadmillMode.AUTO)
+            sessionManager.enableAutoSpeed(targetZone2HeartRate(age.value))
+        }
+    }
+
+    fun disableAutoSpeed() {
+        viewModelScope.launch {
+            treadmillManager.setMode(TreadmillMode.MANUAL)
+            sessionManager.disableAutoSpeed()
+        }
+    }
+
+    private fun targetZone2HeartRate(age: Int): Int {
+        val maxHeartRate = 220 - age
+        return (maxHeartRate * 0.65f).toInt()
     }
 
     private fun startSessionStats(reset: Boolean) {

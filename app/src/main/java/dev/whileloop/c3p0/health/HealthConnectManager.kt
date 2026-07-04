@@ -5,15 +5,17 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
-import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Length
 import timber.log.Timber
 import java.time.Instant
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -76,6 +78,7 @@ class HealthConnectManager @Inject constructor(
 
     suspend fun writeSession(startTime: Instant, endTime: Instant, steps: Int, distanceMeters: Double) {
         if (!hasAllPermissions()) return
+        if (!endTime.isAfter(startTime)) return
 
         try {
             val device = Device(
@@ -83,15 +86,41 @@ class HealthConnectManager @Inject constructor(
                 model = "WalkingPad C2",
                 type = Device.TYPE_UNKNOWN
             )
+            val startZoneOffset = ZoneId.systemDefault().rules.getOffset(startTime)
+            val endZoneOffset = ZoneId.systemDefault().rules.getOffset(endTime)
+            val metadata = Metadata.activelyRecorded(device)
+            val exerciseSessionRecord = ExerciseSessionRecord(
+                startTime = startTime,
+                startZoneOffset = startZoneOffset,
+                endTime = endTime,
+                endZoneOffset = endZoneOffset,
+                metadata = metadata,
+                exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_WALKING,
+                title = "C3P0 WalkingPad Session"
+            )
             val stepsRecord = StepsRecord(
-                count = steps.toLong(),
+                count = steps.coerceAtLeast(0).toLong(),
                 startTime = startTime,
                 endTime = endTime,
-                startZoneOffset = java.time.ZoneOffset.UTC,
-                endZoneOffset = java.time.ZoneOffset.UTC,
-                metadata = Metadata.activelyRecorded(device)
+                startZoneOffset = startZoneOffset,
+                endZoneOffset = endZoneOffset,
+                metadata = metadata
             )
-            healthConnectClient.insertRecords(listOf(stepsRecord))
+            val distanceRecord = DistanceRecord(
+                startTime = startTime,
+                startZoneOffset = startZoneOffset,
+                endTime = endTime,
+                endZoneOffset = endZoneOffset,
+                distance = Length.meters(distanceMeters.coerceAtLeast(0.0)),
+                metadata = metadata
+            )
+            healthConnectClient.insertRecords(
+                listOf<Record>(
+                    exerciseSessionRecord,
+                    stepsRecord,
+                    distanceRecord
+                )
+            )
         } catch (e: Exception) {
             Timber.e(e, "Error writing session to Health Connect")
         }
@@ -101,7 +130,6 @@ class HealthConnectManager @Inject constructor(
         val PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(StepsRecord::class),
             HealthPermission.getWritePermission(StepsRecord::class),
-            HealthPermission.getReadPermission(HeartRateRecord::class),
             HealthPermission.getReadPermission(DistanceRecord::class),
             HealthPermission.getWritePermission(DistanceRecord::class),
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),

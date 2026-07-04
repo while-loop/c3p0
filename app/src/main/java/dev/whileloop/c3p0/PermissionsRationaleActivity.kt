@@ -25,7 +25,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                         Text("Health Connect access", style = MaterialTheme.typography.headlineSmall)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            "C3P0 uses Health Connect to read step and heart-rate data and to write completed walking sessions. This data stays under your control in Health Connect and is only used to show session history and training stats.",
+                            "C3P0 uses Health Connect to read step and weight data and to write completed walking sessions. Heart-rate readings come from your paired watch during a session. This data stays under your control in Health Connect and is only used to show session history and training stats.",
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }

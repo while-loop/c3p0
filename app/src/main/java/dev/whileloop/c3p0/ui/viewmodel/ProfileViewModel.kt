@@ -25,12 +25,6 @@ class ProfileViewModel @Inject constructor(
     private val heartRateManager: HeartRateManager,
     private val healthConnectManager: HealthConnectManager
 ) : ViewModel() {
-    private val _stepGoal = MutableStateFlow(10000)
-    val stepGoal = _stepGoal.asStateFlow()
-
-    private val _age = MutableStateFlow(30)
-    val age = _age.asStateFlow()
-
     private val _isHealthConnectEnabled = MutableStateFlow(false)
     val isHealthConnectEnabled = _isHealthConnectEnabled.asStateFlow()
 
@@ -41,6 +35,18 @@ class ProfileViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         UnitSystem.Imperial
+    )
+
+    val stepGoal = settingsRepository.stepGoal.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        10000
+    )
+
+    val age = settingsRepository.age.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        30
     )
 
     val skipInactiveDeviceWarning = settingsRepository.skipInactiveDeviceWarning.stateIn(
@@ -94,6 +100,8 @@ class ProfileViewModel @Inject constructor(
         }
 
     init {
+        refreshHealthConnectPermissionState()
+
         viewModelScope.launch {
             settingsRepository.treadmillAddress
                 .filterNotNull()
@@ -118,15 +126,25 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun updateStepGoal(goal: Int) {
-        _stepGoal.value = goal
+        viewModelScope.launch {
+            settingsRepository.saveStepGoal(goal)
+        }
     }
 
     fun updateAge(age: Int) {
-        _age.value = age
+        viewModelScope.launch {
+            settingsRepository.saveAge(age)
+        }
     }
 
     fun toggleHealthConnect(enabled: Boolean) {
         _isHealthConnectEnabled.value = enabled
+    }
+
+    fun refreshHealthConnectPermissionState() {
+        viewModelScope.launch {
+            _isHealthConnectEnabled.value = healthConnectManager.hasAllPermissions()
+        }
     }
 
     fun toggleGoogleDriveSync(enabled: Boolean) {

@@ -18,7 +18,13 @@ class SessionRepositoryImpl @Inject constructor(
 
     override suspend fun endSession(id: Long, finalStats: SessionEntity) {
         val session = sessionDao.getSessionById(id) ?: return
-        sessionDao.updateSession(finalStats.copy(id = id, startTime = session.startTime, endTime = Instant.now()))
+        sessionDao.updateSession(
+            finalStats.copy(
+                id = id,
+                startTime = session.startTime,
+                endTime = finalStats.endTime ?: Instant.now()
+            )
+        )
     }
 
     override suspend fun addMetric(metric: SessionMetricEntity) {

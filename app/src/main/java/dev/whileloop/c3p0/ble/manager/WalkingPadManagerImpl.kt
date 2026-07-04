@@ -36,6 +36,8 @@ class WalkingPadManagerImpl @Inject constructor(
     private val WRITE_CHAR_UUID = UUID.fromString("0000fe02-0000-1000-8000-00805f9b34fb")
 
     override suspend fun connect(address: String): Boolean {
+        connectionStateJob?.cancel()
+        connection?.close()
         connection = BleConnection(context, address).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == NOTIFY_CHAR_UUID) {

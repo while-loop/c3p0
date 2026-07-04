@@ -30,6 +30,8 @@ class GarminManagerImpl @Inject constructor(
     private val HR_MEASUREMENT_CHAR_UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb")
 
     override suspend fun connect(address: String): Boolean {
+        connectionStateJob?.cancel()
+        connection?.close()
         connection = BleConnection(context, address).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == HR_MEASUREMENT_CHAR_UUID) {

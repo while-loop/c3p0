@@ -58,6 +58,7 @@ fun SessionDashboard(
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
+    val isAutoSpeedEnabled by viewModel.isAutoSpeedEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val currentHeartRate by viewModel.currentHeartRate.collectAsState()
@@ -254,15 +255,15 @@ fun SessionDashboard(
 
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
-                    selected = status.mode == TreadmillMode.MANUAL,
-                    onClick = { viewModel.setMode(TreadmillMode.MANUAL) },
+                    selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
+                    onClick = { viewModel.disableAutoSpeed() },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) {
                     Text("Manual")
                 }
                 SegmentedButton(
-                    selected = status.mode == TreadmillMode.AUTO,
-                    onClick = { viewModel.setMode(TreadmillMode.AUTO) },
+                    selected = status.mode == TreadmillMode.AUTO || isAutoSpeedEnabled,
+                    onClick = { viewModel.enableAutoSpeed() },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) {
                     Text("Automatic")

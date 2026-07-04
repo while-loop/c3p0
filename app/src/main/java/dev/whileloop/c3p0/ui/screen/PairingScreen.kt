@@ -27,8 +27,8 @@ fun PairingScreen(
     val context = LocalContext.current
     val devices by viewModel.devices.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
-    viewModel.treadmillAddress.collectAsState()
-    viewModel.watchAddress.collectAsState()
+    val treadmillAddress by viewModel.treadmillAddress.collectAsState()
+    val watchAddress by viewModel.watchAddress.collectAsState()
     viewModel.treadmillConnectionState.collectAsState()
     viewModel.watchConnectionState.collectAsState()
     viewModel.pairingAddress.collectAsState()
@@ -54,7 +54,17 @@ fun PairingScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Pair Devices", style = MaterialTheme.typography.headlineMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Pair Devices", style = MaterialTheme.typography.headlineMedium)
+            if (treadmillAddress != null || watchAddress != null) {
+                TextButton(onClick = onDevicePaired) {
+                    Text("Done")
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(

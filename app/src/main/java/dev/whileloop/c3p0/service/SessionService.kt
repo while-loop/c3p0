@@ -31,7 +31,7 @@ class SessionService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Walking Session Active")
             .setContentText("C3P0 is tracking your workout")
-            .setSmallIcon(R.drawable.ic_home) // Replace with better icon later
+            .setSmallIcon(R.drawable.ic_home)
             .setOngoing(true)
             .build()
 

@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,6 +32,8 @@ class SettingsRepository @Inject constructor(
         val SKIP_INACTIVE_DEVICE_WARNING = booleanPreferencesKey("skip_inactive_device_warning")
         val BODY_WEIGHT_KG = doublePreferencesKey("body_weight_kg")
         val GOOGLE_DRIVE_SYNC_ENABLED = booleanPreferencesKey("google_drive_sync_enabled")
+        val STEP_GOAL = intPreferencesKey("step_goal")
+        val AGE = intPreferencesKey("age")
     }
 
     val treadmillAddress: Flow<String?> = context.dataStore.data.map { it[Keys.TREADMILL_ADDRESS] }
@@ -47,6 +50,12 @@ class SettingsRepository @Inject constructor(
     }
     val googleDriveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.GOOGLE_DRIVE_SYNC_ENABLED] ?: false
+    }
+    val stepGoal: Flow<Int> = context.dataStore.data.map {
+        it[Keys.STEP_GOAL] ?: DEFAULT_STEP_GOAL
+    }
+    val age: Flow<Int> = context.dataStore.data.map {
+        it[Keys.AGE] ?: DEFAULT_AGE
     }
 
     suspend fun saveTreadmillAddress(address: String) {
@@ -81,6 +90,16 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    suspend fun saveStepGoal(goal: Int) {
+        context.dataStore.edit { it[Keys.STEP_GOAL] = goal.coerceAtLeast(MIN_STEP_GOAL) }
+        requestBackupIfEnabled()
+    }
+
+    suspend fun saveAge(age: Int) {
+        context.dataStore.edit { it[Keys.AGE] = age.coerceIn(MIN_AGE, MAX_AGE) }
+        requestBackupIfEnabled()
+    }
+
     suspend fun requestBackupIfEnabled(minIntervalMillis: Long = 0L) {
         if (googleDriveSyncEnabled.first()) {
             val now = SystemClock.elapsedRealtime()
@@ -94,5 +113,13 @@ class SettingsRepository @Inject constructor(
     private fun requestBackup() {
         lastBackupRequestElapsedMillis = SystemClock.elapsedRealtime()
         BackupManager(context).dataChanged()
+    }
+
+    private companion object {
+        private const val DEFAULT_STEP_GOAL = 10000
+        private const val MIN_STEP_GOAL = 500
+        private const val DEFAULT_AGE = 30
+        private const val MIN_AGE = 1
+        private const val MAX_AGE = 120
     }
 }
