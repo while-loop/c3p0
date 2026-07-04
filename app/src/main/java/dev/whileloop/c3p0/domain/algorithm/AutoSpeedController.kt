@@ -85,10 +85,11 @@ class AutoSpeedController(
         if (timestamp - lastZoneEdgeGuardTime < EDGE_GUARD_INTERVAL_MILLIS) return null
 
         val guardBandBpm = zoneEdgeGuardBandBpm()
+        val trendBpmPerMinute = heartRateTrendBpmPerMinute(timestamp)
         val adjustment = when {
-            avgHr - zoneMinHr <= guardBandBpm ->
+            avgHr - zoneMinHr <= guardBandBpm && trendBpmPerMinute <= -MIN_EDGE_GUARD_TREND_BPM_PER_MINUTE ->
                 EDGE_GUARD_ADJUSTMENT_KMH.takeIf { avgSpeed + it <= maxSpeed }
-            zoneMaxHr - avgHr <= guardBandBpm ->
+            zoneMaxHr - avgHr <= guardBandBpm && trendBpmPerMinute >= MIN_EDGE_GUARD_TREND_BPM_PER_MINUTE ->
                 (-EDGE_GUARD_ADJUSTMENT_KMH).takeIf { avgSpeed + it >= minSpeed }
             else -> null
         }
@@ -129,6 +130,20 @@ class AutoSpeedController(
 
     private fun zoneEdgeGuardBandBpm(): Double =
         maxOf(MIN_EDGE_GUARD_BPM, (zoneMaxHr - zoneMinHr) * EDGE_GUARD_ZONE_FRACTION)
+
+    private fun heartRateTrendBpmPerMinute(timestamp: Long): Double {
+        val recent = observations
+            .filter { timestamp - it.timestamp <= EDGE_GUARD_TREND_WINDOW_MILLIS }
+            .sortedBy { it.timestamp }
+        if (recent.size < MIN_TREND_OBSERVATIONS) return 0.0
+
+        val first = recent.first()
+        val last = recent.last()
+        val elapsedMinutes = (last.timestamp - first.timestamp) / 60_000.0
+        if (elapsedMinutes <= 0.0) return 0.0
+
+        return (last.avgHr - first.avgHr) / elapsedMinutes
+    }
 
     private fun learnedZone2Speed(): Float? {
         val zone2 = observations.filter { it.zone == HeartRateZone.Zone2 }
@@ -178,8 +193,11 @@ class AutoSpeedController(
         private const val MAX_ADJUSTMENT_KMH = 0.5f * KM_PER_MILE
         private const val EDGE_GUARD_ADJUSTMENT_KMH = 0.1f * KM_PER_MILE
         private const val EDGE_GUARD_INTERVAL_MILLIS = 45_000L
+        private const val EDGE_GUARD_TREND_WINDOW_MILLIS = 2 * 60 * 1000L
         private const val EDGE_GUARD_ZONE_FRACTION = 0.05
         private const val MIN_EDGE_GUARD_BPM = 2.0
+        private const val MIN_EDGE_GUARD_TREND_BPM_PER_MINUTE = 1.0
+        private const val MIN_TREND_OBSERVATIONS = 3
         private const val LEARNED_STEP_KMH = 0.3f * KM_PER_MILE
         private const val LEARNED_SPEED_TOLERANCE_KMH = 0.1f * KM_PER_MILE
     }
