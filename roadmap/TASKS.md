@@ -7,6 +7,7 @@
 - [x] **WalkingPad Guardrails**: Decode 24-bit counters explicitly and clamp speed commands at the BLE manager boundary.
 - [x] **FTMS Stop Reliability**: Fall back from FTMS stop to pause and reset when treadmill data still reports a moving belt.
 - [x] **Encrypted KS Stop Fallback**: Reverse-engineered the Mi WalkingPad APK stop path and added a guarded `props runState 0` fallback for `FED7`/`FED8`-style KS encrypted control characteristics.
+- [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 3-second circular long press with a progress ring.

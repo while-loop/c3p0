@@ -186,26 +186,50 @@ class WalkingPadManagerImpl @Inject constructor(
         return if (ftmsProtocolReady.value) {
             stopFtmsBelt()
         } else {
+            pause()
+        }
+    }
+
+    override suspend fun pause(): Boolean {
+        return if (ftmsProtocolReady.value) {
+            pauseFtmsBelt()
+        } else {
             sendLegacySpeed(0f)
         }
     }
 
+    private suspend fun pauseFtmsBelt(): Boolean {
+        requestFtmsControl()
+        return sendCommand(
+            cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_PAUSE),
+            protocol = WalkingPadProtocol.FitnessMachineService
+        )
+    }
+
     private suspend fun stopFtmsBelt(): Boolean {
         requestFtmsControl()
+
+        if (!isBeltStopped(status.value)) {
+            pauseFtmsBelt()
+            if (!awaitStatusApplied(FTMS_BELT_COAST_STOP_TIMEOUT_MS, ::isBeltStopped)) {
+                errorReporter.report(
+                    "WalkingPad Bluetooth",
+                    "WalkingPad is still moving; wait for the belt to stop before stopping",
+                    commandFailureDetail(
+                        protocol = WalkingPadProtocol.FitnessMachineService,
+                        commandHex = "08 02",
+                        status = status.value
+                    )
+                )
+                return false
+            }
+        }
 
         val stopSent = sendCommand(
             cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_STOP),
             protocol = WalkingPadProtocol.FitnessMachineService
         )
         if (stopSent && awaitStatusApplied(FTMS_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)) {
-            return true
-        }
-
-        val pauseSent = sendCommand(
-            cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_PAUSE),
-            protocol = WalkingPadProtocol.FitnessMachineService
-        )
-        if (pauseSent && awaitStatusApplied(FTMS_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)) {
             return true
         }
 
@@ -226,7 +250,7 @@ class WalkingPadManagerImpl @Inject constructor(
             "WalkingPad did not apply FTMS stop sequence",
             commandFailureDetail(
                 protocol = WalkingPadProtocol.FitnessMachineService,
-                commandHex = "08 01; 08 02; 01; KS props runState 0",
+                commandHex = "08 02; 08 01; 01; KS props runState 0",
                 status = status.value
             ) + " ksEncryptedWrites=${availableKsEncryptedWriteChars().joinToString().ifBlank { "none" }}"
         )
@@ -866,6 +890,7 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
         private const val GATT_DESCRIPTOR_WRITE_DELAY_MS = 400L
         private const val FTMS_STOP_APPLY_TIMEOUT_MS = 2_000L
+        private const val FTMS_BELT_COAST_STOP_TIMEOUT_MS = 15_000L
         private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
         private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L

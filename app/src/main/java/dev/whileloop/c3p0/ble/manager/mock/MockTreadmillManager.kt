@@ -41,6 +41,11 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
         return true
     }
 
+    override suspend fun pause(): Boolean {
+        _status.value = _status.value.copy(state = TreadmillState.STOPPED, speed = 0f)
+        return true
+    }
+
     override suspend fun stop(): Boolean {
         _status.value = _status.value.copy(state = TreadmillState.STOPPED, speed = 0f)
         return true

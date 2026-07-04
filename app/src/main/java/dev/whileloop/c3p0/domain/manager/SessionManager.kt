@@ -138,9 +138,10 @@ class SessionManager @Inject constructor(
         if (_isSessionActive.value.not() || _isSessionPaused.value) return
 
         scope.launch {
-            treadmillManager.stop()
-            accumulateActiveDuration()
-            _isSessionPaused.value = true
+            if (treadmillManager.pause()) {
+                accumulateActiveDuration()
+                _isSessionPaused.value = true
+            }
         }
     }
 
@@ -155,36 +156,38 @@ class SessionManager @Inject constructor(
     }
 
     fun stopSession() {
-        sessionJob?.cancel()
-        _isSessionActive.value = false
-        _isSessionPaused.value = false
-        disableAutoSpeed()
-        
-        // Stop Foreground Service
-        context.stopService(Intent(context, dev.whileloop.c3p0.service.SessionService::class.java))
-
-        val id = currentSessionId ?: return
-        val start = startTime ?: return
-        val end = Instant.now()
-        accumulateActiveDuration(end)
-        val activeDuration = accumulatedActiveDuration
-        val finalStatus = treadmillManager.status.value
-        val totalDistance = counterDelta(startDistance, finalStatus.distance)
-        val totalSteps = counterDelta(startSteps, finalStatus.steps)
-        val distanceMeters = totalDistance * 10.0
-        val averageHeartRate = if (activeHeartRateSampleCount > 0) {
-            activeHeartRateTotal / activeHeartRateSampleCount
-        } else {
-            0
-        }
-        val sessionMaxHeartRate = maxHeartRate
-        currentSessionId = null
-        startTime = null
-        activeStartedAt = null
-        accumulatedActiveDuration = Duration.ZERO
-
         scope.launch {
-            treadmillManager.stop()
+            if (!treadmillManager.stop()) {
+                return@launch
+            }
+
+            sessionJob?.cancel()
+            _isSessionActive.value = false
+            _isSessionPaused.value = false
+            disableAutoSpeed()
+
+            context.stopService(Intent(context, dev.whileloop.c3p0.service.SessionService::class.java))
+
+            val id = currentSessionId ?: return@launch
+            val start = startTime ?: return@launch
+            val end = Instant.now()
+            accumulateActiveDuration(end)
+            val activeDuration = accumulatedActiveDuration
+            val finalStatus = treadmillManager.status.value
+            val totalDistance = counterDelta(startDistance, finalStatus.distance)
+            val totalSteps = counterDelta(startSteps, finalStatus.steps)
+            val distanceMeters = totalDistance * 10.0
+            val averageHeartRate = if (activeHeartRateSampleCount > 0) {
+                activeHeartRateTotal / activeHeartRateSampleCount
+            } else {
+                0
+            }
+            val sessionMaxHeartRate = maxHeartRate
+            currentSessionId = null
+            startTime = null
+            activeStartedAt = null
+            accumulatedActiveDuration = Duration.ZERO
+
             val sessionStats = SessionEntity(
                 startTime = start,
                 endTime = end,

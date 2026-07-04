@@ -287,8 +287,10 @@ fun SessionDashboard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(if (isSessionPaused) "Resume" else "Pause")
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    LongPressStopButton(onStop = { viewModel.stopSession() })
+                    if (isSessionPaused) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        LongPressStopButton(onStop = { viewModel.stopSession() })
+                    }
                 }
             } else {
                 Button(

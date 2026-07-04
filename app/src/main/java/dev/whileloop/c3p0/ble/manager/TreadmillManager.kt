@@ -13,6 +13,7 @@ interface TreadmillManager {
     suspend fun connect(address: String): Boolean
     suspend fun disconnect()
     suspend fun start(): Boolean
+    suspend fun pause(): Boolean
     suspend fun stop(): Boolean
     suspend fun setSpeed(speed: Float): Boolean // speed in km/h (e.g., 3.0)
     suspend fun setMode(mode: TreadmillMode): Boolean
