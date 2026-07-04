@@ -74,7 +74,8 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
                 _status.value = s.copy(
                     time = s.time + 1,
                     distance = s.distance + (s.speed / 3.6).toInt(), // very rough
-                    steps = s.steps + (s.speed * 1.5).toInt()
+                    steps = s.steps + (s.speed * 1.5).toInt(),
+                    hasStepCount = true
                 )
             }
             delay(1000)

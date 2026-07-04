@@ -36,6 +36,7 @@ class SessionManager @Inject constructor(
     private var accumulatedActiveDuration: Duration = Duration.ZERO
     private var startDistance = 0
     private var startSteps = 0
+    private var startCalories = 0
     private var activeHeartRateTotal = 0
     private var activeHeartRateSampleCount = 0
     private var maxHeartRate = 0
@@ -48,6 +49,12 @@ class SessionManager @Inject constructor(
 
     private val _isSessionPaused = MutableStateFlow(false)
     val isSessionPaused = _isSessionPaused.asStateFlow()
+
+    private val zone2MaxSpeedKmh = settingsRepository.zone2MaxSpeedKmh.stateIn(
+        scope,
+        SharingStarted.Eagerly,
+        DEFAULT_ZONE2_MAX_SPEED_KMH
+    )
 
     private var autoSpeedController: AutoSpeedController? = null
 
@@ -77,6 +84,7 @@ class SessionManager @Inject constructor(
             val startStatus = treadmillManager.status.value
             startDistance = startStatus.distance
             startSteps = startStatus.steps
+            startCalories = startStatus.calories
             activeHeartRateTotal = 0
             activeHeartRateSampleCount = 0
             maxHeartRate = 0
@@ -175,8 +183,13 @@ class SessionManager @Inject constructor(
             val activeDuration = accumulatedActiveDuration
             val finalStatus = treadmillManager.status.value
             val totalDistance = counterDelta(startDistance, finalStatus.distance)
-            val totalSteps = counterDelta(startSteps, finalStatus.steps)
+            val totalSteps = if (finalStatus.hasStepCount) {
+                counterDelta(startSteps, finalStatus.steps)
+            } else {
+                estimateStepsFromDistance(totalDistance)
+            }
             val distanceMeters = totalDistance * 10.0
+            val reportedCalories = counterDelta(startCalories, finalStatus.calories)
             val averageHeartRate = if (activeHeartRateSampleCount > 0) {
                 activeHeartRateTotal / activeHeartRateSampleCount
             } else {
@@ -193,10 +206,15 @@ class SessionManager @Inject constructor(
                 endTime = end,
                 totalDistance = totalDistance,
                 totalSteps = totalSteps,
-                totalEnergy = estimateCalories(distanceMeters, activeDuration, settingsRepository.bodyWeightKg.first()),
+                totalEnergy = if (finalStatus.calories > 0 || startCalories > 0) {
+                    reportedCalories
+                } else {
+                    estimateCalories(distanceMeters, activeDuration, settingsRepository.bodyWeightKg.first())
+                },
                 averageHeartRate = averageHeartRate,
                 maxHeartRate = sessionMaxHeartRate
             )
+            startCalories = 0
             sessionRepository.endSession(id, sessionStats)
             
             // Write to Health Connect
@@ -208,16 +226,18 @@ class SessionManager @Inject constructor(
     }
 
     fun enableAutoSpeed(targetHr: Int, zoneMinHr: Int, zoneMaxHr: Int) {
+        val maxSpeedKmh = zone2MaxSpeedKmh.value.coerceIn(AUTO_SPEED_MIN_KMH, AUTO_SPEED_MAX_KMH)
         autoSpeedController = AutoSpeedController(
             targetHr = targetHr,
             zoneMinHr = zoneMinHr,
-            zoneMaxHr = zoneMaxHr
+            zoneMaxHr = zoneMaxHr,
+            maxSpeed = maxSpeedKmh
         ).apply {
             onSpeedAdjustmentRequired = { adjustment ->
                 scope.launch {
                     val currentSpeed = treadmillManager.status.value.speed
                     treadmillManager.setSpeed(
-                        (currentSpeed + adjustment).coerceIn(AUTO_SPEED_MIN_KMH, AUTO_SPEED_MAX_KMH)
+                        (currentSpeed + adjustment).coerceIn(AUTO_SPEED_MIN_KMH, maxSpeedKmh)
                     )
                 }
             }
@@ -240,6 +260,9 @@ class SessionManager @Inject constructor(
 
     private fun counterDelta(start: Int, end: Int): Int =
         if (end >= start) end - start else end
+
+    private fun estimateStepsFromDistance(distanceDelta: Int): Int =
+        ((distanceDelta * 10.0) / ESTIMATED_STRIDE_LENGTH_METERS).roundToInt().coerceAtLeast(0)
 
     private fun estimateCalories(distanceMeters: Double, activeDuration: Duration, bodyWeightKg: Double?): Int {
         val activeHours = activeDuration.toMillis() / 3_600_000.0
@@ -268,7 +291,9 @@ class SessionManager @Inject constructor(
     companion object {
         private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
         private const val DEFAULT_BODY_WEIGHT_KG = 70.0
+        private const val ESTIMATED_STRIDE_LENGTH_METERS = 0.75
         private const val AUTO_SPEED_MIN_KMH = 1.60934f
         private const val AUTO_SPEED_MAX_KMH = 6.0f
+        private const val DEFAULT_ZONE2_MAX_SPEED_KMH = 3.5f * 1.60934f
     }
 }

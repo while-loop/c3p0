@@ -84,7 +84,7 @@ fun SessionDashboard(
     val sessionElapsedSeconds by viewModel.sessionElapsedSeconds.collectAsState()
     val sessionDistance by viewModel.sessionDistance.collectAsState()
     val sessionSteps by viewModel.sessionSteps.collectAsState()
-    val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
+    val sessionCalories by viewModel.sessionCalories.collectAsState()
     val normalizedStepsToGoal by viewModel.normalizedStepsToGoal.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
@@ -112,7 +112,6 @@ fun SessionDashboard(
     }
     val displayedDistance = displayDistance(sessionDistance, unitSystem)
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
-    val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds, bodyWeightKg)
     val isPadReady = connectionState == ConnectionState.CONNECTED
     val maxHeartRate = 220 - age
     val zone2MinHeartRate = (maxHeartRate * 0.60f).toInt()
@@ -223,7 +222,7 @@ fun SessionDashboard(
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCard("Elapsed", formatElapsedTime(sessionElapsedSeconds), "", Modifier.weight(1f))
             Spacer(modifier = Modifier.width(10.dp))
-            StatCard("Calories", estimatedCalories.toString(), "kcal", Modifier.weight(1f))
+            StatCard("Calories", sessionCalories.toString(), "kcal", Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -940,28 +939,12 @@ fun formatElapsedTime(seconds: Int): String {
 private fun heartRateValue(heartRate: Int): String =
     if (heartRate > 0) heartRate.toString() else "---"
 
-private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int, bodyWeightKg: Double?): Int {
-    if (elapsedSeconds <= 0) return 0
-
-    val met = when {
-        speedKmh < 1f -> 1.8f
-        speedKmh < 3.2f -> 2.8f
-        speedKmh < 4.8f -> 3.5f
-        speedKmh < 5.6f -> 4.3f
-        speedKmh < 6.4f -> 5.0f
-        else -> 6.3f
-    }
-    val hours = elapsedSeconds / 3600f
-    return (met * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG).toFloat() * hours).toInt()
-}
-
 private const val CHART_ABSOLUTE_MIN_HEART_RATE = 40
 private const val CHART_ABSOLUTE_MAX_HEART_RATE = 220
 private const val CHART_MIN_VISIBLE_RANGE = 20
 private const val CHART_DOMAIN_PADDING_FRACTION = 0.10f
 private const val CHART_MAX_HEART_RATE = 190
 private val CHART_PADDING = 8.dp
-private const val DEFAULT_BODY_WEIGHT_KG = 70f
 private const val STOP_HOLD_DURATION_MS = 3_000L
 private const val STOP_PROGRESS_FRAME_MS = 16L
 private const val STOP_HOLD_SCALE = 2f

@@ -46,6 +46,26 @@ class AutoSpeedControllerTest {
     }
 
     @Test
+    fun belowZoneDoesNotRequestSpeedAboveConfiguredMax() {
+        val adjustments = mutableListOf<Float>()
+        val controller = AutoSpeedController(
+            targetHr = 123,
+            zoneMinHr = 114,
+            zoneMaxHr = 133,
+            maxSpeed = 3.5f * KM_PER_MILE,
+            adjustmentIntervalSeconds = 30,
+            maxAdjustment = 0.5f
+        ).apply {
+            onSpeedAdjustmentRequired = { adjustment -> adjustments += adjustment }
+        }
+
+        controller.addHrSample(hr = 100, speedKmh = 3.5f * KM_PER_MILE, timestamp = 100)
+        controller.addHrSample(hr = 101, speedKmh = 3.5f * KM_PER_MILE, timestamp = 30_100)
+
+        assertTrue(adjustments.isEmpty())
+    }
+
+    @Test
     fun lowerZoneEdgeTrendingDownNudgesSpeedUp() {
         val adjustments = mutableListOf<Float>()
         val controller = edgeGuardController(adjustments)

@@ -9,6 +9,8 @@ data class TreadmillStatus(
     val time: Int = 0, // seconds
     val distance: Int = 0, // units of 10m
     val steps: Int = 0,
+    val hasStepCount: Boolean = false,
+    val calories: Int = 0,
     val unitSystem: UnitSystem? = null
 )
 

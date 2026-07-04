@@ -850,7 +850,14 @@ class WalkingPadManagerImpl @Inject constructor(
         if (flags and FTMS_TREADMILL_ELEVATION_GAIN_FLAG != 0) offset += 4
         if (flags and FTMS_TREADMILL_INSTANT_PACE_FLAG != 0) offset += 1
         if (flags and FTMS_TREADMILL_AVERAGE_PACE_FLAG != 0) offset += 1
-        if (flags and FTMS_TREADMILL_ENERGY_FLAG != 0) offset += 5
+        val calories = if (flags and FTMS_TREADMILL_ENERGY_FLAG != 0 && data.size >= offset + 5) {
+            val totalEnergyKcal = readUInt16LE(data, offset)
+            offset += 5
+            totalEnergyKcal
+        } else {
+            if (flags and FTMS_TREADMILL_ENERGY_FLAG != 0) offset += 5
+            status.value.calories
+        }
         if (flags and FTMS_TREADMILL_HEART_RATE_FLAG != 0) offset += 1
         if (flags and FTMS_TREADMILL_METABOLIC_EQUIVALENT_FLAG != 0) offset += 1
 
@@ -869,7 +876,8 @@ class WalkingPadManagerImpl @Inject constructor(
                 TreadmillMode.MANUAL
             },
             time = elapsedTime,
-            distance = distance
+            distance = distance,
+            calories = calories
         )
     }
 
@@ -904,6 +912,8 @@ class WalkingPadManagerImpl @Inject constructor(
             time = time,
             distance = distance,
             steps = steps,
+            hasStepCount = true,
+            calories = _status.value.calories,
             unitSystem = _status.value.unitSystem
         )
     }

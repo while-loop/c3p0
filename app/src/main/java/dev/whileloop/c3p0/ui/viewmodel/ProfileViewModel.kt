@@ -56,6 +56,12 @@ class ProfileViewModel @Inject constructor(
         SessionStartMode.Zone2
     )
 
+    val zone2MaxSpeedKmh = settingsRepository.zone2MaxSpeedKmh.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        DEFAULT_ZONE2_MAX_SPEED_KMH
+    )
+
     val skipInactiveDeviceWarning = settingsRepository.skipInactiveDeviceWarning.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -168,6 +174,12 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateZone2MaxSpeedKmh(maxSpeedKmh: Float) {
+        viewModelScope.launch {
+            settingsRepository.saveZone2MaxSpeedKmh(maxSpeedKmh)
+        }
+    }
+
     fun toggleHealthConnect(enabled: Boolean) {
         _isHealthConnectEnabled.value = enabled
     }
@@ -217,5 +229,9 @@ class ProfileViewModel @Inject constructor(
             }
             _isRefreshingWeight.value = false
         }
+    }
+
+    private companion object {
+        private const val DEFAULT_ZONE2_MAX_SPEED_KMH = 3.5f * 1.60934f
     }
 }

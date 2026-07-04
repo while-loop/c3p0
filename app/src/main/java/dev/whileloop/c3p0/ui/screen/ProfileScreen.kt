@@ -43,6 +43,7 @@ fun ProfileScreen(
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val sessionStartMode by viewModel.sessionStartMode.collectAsState()
+    val zone2MaxSpeedKmh by viewModel.zone2MaxSpeedKmh.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
@@ -54,6 +55,7 @@ fun ProfileScreen(
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     var launchHealthConnectPermissions by remember { mutableStateOf(false) }
+    var zone2MaxSpeedDisplay by remember { mutableStateOf(displaySpeedValue(zone2MaxSpeedKmh, unitSystem)) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
@@ -66,6 +68,10 @@ fun ProfileScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshHealthConnectPermissionState()
+    }
+
+    LaunchedEffect(zone2MaxSpeedKmh, unitSystem) {
+        zone2MaxSpeedDisplay = displaySpeedValue(zone2MaxSpeedKmh, unitSystem)
     }
 
     DisposableEffect(lifecycleOwner, viewModel) {
@@ -295,6 +301,27 @@ fun ProfileScreen(
                 }
             }
         }
+        ListItem(
+            headlineContent = { Text("Zone 2 max speed") },
+            supportingContent = {
+                Text(formatSpeed(zone2MaxSpeedFromDisplay(zone2MaxSpeedDisplay, unitSystem), unitSystem))
+            }
+        )
+        Slider(
+            value = zone2MaxSpeedDisplay,
+            onValueChange = { value ->
+                zone2MaxSpeedDisplay = value.coerceIn(
+                    minDisplaySpeed(unitSystem),
+                    maxDisplaySpeed(unitSystem)
+                )
+            },
+            onValueChangeFinished = {
+                viewModel.updateZone2MaxSpeedKmh(zone2MaxSpeedFromDisplay(zone2MaxSpeedDisplay, unitSystem))
+            },
+            valueRange = minDisplaySpeed(unitSystem)..maxDisplaySpeed(unitSystem),
+            steps = speedSliderSteps(unitSystem),
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
         
@@ -388,3 +415,40 @@ private fun startModeLabel(mode: SessionStartMode): String =
         SessionStartMode.Automatic -> "Auto"
         SessionStartMode.Zone2 -> "Zone 2"
     }
+
+private fun displaySpeedValue(speedKmh: Float, unitSystem: UnitSystem): Float =
+    if (unitSystem == UnitSystem.Imperial) {
+        speedKmh / KM_PER_MILE
+    } else {
+        speedKmh
+    }
+
+private fun zone2MaxSpeedFromDisplay(speed: Float, unitSystem: UnitSystem): Float =
+    if (unitSystem == UnitSystem.Imperial) {
+        speed * KM_PER_MILE
+    } else {
+        speed
+    }
+
+private fun formatSpeed(speedKmh: Float, unitSystem: UnitSystem): String =
+    if (unitSystem == UnitSystem.Imperial) {
+        String.format(java.util.Locale.US, "%.1f mph", speedKmh / KM_PER_MILE)
+    } else {
+        String.format(java.util.Locale.US, "%.1f km/h", speedKmh)
+    }
+
+private fun minDisplaySpeed(unitSystem: UnitSystem): Float =
+    displaySpeedValue(MIN_ZONE2_MAX_SPEED_KMH, unitSystem)
+
+private fun maxDisplaySpeed(unitSystem: UnitSystem): Float =
+    displaySpeedValue(MAX_ZONE2_MAX_SPEED_KMH, unitSystem)
+
+private fun speedSliderSteps(unitSystem: UnitSystem): Int {
+    val range = maxDisplaySpeed(unitSystem) - minDisplaySpeed(unitSystem)
+    return (range / SPEED_DISPLAY_STEP).toInt().coerceAtLeast(1) - 1
+}
+
+private const val KM_PER_MILE = 1.60934f
+private const val MIN_ZONE2_MAX_SPEED_KMH = 1.60934f
+private const val MAX_ZONE2_MAX_SPEED_KMH = 6.0f
+private const val SPEED_DISPLAY_STEP = 0.1f

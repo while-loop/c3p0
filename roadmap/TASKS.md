@@ -5,6 +5,7 @@
 - [x] **BLE Core**: Implemented `BleScanner`, `BleConnection`, and `BleModule` (DI).
 - [x] **WalkingPad Support**: Reverse-engineered C2 protocol, CRC calculation, and status parsing.
 - [x] **WalkingPad Guardrails**: Decode 24-bit counters explicitly and clamp speed commands at the BLE manager boundary.
+- [x] **WalkingPad FTMS Calories And Step Fallback**: Read FTMS total energy when present and use pad-distance-based step estimates for FTMS-only pads that do not expose a step counter.
 - [x] **FTMS Stop Reliability**: Fall back from FTMS stop to pause and reset when treadmill data still reports a moving belt.
 - [x] **Encrypted KS Stop Fallback**: Reverse-engineered the Mi WalkingPad APK stop path and added a guarded `props runState 0` fallback for `FED7`/`FED8`-style KS encrypted control characteristics.
 - [x] **Encrypted KS Native Automatic Mode**: Enabled Automatic mode when encrypted KS control characteristics are present by sending `props ControlMode 0/1/2` mode commands with the known model encryption tables.
@@ -12,6 +13,7 @@
 - [x] **Responsive WalkingPad Commands**: Removed repeated FTMS control and unit-sync preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
 - [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust aggressively outside Zone 2 while using only slow 0.1 mph edge-guard nudges inside Zone 2.
+- [x] **Zone 2 Max Speed Setting**: Added a Profile max-speed slider for Zone 2, defaulted to 3.5 mph, and clamped controller speed adjustments to the saved cap.
 - [x] **Dynamic HR Chart Scale**: Scaled the live heart-rate chart to observed HR plus Zone 2 bounds with 10% padding and aligned y-axis labels to the dynamic grid.
 - [x] **Zone 2 Controller Tests**: Added unit coverage for in-zone no-op behavior, learned speed bias, and trend-gated edge guard adjustments.
 - [x] **Default Session Mode Setting**: Added a Profile setting for Manual, Automatic, or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
