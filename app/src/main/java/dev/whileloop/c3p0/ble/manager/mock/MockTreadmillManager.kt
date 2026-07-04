@@ -74,7 +74,7 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
     }
 
     companion object {
-        private const val MIN_SPEED_KMH = 0f
+        private const val MIN_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
     }
 }

@@ -7,7 +7,7 @@ class AutoSpeedController(
     private val targetHr: Int,
     private val zoneMinHr: Int = targetHr - DEFAULT_ZONE_HALF_WIDTH_BPM,
     private val zoneMaxHr: Int = targetHr + DEFAULT_ZONE_HALF_WIDTH_BPM,
-    private val minSpeed: Float = 1.0f,
+    private val minSpeed: Float = 1.60934f,
     private val maxSpeed: Float = 6.0f,
     private val adjustmentIntervalSeconds: Int = 30,
     private val maxAdjustment: Float = 0.5f,

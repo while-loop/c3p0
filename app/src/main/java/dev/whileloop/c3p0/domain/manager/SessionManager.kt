@@ -265,7 +265,7 @@ class SessionManager @Inject constructor(
     companion object {
         private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
         private const val DEFAULT_BODY_WEIGHT_KG = 70.0
-        private const val AUTO_SPEED_MIN_KMH = 1.0f
+        private const val AUTO_SPEED_MIN_KMH = 1.60934f
         private const val AUTO_SPEED_MAX_KMH = 6.0f
     }
 }

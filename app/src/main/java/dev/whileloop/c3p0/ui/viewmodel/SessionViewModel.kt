@@ -371,7 +371,7 @@ class SessionViewModel @Inject constructor(
     companion object {
         private const val MAX_HEART_RATE_SAMPLES = 180
         private const val SPEED_STEP_KMH = 0.1f
-        private const val MIN_SPEED_KMH = 0f
+        private const val MIN_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
         private const val DEFAULT_STEP_GOAL = 10000
     }

@@ -140,19 +140,32 @@ class WalkingPadManagerImpl @Inject constructor(
     override suspend fun start(): Boolean {
         if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
             requestFtmsControl()
+            val startSpeed = status.value.speed.coerceAtLeast(MIN_MOVING_SPEED_KMH)
+            sendFtmsTargetSpeed(startSpeed, verifyApplied = false)
             return sendControlCommand(
                 label = "start belt",
                 cmd = byteArrayOf(FTMS_OP_START_OR_RESUME),
-                isApplied = { status -> status.state != TreadmillState.STOPPED && status.state != TreadmillState.STANDBY }
+                isApplied = { status ->
+                    status.state != TreadmillState.STOPPED &&
+                        status.state != TreadmillState.STANDBY &&
+                        status.speed >= MIN_MOVING_SPEED_KMH - SPEED_APPLIED_TOLERANCE_KMH
+                }
             )
         } else {
             if (status.value.mode == TreadmillMode.STANDBY && !setMode(TreadmillMode.MANUAL)) {
                 return false
             }
+            if (status.value.speed < MIN_MOVING_SPEED_KMH) {
+                sendLegacySpeed(MIN_MOVING_SPEED_KMH, verifyApplied = false)
+            }
             return sendControlCommand(
                 label = "start belt",
                 cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()),
-                isApplied = { status -> status.state != TreadmillState.STOPPED && status.state != TreadmillState.STANDBY }
+                isApplied = { status ->
+                    status.state != TreadmillState.STOPPED &&
+                        status.state != TreadmillState.STANDBY &&
+                        status.speed >= MIN_MOVING_SPEED_KMH - SPEED_APPLIED_TOLERANCE_KMH
+                }
             )
         }
     }
@@ -165,32 +178,64 @@ class WalkingPadManagerImpl @Inject constructor(
                 isApplied = { status -> status.state == TreadmillState.STOPPED || status.speed <= SPEED_APPLIED_TOLERANCE_KMH }
             )
         } else {
-            setSpeed(0f)
+            sendLegacySpeed(0f)
         }
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
-        val targetSpeed = speed.coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH)
+        val targetSpeed = speed.coerceIn(MIN_MOVING_SPEED_KMH, MAX_SPEED_KMH)
         if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
-            val speedHundredths = (targetSpeed * 100).toInt().coerceIn(0, UShort.MAX_VALUE.toInt())
-            return sendControlCommand(
-                label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
-                cmd = byteArrayOf(
-                    FTMS_OP_SET_TARGET_SPEED,
-                    (speedHundredths and 0xFF).toByte(),
-                    ((speedHundredths shr 8) and 0xFF).toByte()
-                ),
-                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
-            )
+            requestFtmsControl()
+            return sendFtmsTargetSpeed(targetSpeed)
         }
 
+        return sendLegacySpeed(targetSpeed)
+    }
+
+    private suspend fun sendLegacySpeed(
+        targetSpeed: Float,
+        verifyApplied: Boolean = true
+    ): Boolean {
         val s = (targetSpeed * 10).toInt().toByte()
-        return sendControlCommand(
-            label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
-            cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte()),
-            isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+        val cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte())
+        return sendSpeedCommand(
+            targetSpeed = targetSpeed,
+            cmd = cmd,
+            verifyApplied = verifyApplied
         )
     }
+
+    private suspend fun sendFtmsTargetSpeed(
+        targetSpeed: Float,
+        verifyApplied: Boolean = true
+    ): Boolean {
+        val speedHundredths = (targetSpeed * 100).toInt().coerceIn(0, UShort.MAX_VALUE.toInt())
+        val cmd = byteArrayOf(
+            FTMS_OP_SET_TARGET_SPEED,
+            (speedHundredths and 0xFF).toByte(),
+            ((speedHundredths shr 8) and 0xFF).toByte()
+        )
+        return sendSpeedCommand(
+            targetSpeed = targetSpeed,
+            cmd = cmd,
+            verifyApplied = verifyApplied
+        )
+    }
+
+    private suspend fun sendSpeedCommand(
+        targetSpeed: Float,
+        cmd: ByteArray,
+        verifyApplied: Boolean
+    ): Boolean =
+        if (verifyApplied) {
+            sendControlCommand(
+                label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
+                cmd = cmd,
+                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+            )
+        } else {
+            sendCommand(cmd)
+        }
 
     override suspend fun setMode(mode: TreadmillMode): Boolean {
         if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
@@ -223,6 +268,11 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private suspend fun applyUnitSystem(unitSystem: UnitSystem): Boolean {
+        if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            _status.value = _status.value.copy(unitSystem = unitSystem)
+            return true
+        }
+
         val useMiles = if (unitSystem == UnitSystem.Imperial) 1 else 0
         return setPreferenceInt(PREF_UNITS, useMiles)
     }
@@ -609,7 +659,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     companion object {
         private const val PREF_UNITS = 8
-        private const val MIN_SPEED_KMH = 0f
+        private const val MIN_MOVING_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
         private const val INITIAL_POLL_DELAY_MS = 250L
         private const val MIN_COMMAND_SPACING_MS = 700L
