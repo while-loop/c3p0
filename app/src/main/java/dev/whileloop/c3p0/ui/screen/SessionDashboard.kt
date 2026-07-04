@@ -339,7 +339,7 @@ fun SessionDashboard(
                 SegmentedButton(
                     selected = isAutoSpeedEnabled,
                     onClick = { viewModel.enableZone2Mode() },
-                    enabled = isPadReady,
+                    enabled = isPadReady && heartRateActive,
                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = sessionModeCount)
                 ) {
                     Text("Zone 2")

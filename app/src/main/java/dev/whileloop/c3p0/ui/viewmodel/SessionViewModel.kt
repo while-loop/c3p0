@@ -1,5 +1,6 @@
 package dev.whileloop.c3p0.ui.viewmodel
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.whileloop.c3p0.ble.manager.ConnectionState
@@ -209,6 +210,15 @@ class SessionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            while (true) {
+                delay(HEART_RATE_ZONE2_GUARD_INTERVAL_MS)
+                if (sessionManager.isAutoSpeedEnabled.value && !hasFreshHeartRateData()) {
+                    exitZone2ForMissingHeartRate()
+                }
+            }
+        }
+
+        viewModelScope.launch {
             settingsRepository.stepGoal.distinctUntilChanged().collect {
                 updateNormalizedStepsToGoal()
             }
@@ -326,6 +336,7 @@ class SessionViewModel @Inject constructor(
 
     fun enableZone2Mode() {
         viewModelScope.launch {
+            if (!hasFreshHeartRateData()) return@launch
             val zone = zone2HeartRateRange(age.value)
             treadmillManager.setMode(TreadmillMode.MANUAL)
             sessionManager.enableAutoSpeed(
@@ -342,6 +353,17 @@ class SessionViewModel @Inject constructor(
             sessionManager.disableAutoSpeed()
         }
     }
+
+    private suspend fun exitZone2ForMissingHeartRate() {
+        sessionManager.disableAutoSpeed()
+        treadmillManager.setMode(TreadmillMode.MANUAL)
+        treadmillManager.setSpeed(MIN_SPEED_KMH)
+    }
+
+    private fun hasFreshHeartRateData(nowElapsedMillis: Long = SystemClock.elapsedRealtime()): Boolean =
+        currentHeartRate.value > 0 &&
+            lastHeartRateReceivedAtMillis.value > 0L &&
+            nowElapsedMillis - lastHeartRateReceivedAtMillis.value <= HEART_RATE_FRESHNESS_WINDOW_MS
 
     private fun zone2HeartRateRange(age: Int): HeartRateRange {
         val maxHeartRate = 220 - age
@@ -404,6 +426,8 @@ class SessionViewModel @Inject constructor(
         private const val MAX_SPEED_KMH = 6f
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
         private const val PENDING_SPEED_TIMEOUT_MS = 3_000L
+        private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
+        private const val HEART_RATE_ZONE2_GUARD_INTERVAL_MS = 1_000L
         private const val DEFAULT_STEP_GOAL = 10000
     }
 

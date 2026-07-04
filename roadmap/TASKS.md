@@ -10,6 +10,7 @@
 - [x] **Encrypted KS Native Automatic Mode**: Enabled Automatic mode when encrypted KS control characteristics are present by sending `props ControlMode 0/1/2` mode commands with the known model encryption tables.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated FTMS control and unit-sync preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
+- [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 3-second circular long press with a progress ring.
