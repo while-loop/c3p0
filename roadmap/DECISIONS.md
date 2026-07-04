@@ -13,7 +13,7 @@
 - **Foreground Service**: Sessions run in `SessionService` to prevent the OS from killing the app during long workouts. This is required for reliable BLE data collection and Health Connect exports.
 - **Persistence**: Real-time metrics (HR, Speed, Cadence) are saved to Room as they arrive, ensuring data isn't lost if the app crashes.
 - **Pause Semantics**: Pausing a session stops the WalkingPad, pauses elapsed/active stat collection, skips Room metric writes, and excludes paused HR readings from the average. Resuming restarts the WalkingPad and continues the same session without resetting stats.
-- **Stop Safety**: Stopping a session requires a 5-second long press to prevent accidental session loss.
+- **Stop Safety**: Stopping a session requires a 3-second circular long press with a progress ring to prevent accidental session loss.
 - **Device Commands**: Session start sends WalkingPad start, pause sends stop, resume sends start, and stop captures final counters before sending stop.
 - **Session Aggregates**: Stored session totals use deltas from the start counters. Calories use a MET estimate based on active duration, body weight, and average speed. HR aggregates come from active readings only. Cadence uses step deltas over elapsed metric time.
 - **Live Session Stats**: The session dashboard also displays distance and steps as deltas from the session start counters, matching persisted session totals.

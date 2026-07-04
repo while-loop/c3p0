@@ -14,7 +14,7 @@ This plan outlines the development of C3P0, an Android companion app for Walking
     - Aggregate and per-minute Steps, Distance, and Cadence (Steps per Minute).
     - Session duration and Energy (Calories) burned.
     - All metrics should be viewable in historical session details.
-- **Session Controls**: Provide start, pause/resume, and stop. Stop requires a 5-second long press.
+- **Session Controls**: Provide start, pause/resume, and stop. Stop requires a 3-second circular long press with a progress ring.
 - **Permission UX**: Show explanatory bottom sheets before permission prompts and before continuing without active devices.
 - **Install Testing**: CI builds debug APK artifacts on every push so the app can be installed remotely during development.
 

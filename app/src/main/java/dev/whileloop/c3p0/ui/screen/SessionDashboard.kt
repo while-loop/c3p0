@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -314,30 +315,87 @@ private fun LongPressStopButton(
     modifier: Modifier = Modifier
 ) {
     var isHolding by remember { mutableStateOf(false) }
+    var holdProgress by remember { mutableStateOf(0f) }
+    val ringColor = MaterialTheme.colorScheme.onError
+    val trackColor = MaterialTheme.colorScheme.errorContainer
 
     LaunchedEffect(isHolding) {
         if (isHolding) {
-            delay(STOP_HOLD_DURATION_MS)
-            isHolding = false
-            onStop()
+            val startedAt = SystemClock.elapsedRealtime()
+            while (true) {
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                holdProgress = (elapsed.toFloat() / STOP_HOLD_DURATION_MS).coerceIn(0f, 1f)
+                if (elapsed >= STOP_HOLD_DURATION_MS) {
+                    isHolding = false
+                    onStop()
+                    break
+                }
+                delay(STOP_PROGRESS_FRAME_MS)
+            }
+        } else {
+            holdProgress = 0f
         }
     }
 
-    Button(
-        onClick = {},
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-        modifier = modifier.pointerInput(onStop) {
+    Box(
+        modifier = modifier
+            .size(STOP_BUTTON_SIZE)
+            .pointerInput(onStop) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
                 isHolding = true
                 waitForUpOrCancellation()
                 isHolding = false
             }
-        }
+        },
+        contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Default.Stop, contentDescription = "Stop")
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(if (isHolding) "Keep holding" else "Hold 5s")
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.Default.Stop, contentDescription = "Hold to stop")
+                Text(
+                    text = if (isHolding) "Hold" else "Stop",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = STOP_RING_STROKE_WIDTH.toPx()
+            val inset = strokeWidth / 2
+            val arcSize = androidx.compose.ui.geometry.Size(
+                width = size.width - strokeWidth,
+                height = size.height - strokeWidth
+            )
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+            if (holdProgress > 0f) {
+                drawArc(
+                    color = ringColor,
+                    startAngle = -90f,
+                    sweepAngle = 360f * holdProgress,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            }
+        }
     }
 }
 
@@ -700,5 +758,8 @@ private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int, bodyWeightKg:
 private const val CHART_MIN_HEART_RATE = 50
 private const val CHART_MAX_HEART_RATE = 190
 private const val DEFAULT_BODY_WEIGHT_KG = 70f
-private const val STOP_HOLD_DURATION_MS = 5000L
+private const val STOP_HOLD_DURATION_MS = 3_000L
+private const val STOP_PROGRESS_FRAME_MS = 16L
+private val STOP_BUTTON_SIZE = 72.dp
+private val STOP_RING_STROKE_WIDTH = 4.dp
 private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L

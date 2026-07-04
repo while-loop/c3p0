@@ -25,7 +25,7 @@
 ## Phase 3: Session Logic & Auto-Speed [COMPLETED]
 - [x] Implement Session management (start/stop/pause).
 - [x] Add pause/resume controls; pause stops active stats and metric collection.
-- [x] Require a 5-second long press to stop an active session.
+- [x] Require a 3-second circular long press with a progress ring to stop an active session.
 - [x] Warn before starting/resuming when the watch, live HR broadcast, or WalkingPad is inactive, with options to pair, continue, or never ask again.
 - [x] Keep live and persisted session distance/step totals aligned to session-start deltas.
 - [x] Implement and wire Auto-Speed algorithm for Zone 2 HR training from the session Automatic mode.
