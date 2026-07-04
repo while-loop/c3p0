@@ -59,12 +59,22 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun saveTreadmillAddress(address: String) {
-        context.dataStore.edit { it[Keys.TREADMILL_ADDRESS] = address }
+        context.dataStore.edit {
+            it[Keys.TREADMILL_ADDRESS] = address
+            if (it[Keys.WATCH_ADDRESS] == address) {
+                it.remove(Keys.WATCH_ADDRESS)
+            }
+        }
         requestBackupIfEnabled()
     }
 
     suspend fun saveWatchAddress(address: String) {
-        context.dataStore.edit { it[Keys.WATCH_ADDRESS] = address }
+        context.dataStore.edit {
+            it[Keys.WATCH_ADDRESS] = address
+            if (it[Keys.TREADMILL_ADDRESS] == address) {
+                it.remove(Keys.TREADMILL_ADDRESS)
+            }
+        }
         requestBackupIfEnabled()
     }
 

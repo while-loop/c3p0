@@ -12,13 +12,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.whileloop.c3p0.ble.model.BleDevice
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
 import dev.whileloop.c3p0.ui.permission.bleScanPermissions
 import dev.whileloop.c3p0.ui.permission.hasPermissions
 import dev.whileloop.c3p0.ui.permission.permissionGuidance
+import dev.whileloop.c3p0.ui.viewmodel.PairingDeviceRole
 import dev.whileloop.c3p0.ui.viewmodel.PairingViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PairingScreen(
     viewModel: PairingViewModel = hiltViewModel(),
@@ -33,6 +36,7 @@ fun PairingScreen(
     viewModel.watchConnectionState.collectAsState()
     viewModel.pairingAddress.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
+    var selectedDevice by remember { mutableStateOf<BleDevice?>(null) }
     val scanPermissions = remember { bleScanPermissions() }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -50,6 +54,17 @@ fun PairingScreen(
                 permissionLauncher.launch(scanPermissions)
             },
             onDismiss = { showPermissionSheet = false }
+        )
+    }
+
+    selectedDevice?.let { device ->
+        DeviceRoleBottomSheet(
+            device = device,
+            onRoleSelected = { role ->
+                selectedDevice = null
+                viewModel.pairDevice(device, role)
+            },
+            onDismiss = { selectedDevice = null }
         )
     }
 
@@ -100,15 +115,58 @@ fun PairingScreen(
                         Column {
                             Text("${device.rssi} dBm")
                             if (connectionLabel != null) {
-                                Text(if (connectionLabel == "Connected") "Active" else connectionLabel)
+                                Text(connectionLabel)
                             }
                         }
                     },
                     modifier = Modifier.clickable {
-                        viewModel.pairDevice(device)
+                        selectedDevice = device
                     }
                 )
                 HorizontalDivider()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeviceRoleBottomSheet(
+    device: BleDevice,
+    onRoleSelected: (PairingDeviceRole) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text("Device type", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = device.name ?: "Unknown Device",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = device.address,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = { onRoleSelected(PairingDeviceRole.Pad) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("WalkingPad")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { onRoleSelected(PairingDeviceRole.Watch) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Watch")
             }
         }
     }

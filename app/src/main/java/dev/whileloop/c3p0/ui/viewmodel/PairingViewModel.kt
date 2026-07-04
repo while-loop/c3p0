@@ -84,16 +84,19 @@ class PairingViewModel @Inject constructor(
         }
     }
 
-    fun pairDevice(device: BleDevice) {
+    fun pairDevice(device: BleDevice, role: PairingDeviceRole) {
         viewModelScope.launch {
             _pairingAddress.value = device.address
             try {
-                if (device.isWalkingPad()) {
-                    settingsRepository.saveTreadmillAddress(device.address)
-                    treadmillManager.connect(device.address)
-                } else {
-                    settingsRepository.saveWatchAddress(device.address)
-                    heartRateManager.connect(device.address)
+                when (role) {
+                    PairingDeviceRole.Pad -> {
+                        settingsRepository.saveTreadmillAddress(device.address)
+                        treadmillManager.connect(device.address)
+                    }
+                    PairingDeviceRole.Watch -> {
+                        settingsRepository.saveWatchAddress(device.address)
+                        heartRateManager.connect(device.address)
+                    }
                 }
             } finally {
                 _pairingAddress.value = null
@@ -102,21 +105,27 @@ class PairingViewModel @Inject constructor(
     }
 
     fun deviceConnectionLabel(device: BleDevice): String? {
-        val isWalkingPad = device.isWalkingPad()
-        val savedAddress = if (isWalkingPad) treadmillAddress.value else watchAddress.value
-        if (savedAddress != device.address) return null
+        if (pairingAddress.value == device.address) {
+            return "Pairing..."
+        }
 
-        val state = if (isWalkingPad) treadmillConnectionState.value else watchConnectionState.value
-        return when {
-            pairingAddress.value == device.address -> "Pairing..."
-            state == ConnectionState.CONNECTED -> "Connected"
-            state == ConnectionState.CONNECTING -> "Connecting..."
-            else -> "Saved"
+        val roleAndState = when (device.address) {
+            treadmillAddress.value -> PairingDeviceRole.Pad to treadmillConnectionState.value
+            watchAddress.value -> PairingDeviceRole.Watch to watchConnectionState.value
+            else -> return null
+        }
+        val (role, state) = roleAndState
+        val roleLabel = when (role) {
+            PairingDeviceRole.Pad -> "Pad"
+            PairingDeviceRole.Watch -> "Watch"
+        }
+
+        return when (state) {
+            ConnectionState.CONNECTED -> "$roleLabel connected"
+            ConnectionState.CONNECTING -> "$roleLabel connecting..."
+            else -> "$roleLabel saved"
         }
     }
-
-    private fun BleDevice.isWalkingPad(): Boolean =
-        name?.contains("WalkingPad", ignoreCase = true) == true
 
     private fun addOrUpdateDevice(device: BleDevice) {
         val existing = devicesByAddress[device.address]
@@ -178,4 +187,9 @@ class PairingViewModel @Inject constructor(
         val averageRssi: Double
             get() = if (eventCount > 0) rssiTotal.toDouble() / eventCount else Int.MIN_VALUE.toDouble()
     }
+}
+
+enum class PairingDeviceRole {
+    Pad,
+    Watch
 }
