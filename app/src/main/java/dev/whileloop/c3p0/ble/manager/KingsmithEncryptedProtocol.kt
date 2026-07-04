@@ -13,7 +13,7 @@ internal object KingsmithEncryptedProtocol {
     const val AUTO_MODE_COMMAND = "props ControlMode 0"
     const val MANUAL_MODE_COMMAND = "props ControlMode 1"
     const val STANDBY_MODE_COMMAND = "props ControlMode 2"
-    const val POLL_PROPS_COMMAND = "servers getProp 1 2 3 7 12 16 17 23 24 31"
+    const val POLL_PROPS_COMMAND = "servers getProp 1 2 3 4 5 7 9 12 13 16 17 23 24 31"
 
     val characteristicPairs = listOf(
         CharacteristicPair(readCharSubstring = "0000fed8", writeCharSubstring = "0000fed7"),
@@ -136,6 +136,7 @@ internal object KingsmithEncryptedProtocol {
             time = props["RunningTotalTime"]?.toIntOrNull() ?: current.time,
             distance = runningDistanceMeters?.let { meters -> meters / 10 } ?: current.distance,
             steps = runningSteps ?: current.steps,
+            calories = props["BurnCalories"]?.toFloatOrNull()?.toInt() ?: current.calories,
             hasStepCount = runningSteps != null || current.hasStepCount
         )
     }

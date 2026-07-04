@@ -35,10 +35,18 @@ class KingsmithEncryptedProtocolTest {
     }
 
     @Test
-    fun applyPropsReadsRunningStepsAndDistance() {
+    fun pollPropsRequestsOfficialMotionAndStateFields() {
+        assertEquals(
+            "servers getProp 1 2 3 4 5 7 9 12 13 16 17 23 24 31",
+            KingsmithEncryptedProtocol.POLL_PROPS_COMMAND
+        )
+    }
+
+    @Test
+    fun applyPropsReadsWalkingPadTelemetry() {
         val props = KingsmithEncryptedProtocol.parseProps(
             "props runState 1 CurrentSpeed 3.2 ControlMode 1 RunningTotalTime 42 " +
-                "RunningDistance 120 RunningSteps 345"
+                "RunningDistance 120 RunningSteps 345 BurnCalories 17.8"
         )
 
         val status = KingsmithEncryptedProtocol.applyProps(TreadmillStatus(), props.orEmpty())
@@ -49,6 +57,7 @@ class KingsmithEncryptedProtocolTest {
         assertEquals(42, status.time)
         assertEquals(12, status.distance)
         assertEquals(345, status.steps)
+        assertEquals(17, status.calories)
         assertTrue(status.hasStepCount)
     }
 }
