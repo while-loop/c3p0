@@ -121,6 +121,7 @@ fun SessionDashboard(
             padActive = connectionState == ConnectionState.CONNECTED,
             watchConnected = watchConnectionState == ConnectionState.CONNECTED,
             heartRateActive = heartRateActive,
+            currentHeartRate = currentHeartRate,
             neverAskAgain = neverAskAgain,
             onNeverAskAgainChange = { neverAskAgain = it },
             onPair = {
@@ -489,6 +490,7 @@ private fun InactiveDeviceWarningBottomSheet(
     padActive: Boolean,
     watchConnected: Boolean,
     heartRateActive: Boolean,
+    currentHeartRate: Int,
     neverAskAgain: Boolean,
     onNeverAskAgainChange: (Boolean) -> Unit,
     onPair: () -> Unit,
@@ -504,9 +506,25 @@ private fun InactiveDeviceWarningBottomSheet(
         ) {
             Text("Device not active", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                inactiveDeviceMessage(padActive, watchConnected, heartRateActive),
-                style = MaterialTheme.typography.bodyMedium
+            DeviceReadinessRow(
+                label = "WalkingPad",
+                isReady = padActive,
+                readyText = "Connected",
+                notReadyText = "Not connected"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DeviceReadinessRow(
+                label = "Watch",
+                isReady = watchConnected,
+                readyText = "Connected",
+                notReadyText = "Not connected"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DeviceReadinessRow(
+                label = "Heart rate",
+                isReady = heartRateActive,
+                readyText = "${currentHeartRate} bpm, fresh",
+                notReadyText = heartRateInactiveText(watchConnected, currentHeartRate)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -531,6 +549,37 @@ private fun InactiveDeviceWarningBottomSheet(
                 Text("Continue anyway")
             }
         }
+    }
+}
+
+@Composable
+private fun DeviceReadinessRow(
+    label: String,
+    isReady: Boolean,
+    readyText: String,
+    notReadyText: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(if (isReady) Color.Green else MaterialTheme.colorScheme.error)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(
+            text = if (isReady) readyText else notReadyText,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+        )
     }
 }
 
@@ -568,13 +617,11 @@ private fun shouldWarnAboutInactiveDevices(
                 !heartRateActive
             )
 
-private fun inactiveDeviceMessage(padActive: Boolean, watchConnected: Boolean, heartRateActive: Boolean): String =
+private fun heartRateInactiveText(watchConnected: Boolean, currentHeartRate: Int): String =
     when {
-        !padActive && !watchConnected -> "Your WalkingPad and watch are not active. Pair them now, or continue without live device data."
-        !padActive -> "Your WalkingPad is not active. Pair it now, or continue without pad controls and live distance."
-        !watchConnected -> "Your watch is not active. Pair it now, or continue without live heart-rate data."
-        !heartRateActive -> "Your watch is connected, but C3P0 has not received recent heart-rate data. Start broadcasting heart rate on the watch, pair again, or continue without live heart-rate data."
-        else -> "Your devices are not sending expected live data. Pair them now, or continue anyway."
+        !watchConnected -> "Watch not connected"
+        currentHeartRate > 0 -> "$currentHeartRate bpm, stale"
+        else -> "No recent HR"
     }
 
 private fun hasFreshHeartRateData(
