@@ -1,0 +1,36 @@
+# Full Audit Loop Prompt
+
+Use this prompt when the user asks for another thorough audit loop:
+
+You are working in the C3P0 Android repo. Run a full audit loop, not just a quick grep. Read the roadmap docs, AGENTS.md, recent git history, and the app code paths end to end. Look for missing functionality, code paths that claim to work but are only partially wired, permission flows that can fail silently, lifecycle gaps, stale docs, and places where UI state can diverge from device/app storage state. Keep looping until the app feels internally consistent.
+
+Audit focus areas:
+- Permission-gated paths: every Android/BLE/Health Connect permission request should have an explanatory bottom sheet before the system prompt. Permission denial should not crash the app or leave misleading state.
+- Health Connect: verify requested permissions match actual operations, do not request/write heart-rate data, refresh granted-state on resume, write completed walking sessions only when allowed, and read weight/steps with operation-scoped permission checks.
+- BLE pairing and reconnect: saved devices should reconnect when opening pairing/profile/session surfaces, scan results should be deduped and sorted closest first, connected/saved/connecting state should be visible, and connection attempts should handle missing permissions.
+- WalkingPad unit sync: the app's stored unit setting is the source of truth. Sync on setting change, session start/resume/pause, and when reported device units diverge.
+- Session lifecycle: start, pause, resume, and stop must send the right WalkingPad commands, avoid races, preserve one logical session across pause/resume, and require long-press stop.
+- Session stats: live and persisted distance/steps should be session deltas, not lifetime device counters. Elapsed/active time, calories, cadence, current HR, average HR, max HR, and HR chart data should ignore paused readings where appropriate.
+- Inactive-device warnings: starting or resuming with inactive watch/pad should show a bottom sheet with Pair, Continue, and Never Ask Again. Continue should perform the originally requested action.
+- Auto-speed and manual speed: ignore missing/non-positive HR, smooth adjustments, and clamp all speed paths at UI, controller, mock, and BLE manager boundaries.
+- Backup: the toggle should persist, backup should be requested on cold start and meaningful data changes, session-progress backup requests should be throttled, and docs should explain Android Auto Backup account/timing limitations.
+- UI completeness: toggles should do something observable, buttons should route somewhere useful, profile/session/pairing state should not lie, and labels should match actual semantics.
+- Persistence/docs: DataStore/Room writes should trigger backup when appropriate. Roadmap docs should reflect completed behavior and known manual-verification gaps.
+- Incomplete code markers: scan for TODO, FIXME, placeholder, mock-only behavior leaking into production, stale comments, broad catches that hide user-visible failure, impossible branches, and unused or misleading state.
+
+Suggested loop:
+1. Check `wsl git -C /mnt/c/Users/anthony/dev/c3p0 status --short --branch`.
+2. Read roadmap docs and relevant app files before editing.
+3. Run targeted scans with `rg` for TODO/FIXME/not implemented/placeholder/stale permissions/Health Connect HR permissions/raw speed setting/fallback zeros.
+4. Trace each suspicious path from UI -> ViewModel -> manager/repository -> platform API.
+5. Patch narrowly, matching existing app patterns.
+6. Rescan after patches. If new concerns appear, repeat the trace/patch cycle.
+7. Update roadmap docs for behavior changes and remaining manual validation.
+8. Verify with:
+   - `.\gradlew.bat :app:assembleDebug`
+   - `.\gradlew.bat :app:testDebugUnitTest`
+   - `.\gradlew.bat :app:lint` when the audit touches UI/permissions/build-sensitive code.
+9. Report any skipped verification explicitly, especially instrumentation tests that need a running emulator/device.
+10. Commit and push completed work with WSL Git unless the user explicitly says not to.
+
+Use the Android Studio JBR/SDK paths from AGENTS.md for Gradle. Use WSL Git for status, diff, commit, and push. Do not edit `local.properties`.
