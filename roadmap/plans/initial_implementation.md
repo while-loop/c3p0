@@ -43,7 +43,7 @@ This plan outlines the development of C3P0, an Android companion app for Walking
 - **Session Stats**: Show active time, calories, current HR, session average HR, and a zone-colored HR history chart with y-axis labels.
 - **Units**: Default to imperial and keep the WalkingPad unit setting synchronized with app storage.
 - **Pairing/Profile**: Deduplicate BLE devices, sort by RSSI closest-first, and show connected/selected device status.
-- **`History & Stats`**: Charts (Vico) showing both raw and normalized steps.
+- **`History & Stats`**: Charts (Vico) and lists showing aggregate raw Health Connect steps and normalized steps.
 
 ### 5. CI
 - **GitHub Actions**: Build the debug APK on every push and upload it as a retained artifact. Release APK builds remain blocked until signing keys are created.

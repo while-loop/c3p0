@@ -10,6 +10,7 @@ import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.manager.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.whileloop.c3p0.domain.usecase.StepNormalizationUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +30,8 @@ class SessionViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val treadmillManager: TreadmillManager,
     private val heartRateManager: HeartRateManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val stepNormalizationUseCase: StepNormalizationUseCase
 ) : ViewModel() {
     private var elapsedJob: Job? = null
     private var heartRateHistoryJob: Job? = null
@@ -38,6 +40,7 @@ class SessionViewModel @Inject constructor(
     private var activeHeartRateSampleCount = 0
     private var sessionStartDistance = 0
     private var sessionStartSteps = 0
+    private var normalizedStepsToday: Int? = null
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
     val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
@@ -53,6 +56,9 @@ class SessionViewModel @Inject constructor(
 
     private val _averageHeartRate = MutableStateFlow(0)
     val averageHeartRate = _averageHeartRate.asStateFlow()
+
+    private val _normalizedStepsToGoal = MutableStateFlow<Int?>(null)
+    val normalizedStepsToGoal = _normalizedStepsToGoal.asStateFlow()
 
     val treadmillStatus = treadmillManager.status.stateIn(
         viewModelScope,
@@ -126,6 +132,12 @@ class SessionViewModel @Inject constructor(
         null
     )
 
+    val stepGoal = settingsRepository.stepGoal.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        DEFAULT_STEP_GOAL
+    )
+
     init {
         viewModelScope.launch {
             settingsRepository.unitSystem.distinctUntilChanged().collect { storedUnitSystem ->
@@ -159,6 +171,7 @@ class SessionViewModel @Inject constructor(
                         stopSessionStats()
                         if (!isActive) {
                             statsStarted = false
+                            refreshNormalizedStepsToGoal()
                         }
                     }
                 }
@@ -172,7 +185,14 @@ class SessionViewModel @Inject constructor(
                 if (isActive) {
                     _sessionDistance.value = counterDelta(sessionStartDistance, status.distance)
                     _sessionSteps.value = counterDelta(sessionStartSteps, status.steps)
+                    updateNormalizedStepsToGoal()
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.stepGoal.distinctUntilChanged().collect {
+                updateNormalizedStepsToGoal()
             }
         }
 
@@ -197,6 +217,8 @@ class SessionViewModel @Inject constructor(
                     }
                 }
         }
+
+        refreshNormalizedStepsToGoal()
     }
 
     fun startSession() {
@@ -231,6 +253,27 @@ class SessionViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.saveSkipInactiveDeviceWarning(skip)
         }
+    }
+
+    fun refreshNormalizedStepsToGoal() {
+        viewModelScope.launch {
+            if (!stepNormalizationUseCase.canReadStepHistory()) {
+                normalizedStepsToday = null
+                _normalizedStepsToGoal.value = null
+                return@launch
+            }
+            normalizedStepsToday = stepNormalizationUseCase.getTodayNormalizedSteps().toInt()
+            updateNormalizedStepsToGoal()
+        }
+    }
+
+    private fun updateNormalizedStepsToGoal() {
+        val normalizedSteps = normalizedStepsToday ?: run {
+            _normalizedStepsToGoal.value = null
+            return
+        }
+        val inProgressSteps = if (sessionManager.isSessionActive.value) _sessionSteps.value else 0
+        _normalizedStepsToGoal.value = (stepGoal.value - normalizedSteps - inProgressSteps).coerceAtLeast(0)
     }
 
     fun incrementSpeed() {
@@ -323,6 +366,7 @@ class SessionViewModel @Inject constructor(
         private const val SPEED_STEP_KMH = 0.1f
         private const val MIN_SPEED_KMH = 0f
         private const val MAX_SPEED_KMH = 6f
+        private const val DEFAULT_STEP_GOAL = 10000
     }
 
     private fun counterDelta(start: Int, end: Int): Int =

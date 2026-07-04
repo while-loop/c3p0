@@ -18,14 +18,13 @@ class StepNormalizationUseCase @Inject constructor(
 
     suspend fun getNormalizedSteps(startTime: Instant, endTime: Instant): NormalizedStepsResult {
         val records = healthConnectManager.readRawSteps(startTime, endTime)
+        val totalRaw = healthConnectManager.readAggregatedSteps(startTime, endTime)
         
-        var totalRaw = 0L
         var c3p0Steps = 0L
         var overlappingOtherSteps = 0L
         
         for (record in records) {
             val windowCount = proratedCount(record, startTime, endTime)
-            totalRaw += windowCount
             if (record.metadata.dataOrigin.packageName == C3P0_PACKAGE_NAME) {
                 c3p0Steps += windowCount
             } else {
@@ -54,14 +53,25 @@ class StepNormalizationUseCase @Inject constructor(
             val date = startDate.plusDays(offset.toLong())
             val dayStart = date.atStartOfDay(zone).toInstant()
             val dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant()
-            summarizeDay(date, dayStart, dayEnd, records, sessions)
+            summarizeDay(
+                date = date,
+                dayStart = dayStart,
+                dayEnd = dayEnd,
+                rawSteps = healthConnectManager.readAggregatedSteps(dayStart, dayEnd),
+                records = records,
+                sessions = sessions
+            )
         }.reversed()
     }
+
+    suspend fun getTodayNormalizedSteps(): Long =
+        getDailyStepHistory(days = 1).firstOrNull()?.normalizedSteps ?: 0L
 
     private fun summarizeDay(
         date: LocalDate,
         dayStart: Instant,
         dayEnd: Instant,
+        rawSteps: Long,
         records: List<StepsRecord>,
         sessions: List<SessionEntity>
     ): DailyStepHistory {
@@ -69,13 +79,11 @@ class StepNormalizationUseCase @Inject constructor(
             val sessionEnd = session.endTime ?: return@filter false
             session.startTime < dayEnd && sessionEnd > dayStart
         }
-        var rawSteps = 0L
         var c3p0Steps = 0L
         var excludedOtherSessionSteps = 0L
 
         records.forEach { record ->
             val dayCount = proratedCount(record, dayStart, dayEnd)
-            rawSteps += dayCount
 
             if (record.metadata.dataOrigin.packageName == C3P0_PACKAGE_NAME) {
                 c3p0Steps += dayCount

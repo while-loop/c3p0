@@ -71,6 +71,7 @@ fun SessionDashboard(
     val sessionDistance by viewModel.sessionDistance.collectAsState()
     val sessionSteps by viewModel.sessionSteps.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
+    val normalizedStepsToGoal by viewModel.normalizedStepsToGoal.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
     var pendingSessionAction by remember { mutableStateOf(SessionAction.Start) }
@@ -182,6 +183,13 @@ fun SessionDashboard(
             StatCard("Steps", sessionSteps.toString(), "steps", Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height(10.dp))
+        StatCard(
+            "Steps to Goal",
+            normalizedStepsToGoal?.toString() ?: "---",
+            "normalized",
+            Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCard("Elapsed", formatElapsedTime(sessionElapsedSeconds), "", Modifier.weight(1f))
             Spacer(modifier = Modifier.width(10.dp))
@@ -236,13 +244,16 @@ fun SessionDashboard(
         Spacer(modifier = Modifier.height(32.dp))
 
         // Mode and Power
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isSessionActive) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Button(
                         onClick = {
                             if (isSessionPaused) {
@@ -265,6 +276,7 @@ fun SessionDashboard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(if (isSessionPaused) "Resume" else "Pause")
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
                     LongPressStopButton(onStop = { viewModel.stopSession() })
                 }
             } else {
@@ -287,6 +299,7 @@ fun SessionDashboard(
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,

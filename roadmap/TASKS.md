@@ -15,9 +15,10 @@
 - [x] **Session Aggregates**: Persist session distance/steps as session deltas, plus calories, average HR, max HR, and real cadence.
 - [x] **Live Session Deltas**: Session-screen distance and steps use current-session deltas instead of lifetime WalkingPad counters.
 - [x] **Session Metrics UI**: Added elapsed time, calories, current HR, session average HR, and heart-rate history chart with y-axis labels and zone-colored line segments.
+- [x] **Goal Progress Tile**: Added normalized steps remaining to daily goal on the session screen.
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
 - [x] **Stats Details**: Added selected-session history details and normalized Health Connect step breakdown.
-- [x] **Historical Step History**: Added Health Connect daily step history with raw totals, C3P0 steps, excluded other-source session steps, and normalized totals.
+- [x] **Historical Step History**: Added Health Connect daily step history with aggregate raw totals, C3P0 steps, excluded other-source session steps, and normalized totals.
 - [x] **Permissions UX**: Added bottom sheets to explain permission requests before invoking system permission prompts.
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.

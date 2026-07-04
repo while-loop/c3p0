@@ -23,7 +23,7 @@
 ## 3. Data Strategy
 - **Health Connect**: Chosen over Google Fit as the primary health data hub for modern Android devices. We write completed walking sessions, steps, and distance. We read body weight for calorie estimates and steps for normalization. We do not request or write heart-rate records; the watch should remain the source of HR data in Health Connect.
 - **Health Connect Permissions**: The profile toggle reflects actual granted permissions. Enabling shows the Health Connect permission flow; disabling opens Health Connect settings because apps cannot revoke Health Connect grants directly. Read/write code paths check only the permissions needed for that operation.
-- **Normalized Historical Steps**: Daily Health Connect history shows raw steps and normalized steps. Normalization subtracts non-C3P0 step records that overlap completed C3P0 sessions, with record counts prorated across day/session boundaries.
+- **Normalized Historical Steps**: Daily Health Connect history uses Health Connect aggregate steps for raw daily totals, then subtracts non-C3P0 step records that overlap completed C3P0 sessions. Record-level counts are prorated across day/session boundaries for the C3P0 and excluded-source breakdown.
 - **DataStore**: Used for lightweight persistence like BLE device addresses, unit preferences, inactive-warning preference, backup toggle, profile age, daily step goal, and cached body weight. Room handles the heavy lifting for session history.
 - **Unit Source of Truth**: The app's stored unit setting is the source of truth. WalkingPad units are corrected when settings change, when a session starts/resumes/pauses, and when reported device units diverge.
 - **Auto Backup**: We rely on Android's native Google Drive Auto Backup to sync Room DB files and DataStore preferences. Backup rules include `c3p0.db`, `c3p0.db-shm`, `c3p0.db-wal`, `datastore/settings.preferences_pb`, and SharedPreferences.
@@ -34,7 +34,7 @@
 - **Jetpack Compose**: Used for all UI. We opted for a simple Dashboard with "Status Dots" to provide immediate feedback on device connectivity.
 - **Auto-Speed Algorithm**: Implemented as a Proportional Controller with a Moving Average to ensure treadmill adjustments are smooth and not jittery.
 - **Permission Rationale**: Code paths that require Android permissions should show a bottom sheet explaining the request before invoking the system prompt.
-- **Session Dashboard Density**: Session stats are compact tiles because the screen now shows distance, steps, active time, calories, current HR, average HR, speed controls, device status, and the HR chart.
+- **Session Dashboard Density**: Session stats are compact tiles because the screen now shows distance, steps, normalized steps remaining to goal, active time, calories, current HR, average HR, speed controls, device status, and the HR chart. Steps remaining uses today's normalized Health Connect baseline plus in-progress session steps. Session action controls are centered to avoid the control row feeling lopsided.
 - **Heart-Rate Chart**: The session chart includes y-axis labels and zone-colored line segments for Zone 0 through Zone 4.
 - **Stats History**: The History screen shows daily Health Connect raw/normalized step history and selected-session details with stored aggregates, metric-derived fallback summaries, and Health Connect normalized step counts when available.
 

@@ -3,8 +3,6 @@ package dev.whileloop.c3p0.ui.screen
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -87,22 +85,25 @@ fun StatsScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
 
-        HealthConnectStepHistoryCard(
-            rows = dailyStepHistory,
-            canReadSteps = canReadHealthConnectSteps,
-            isLoading = isStepHistoryLoading,
-            onEnable = { showStepPermissionSheet = true },
-            onRefresh = { viewModel.refreshStepHistory() }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        selectedSession?.let { session ->
-            SessionDetailCard(session, metrics, normalizedSteps, unitSystem)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                HealthConnectStepHistoryCard(
+                    rows = dailyStepHistory,
+                    canReadSteps = canReadHealthConnectSteps,
+                    isLoading = isStepHistoryLoading,
+                    onEnable = { showStepPermissionSheet = true },
+                    onRefresh = { viewModel.refreshStepHistory() }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            selectedSession?.let { session ->
+                item {
+                    SessionDetailCard(session, metrics, normalizedSteps, unitSystem)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+
             items(sessions) { session ->
                 SessionItem(session, unitSystem) {
                     viewModel.selectSession(session)
@@ -141,17 +142,11 @@ private fun HealthConnectStepHistoryCard(
                 !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
                 rows.isEmpty() -> Text("No Health Connect step data found.")
                 else -> {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 360.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
                     rows.forEach { row ->
                         DailyStepHistoryRow(row)
                         if (row != rows.last()) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         }
-                    }
                     }
                 }
             }

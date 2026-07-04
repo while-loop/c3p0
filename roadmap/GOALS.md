@@ -19,7 +19,7 @@
 - [x] Remove app-side heart-rate read/write permissions from Health Connect; watches remain the source of HR records.
 - [x] Scope Health Connect permission checks by operation and surface Health Connect settings for revocation.
 - [x] Implement and surface "Normalized Steps" using Health Connect data in session history.
-- [x] Show daily Health Connect step history with raw and normalized totals.
+- [x] Show daily Health Connect step history with aggregate raw and normalized totals.
 - [x] Ensure historical viewing of session aggregates and metric summaries (steps/HR/distance/time/SPM).
 
 ## Phase 3: Session Logic & Auto-Speed [COMPLETED]
@@ -35,6 +35,7 @@
 
 ## Phase 4: UI Development [COMPLETED]
 - [x] Build Session Screen (real-time stats, speed control, active HR chart, calories, elapsed/active session stats).
+- [x] Show normalized steps remaining to daily goal on the Session Screen.
 - [x] Build Stats Screen (history list, selected-session details, normalized step breakdown).
 - [x] Build Profile Screen (integrations, goals, current device status, unit settings).
 - [x] Build Pairing Screen (scan and save devices).

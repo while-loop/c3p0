@@ -10,6 +10,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Length
@@ -49,16 +50,42 @@ class HealthConnectManager @Inject constructor(
         if (!hasPermissions(STEP_HISTORY_PERMISSIONS)) return emptyList()
 
         return try {
-            val response = healthConnectClient.readRecords(
-                ReadRecordsRequest(
-                    recordType = StepsRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            val records = mutableListOf<StepsRecord>()
+            var pageToken: String? = null
+            do {
+                val response = healthConnectClient.readRecords(
+                    ReadRecordsRequest(
+                        recordType = StepsRecord::class,
+                        timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
+                        pageSize = STEP_READ_PAGE_SIZE,
+                        pageToken = pageToken
+                    )
                 )
-            )
-            response.records
+                records += response.records
+                pageToken = response.pageToken
+            } while (!pageToken.isNullOrBlank())
+
+            records
         } catch (e: Exception) {
             Timber.e(e, "Error reading steps from Health Connect")
             emptyList()
+        }
+    }
+
+    suspend fun readAggregatedSteps(startTime: Instant, endTime: Instant): Long {
+        if (!hasPermissions(STEP_HISTORY_PERMISSIONS)) return 0L
+
+        return try {
+            val response = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(StepsRecord.COUNT_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
+            )
+            response[StepsRecord.COUNT_TOTAL] ?: 0L
+        } catch (e: Exception) {
+            Timber.e(e, "Error reading aggregated steps from Health Connect")
+            0L
         }
     }
 
@@ -135,6 +162,7 @@ class HealthConnectManager @Inject constructor(
     }
 
     companion object {
+        private const val STEP_READ_PAGE_SIZE = 1000
         val STEP_HISTORY_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(StepsRecord::class)
         )
