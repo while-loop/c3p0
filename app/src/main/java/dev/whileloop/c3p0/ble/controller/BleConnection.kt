@@ -23,6 +23,7 @@ class BleConnection(
     private val address: String,
     private val errorReporter: BleErrorReporter,
     private val requiredServiceUuid: UUID? = null,
+    private val fallbackServiceUuids: Set<UUID> = emptySet(),
     private val refreshGattOnConnect: Boolean = false,
     private val preferWriteWithoutResponse: Boolean = false
 ) {
@@ -64,12 +65,15 @@ class BleConnection(
                     .joinToString(separator = ";") { service -> service.toSummary() }
                     .ifBlank { "empty" }
                 Timber.d("Services discovered for $address")
-                val requiredService = requiredServiceUuid
-                if (requiredService != null && gatt.getService(requiredService) == null) {
+                val acceptableServices = buildSet {
+                    requiredServiceUuid?.let { add(it) }
+                    addAll(fallbackServiceUuids)
+                }
+                if (acceptableServices.isNotEmpty() && acceptableServices.none { gatt.getService(it) != null }) {
                     retryServiceDiscoveryOrReport(
                         gatt = gatt,
                         message = "Required BLE service not found",
-                        detail = "address=$address service=$requiredService services=$discoveredServiceSummary"
+                        detail = "address=$address services=${acceptableServices.joinToString()} discovered=$discoveredServiceSummary"
                     )
                     return
                 }
@@ -131,7 +135,12 @@ class BleConnection(
     fun serviceSummary(): String = discoveredServiceSummary
 
     @SuppressLint("MissingPermission")
-    fun writeCharacteristic(serviceUuid: UUID, charUuid: UUID, data: ByteArray): Boolean {
+    fun writeCharacteristic(
+        serviceUuid: UUID,
+        charUuid: UUID,
+        data: ByteArray,
+        preferWithoutResponse: Boolean = preferWriteWithoutResponse
+    ): Boolean {
         if (!hasConnectPermission()) {
             reportError("Missing Bluetooth connect permission", "write characteristic $charUuid")
             return false
@@ -148,7 +157,7 @@ class BleConnection(
         val supportsWriteWithoutResponse =
             char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
         val writeType = when {
-            preferWriteWithoutResponse && supportsWriteWithoutResponse ->
+            preferWithoutResponse && supportsWriteWithoutResponse ->
                 BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             supportsWrite -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             supportsWriteWithoutResponse -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
@@ -171,8 +180,36 @@ class BleConnection(
 
     @SuppressLint("MissingPermission")
     fun enableNotifications(serviceUuid: UUID, charUuid: UUID): Boolean {
+        return enableCharacteristicUpdates(
+            serviceUuid = serviceUuid,
+            charUuid = charUuid,
+            descriptorValue = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+            updateLabel = "notifications"
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    fun enableIndications(serviceUuid: UUID, charUuid: UUID): Boolean {
+        return enableCharacteristicUpdates(
+            serviceUuid = serviceUuid,
+            charUuid = charUuid,
+            descriptorValue = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE,
+            updateLabel = "indications"
+        )
+    }
+
+    fun hasService(serviceUuid: UUID): Boolean =
+        bluetoothGatt?.getService(serviceUuid) != null
+
+    @SuppressLint("MissingPermission")
+    private fun enableCharacteristicUpdates(
+        serviceUuid: UUID,
+        charUuid: UUID,
+        descriptorValue: ByteArray,
+        updateLabel: String
+    ): Boolean {
         if (!hasConnectPermission()) {
-            reportError("Missing Bluetooth connect permission", "enable notifications for $charUuid")
+            reportError("Missing Bluetooth connect permission", "enable $updateLabel for $charUuid")
             return false
         }
         val service = bluetoothGatt?.getService(serviceUuid) ?: run {
@@ -186,27 +223,27 @@ class BleConnection(
         try {
             val notificationSet = bluetoothGatt?.setCharacteristicNotification(char, true) ?: false
             if (!notificationSet) {
-                reportError("Unable to enable characteristic notification", "address=$address characteristic=$charUuid")
+                reportError("Unable to enable characteristic $updateLabel", "address=$address characteristic=$charUuid")
                 return false
             }
         } catch (e: SecurityException) {
-            Timber.e(e, "Unable to enable BLE notifications without permission")
-            reportError("Unable to enable BLE notifications", e.message)
+            Timber.e(e, "Unable to enable BLE $updateLabel without permission")
+            reportError("Unable to enable BLE $updateLabel", e.message)
             return false
         }
         
         val descriptor = char.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID) ?: run {
-            reportError("BLE notification descriptor not found", "address=$address characteristic=$charUuid")
+            reportError("BLE $updateLabel descriptor not found", "address=$address characteristic=$charUuid")
             return false
         }
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 bluetoothGatt?.writeDescriptor(
                     descriptor,
-                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    descriptorValue
                 ) == BluetoothStatusCodes.SUCCESS
             } else {
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                descriptor.value = descriptorValue
                 bluetoothGatt?.writeDescriptor(descriptor) ?: false
             }
         } catch (e: SecurityException) {

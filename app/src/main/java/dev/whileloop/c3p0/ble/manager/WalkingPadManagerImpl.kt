@@ -39,6 +39,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
     private var lastRawNotificationHex: String? = null
+    private var activeProtocol = WalkingPadProtocol.LegacyKingsmith
     private val protocolReady = MutableStateFlow(false)
     private val _status = MutableStateFlow(TreadmillStatus())
     override val status: StateFlow<TreadmillStatus> = _status.asStateFlow()
@@ -51,6 +52,9 @@ class WalkingPadManagerImpl @Inject constructor(
     private val SERVICE_UUID = UUID.fromString("0000fe00-0000-1000-8000-00805f9b34fb")
     private val NOTIFY_CHAR_UUID = UUID.fromString("0000fe01-0000-1000-8000-00805f9b34fb")
     private val WRITE_CHAR_UUID = UUID.fromString("0000fe02-0000-1000-8000-00805f9b34fb")
+    private val FTMS_SERVICE_UUID = UUID.fromString("00001826-0000-1000-8000-00805f9b34fb")
+    private val FTMS_TREADMILL_DATA_UUID = UUID.fromString("00002acd-0000-1000-8000-00805f9b34fb")
+    private val FTMS_CONTROL_POINT_UUID = UUID.fromString("00002ad9-0000-1000-8000-00805f9b34fb")
 
     override suspend fun connect(address: String): Boolean {
         connectionStateJob?.cancel()
@@ -64,31 +68,28 @@ class WalkingPadManagerImpl @Inject constructor(
             address = address,
             errorReporter = errorReporter,
             requiredServiceUuid = SERVICE_UUID,
+            fallbackServiceUuids = setOf(FTMS_SERVICE_UUID),
             refreshGattOnConnect = true,
             preferWriteWithoutResponse = true
         ).apply {
             onNotificationReceived = { uuid, data ->
-                if (uuid == NOTIFY_CHAR_UUID) {
-                    handleNotification(data)
+                when (uuid) {
+                    NOTIFY_CHAR_UUID -> handleNotification(data)
+                    FTMS_TREADMILL_DATA_UUID -> handleFtmsTreadmillData(data)
+                    FTMS_CONTROL_POINT_UUID -> handleFtmsControlPoint(data)
                 }
             }
             onServicesDiscovered = {
-                val notificationsEnabled = enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID)
-                Timber.d("WalkingPad notifications enabled: $notificationsEnabled")
-                if (notificationsEnabled) {
-                    scope.launch {
-                        delay(PROTOCOL_READY_DELAY_MS)
-                        protocolReady.value = true
-                        protocolReadyWatchdogJob?.cancel()
-                        _connectionState.value = ConnectionState.CONNECTED
-                        startStatusPolling()
+                when {
+                    hasService(SERVICE_UUID) -> activateLegacyProtocol(address)
+                    hasService(FTMS_SERVICE_UUID) -> activateFtmsProtocol(address)
+                    else -> {
+                        errorReporter.report(
+                            "WalkingPad Bluetooth",
+                            "No supported WalkingPad protocol service found",
+                            "address=$address services=${serviceSummary()}"
+                        )
                     }
-                } else {
-                    errorReporter.report(
-                        "WalkingPad Bluetooth",
-                        "WalkingPad notifications were not enabled",
-                        "address=$address"
-                    )
                 }
             }
         }
@@ -137,22 +138,52 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun start(): Boolean {
-        if (status.value.mode == TreadmillMode.STANDBY && !setMode(TreadmillMode.MANUAL)) {
-            return false
+        if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            requestFtmsControl()
+            return sendControlCommand(
+                label = "start belt",
+                cmd = byteArrayOf(FTMS_OP_START_OR_RESUME),
+                isApplied = { status -> status.state != TreadmillState.STOPPED && status.state != TreadmillState.STANDBY }
+            )
+        } else {
+            if (status.value.mode == TreadmillMode.STANDBY && !setMode(TreadmillMode.MANUAL)) {
+                return false
+            }
+            return sendControlCommand(
+                label = "start belt",
+                cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()),
+                isApplied = { status -> status.state != TreadmillState.STOPPED && status.state != TreadmillState.STANDBY }
+            )
         }
-        return sendControlCommand(
-            label = "start belt",
-            cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()),
-            isApplied = { status -> status.state != TreadmillState.STOPPED && status.state != TreadmillState.STANDBY }
-        )
     }
 
     override suspend fun stop(): Boolean {
-        return setSpeed(0f)
+        return if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            sendControlCommand(
+                label = "stop belt",
+                cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_STOP),
+                isApplied = { status -> status.state == TreadmillState.STOPPED || status.speed <= SPEED_APPLIED_TOLERANCE_KMH }
+            )
+        } else {
+            setSpeed(0f)
+        }
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
         val targetSpeed = speed.coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH)
+        if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            val speedHundredths = (targetSpeed * 100).toInt().coerceIn(0, UShort.MAX_VALUE.toInt())
+            return sendControlCommand(
+                label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
+                cmd = byteArrayOf(
+                    FTMS_OP_SET_TARGET_SPEED,
+                    (speedHundredths and 0xFF).toByte(),
+                    ((speedHundredths shr 8) and 0xFF).toByte()
+                ),
+                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+            )
+        }
+
         val s = (targetSpeed * 10).toInt().toByte()
         return sendControlCommand(
             label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
@@ -162,6 +193,18 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun setMode(mode: TreadmillMode): Boolean {
+        if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            if (mode != TreadmillMode.MANUAL) {
+                errorReporter.report(
+                    "WalkingPad Bluetooth",
+                    "Native WalkingPad automatic mode is not available over FTMS",
+                    "mode=$mode"
+                )
+                return false
+            }
+            return true
+        }
+
         val m = when (mode) {
             TreadmillMode.AUTO -> 0x00
             TreadmillMode.MANUAL -> 0x01
@@ -185,7 +228,11 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private suspend fun askStatus(): Boolean =
+        if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            true
+        } else {
         sendCommand(byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x00, 0x00, 0x00, 0xFD.toByte()))
+        }
 
     private suspend fun askParams(): Boolean =
         sendCommand(
@@ -235,7 +282,11 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private suspend fun sendCommand(cmd: ByteArray): Boolean = commandMutex.withLock {
         if (!awaitProtocolReady()) {
-            val fixed = fixCrc(cmd.copyOf())
+            val fixed = if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+                cmd
+            } else {
+                fixCrc(cmd.copyOf())
+            }
             errorReporter.report(
                 "WalkingPad Bluetooth",
                 "WalkingPad protocol is not ready",
@@ -250,9 +301,22 @@ class WalkingPadManagerImpl @Inject constructor(
             delay(MIN_COMMAND_SPACING_MS - elapsedSinceLastCommand)
         }
 
-        val fixed = fixCrc(cmd.copyOf())
+        val fixed = if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            cmd
+        } else {
+            fixCrc(cmd.copyOf())
+        }
         Timber.d("Sending WalkingPad command: ${fixed.toHexString()}")
-        val sent = connection?.writeCharacteristic(SERVICE_UUID, WRITE_CHAR_UUID, fixed) ?: false
+        val sent = if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+            connection?.writeCharacteristic(
+                FTMS_SERVICE_UUID,
+                FTMS_CONTROL_POINT_UUID,
+                fixed,
+                preferWithoutResponse = false
+            ) ?: false
+        } else {
+            connection?.writeCharacteristic(SERVICE_UUID, WRITE_CHAR_UUID, fixed) ?: false
+        }
         if (sent) {
             lastCommandElapsedMillis = SystemClock.elapsedRealtime()
         } else {
@@ -280,7 +344,11 @@ class WalkingPadManagerImpl @Inject constructor(
         val previousStatusAt = lastStatusReceivedElapsedMillis
         val sent = sendCommand(cmd)
         if (sent) {
-            val commandHex = fixCrc(cmd.copyOf()).toHexString()
+            val commandHex = if (activeProtocol == WalkingPadProtocol.FitnessMachineService) {
+                cmd.toHexString()
+            } else {
+                fixCrc(cmd.copyOf()).toHexString()
+            }
             scope.launch {
                 delay(COMMAND_REPLY_TIMEOUT_MS)
                 val latestStatus = status.value
@@ -340,6 +408,58 @@ class WalkingPadManagerImpl @Inject constructor(
         return cmd
     }
 
+    private fun activateLegacyProtocol(address: String) {
+        activeProtocol = WalkingPadProtocol.LegacyKingsmith
+        val notificationsEnabled = connection?.enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID) ?: false
+        Timber.d("WalkingPad legacy notifications enabled: $notificationsEnabled")
+        if (notificationsEnabled) {
+            scope.launch {
+                delay(PROTOCOL_READY_DELAY_MS)
+                protocolReady.value = true
+                protocolReadyWatchdogJob?.cancel()
+                _connectionState.value = ConnectionState.CONNECTED
+                startStatusPolling()
+            }
+        } else {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "WalkingPad notifications were not enabled",
+                "address=$address"
+            )
+        }
+    }
+
+    private fun activateFtmsProtocol(address: String) {
+        activeProtocol = WalkingPadProtocol.FitnessMachineService
+        scope.launch {
+            val treadmillNotificationsEnabled =
+                connection?.enableNotifications(FTMS_SERVICE_UUID, FTMS_TREADMILL_DATA_UUID) ?: false
+            delay(GATT_DESCRIPTOR_WRITE_DELAY_MS)
+            val controlPointIndicationsEnabled =
+                connection?.enableIndications(FTMS_SERVICE_UUID, FTMS_CONTROL_POINT_UUID) ?: false
+            Timber.d(
+                "WalkingPad FTMS ready checks. treadmillData=$treadmillNotificationsEnabled " +
+                    "controlPoint=$controlPointIndicationsEnabled"
+            )
+
+            if (treadmillNotificationsEnabled && controlPointIndicationsEnabled) {
+                protocolReady.value = true
+                protocolReadyWatchdogJob?.cancel()
+                _connectionState.value = ConnectionState.CONNECTED
+                requestFtmsControl()
+            } else {
+                errorReporter.report(
+                    "WalkingPad Bluetooth",
+                    "FTMS notifications or control indications were not enabled",
+                    "address=$address treadmillData=$treadmillNotificationsEnabled controlPoint=$controlPointIndicationsEnabled"
+                )
+            }
+        }
+    }
+
+    private suspend fun requestFtmsControl(): Boolean =
+        sendCommand(byteArrayOf(FTMS_OP_REQUEST_CONTROL))
+
     private fun handleNotification(data: ByteArray) {
         lastRawNotificationHex = data.toHexString()
         if (data.size < 2 || data[0] != 0xF8.toByte()) {
@@ -350,6 +470,63 @@ class WalkingPadManagerImpl @Inject constructor(
             0xA2 -> handleStatusNotification(data)
             0xA6 -> handleParamsNotification(data)
         }
+    }
+
+    private fun handleFtmsControlPoint(data: ByteArray) {
+        lastRawNotificationHex = data.toHexString()
+        if (data.size >= 3 && data[0] == FTMS_OP_RESPONSE_CODE) {
+            Timber.d(
+                "FTMS control response request=${data[1].toInt() and 0xFF} " +
+                    "result=${data[2].toInt() and 0xFF}"
+            )
+        }
+    }
+
+    private fun handleFtmsTreadmillData(data: ByteArray) {
+        lastRawNotificationHex = data.toHexString()
+        if (data.size < 4) return
+
+        lastStatusReceivedElapsedMillis = SystemClock.elapsedRealtime()
+        val flags = readUInt16LE(data, 0)
+        var offset = 2
+        val hasInstantSpeed = flags and FTMS_TREADMILL_MORE_DATA_FLAG == 0
+        val speed = if (hasInstantSpeed && data.size >= offset + 2) {
+            readUInt16LE(data, offset) / 100f
+        } else {
+            status.value.speed
+        }
+        if (hasInstantSpeed) offset += 2
+        if (flags and FTMS_TREADMILL_AVERAGE_SPEED_FLAG != 0) offset += 2
+
+        val distance = if (flags and FTMS_TREADMILL_TOTAL_DISTANCE_FLAG != 0 && data.size >= offset + 3) {
+            val meters = readUInt24LE(data, offset)
+            offset += 3
+            meters / 10
+        } else {
+            status.value.distance
+        }
+
+        if (flags and FTMS_TREADMILL_INCLINATION_FLAG != 0) offset += 4
+        if (flags and FTMS_TREADMILL_ELEVATION_GAIN_FLAG != 0) offset += 4
+        if (flags and FTMS_TREADMILL_INSTANT_PACE_FLAG != 0) offset += 1
+        if (flags and FTMS_TREADMILL_AVERAGE_PACE_FLAG != 0) offset += 1
+        if (flags and FTMS_TREADMILL_ENERGY_FLAG != 0) offset += 5
+        if (flags and FTMS_TREADMILL_HEART_RATE_FLAG != 0) offset += 1
+        if (flags and FTMS_TREADMILL_METABOLIC_EQUIVALENT_FLAG != 0) offset += 1
+
+        val elapsedTime = if (flags and FTMS_TREADMILL_ELAPSED_TIME_FLAG != 0 && data.size >= offset + 2) {
+            readUInt16LE(data, offset)
+        } else {
+            status.value.time
+        }
+
+        _status.value = status.value.copy(
+            state = if (speed > SPEED_APPLIED_TOLERANCE_KMH) TreadmillState.ACTIVE else TreadmillState.STOPPED,
+            speed = speed,
+            mode = TreadmillMode.MANUAL,
+            time = elapsedTime,
+            distance = distance
+        )
     }
 
     private fun handleStatusNotification(data: ByteArray) {
@@ -404,6 +581,15 @@ class WalkingPadManagerImpl @Inject constructor(
             ((data[offset + 1].toInt() and 0xFF) shl 8) or
             (data[offset + 2].toInt() and 0xFF)
 
+    private fun readUInt16LE(data: ByteArray, offset: Int): Int =
+        (data[offset].toInt() and 0xFF) or
+            ((data[offset + 1].toInt() and 0xFF) shl 8)
+
+    private fun readUInt24LE(data: ByteArray, offset: Int): Int =
+        (data[offset].toInt() and 0xFF) or
+            ((data[offset + 1].toInt() and 0xFF) shl 8) or
+            ((data[offset + 2].toInt() and 0xFF) shl 16)
+
     private fun syncUnitSystemIfNeeded(reportedUnitSystem: UnitSystem?) {
         if (reportedUnitSystem == null || reportedUnitSystem == desiredUnitSystem || isSyncingUnitSystem) return
 
@@ -433,5 +619,28 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PROTOCOL_READY_DELAY_MS = 500L
         private const val PROTOCOL_READY_TIMEOUT_MS = 5_000L
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
+        private const val GATT_DESCRIPTOR_WRITE_DELAY_MS = 400L
+        private const val FTMS_OP_REQUEST_CONTROL: Byte = 0x00
+        private const val FTMS_OP_SET_TARGET_SPEED: Byte = 0x02
+        private const val FTMS_OP_START_OR_RESUME: Byte = 0x07
+        private const val FTMS_OP_STOP_OR_PAUSE: Byte = 0x08
+        private const val FTMS_OP_RESPONSE_CODE: Byte = 0x80.toByte()
+        private const val FTMS_STOP: Byte = 0x01
+        private const val FTMS_TREADMILL_MORE_DATA_FLAG = 0x0001
+        private const val FTMS_TREADMILL_AVERAGE_SPEED_FLAG = 0x0002
+        private const val FTMS_TREADMILL_TOTAL_DISTANCE_FLAG = 0x0004
+        private const val FTMS_TREADMILL_INCLINATION_FLAG = 0x0008
+        private const val FTMS_TREADMILL_ELEVATION_GAIN_FLAG = 0x0010
+        private const val FTMS_TREADMILL_INSTANT_PACE_FLAG = 0x0020
+        private const val FTMS_TREADMILL_AVERAGE_PACE_FLAG = 0x0040
+        private const val FTMS_TREADMILL_ENERGY_FLAG = 0x0080
+        private const val FTMS_TREADMILL_HEART_RATE_FLAG = 0x0100
+        private const val FTMS_TREADMILL_METABOLIC_EQUIVALENT_FLAG = 0x0200
+        private const val FTMS_TREADMILL_ELAPSED_TIME_FLAG = 0x0400
+    }
+
+    private enum class WalkingPadProtocol {
+        LegacyKingsmith,
+        FitnessMachineService
     }
 }
