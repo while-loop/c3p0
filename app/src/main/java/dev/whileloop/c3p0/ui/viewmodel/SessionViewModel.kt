@@ -38,7 +38,6 @@ class SessionViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val stepNormalizationUseCase: StepNormalizationUseCase
 ) : ViewModel() {
-    private var elapsedJob: Job? = null
     private var heartRateHistoryJob: Job? = null
     private var speedCommandJob: Job? = null
     private var pendingManualSpeedKmh: Float? = null
@@ -48,6 +47,7 @@ class SessionViewModel @Inject constructor(
     private var sessionStartDistance = 0
     private var sessionStartSteps = 0
     private var sessionStartCalories = 0
+    private var sessionStartPadTime = 0
     private var normalizedStepsToday: Int? = null
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
@@ -213,6 +213,7 @@ class SessionViewModel @Inject constructor(
             }.collect { (status, isActive) ->
                 if (isActive) {
                     val distanceDelta = counterDelta(sessionStartDistance, status.distance)
+                    _sessionElapsedSeconds.value = counterDelta(sessionStartPadTime, status.time)
                     _sessionDistance.value = distanceDelta
                     _sessionSteps.value = sessionStepDelta(status.hasStepCount, status.steps, distanceDelta)
                     _sessionCalories.value = sessionCalorieDelta(status.calories, distanceDelta, status.speed)
@@ -437,19 +438,12 @@ class SessionViewModel @Inject constructor(
             sessionStartDistance = treadmillStatus.value.distance
             sessionStartSteps = treadmillStatus.value.steps
             sessionStartCalories = treadmillStatus.value.calories
+            sessionStartPadTime = treadmillStatus.value.time
             _sessionDistance.value = 0
             _sessionSteps.value = 0
             _sessionCalories.value = 0
             activeHeartRateTotal = 0
             activeHeartRateSampleCount = 0
-        }
-
-        elapsedJob?.cancel()
-        elapsedJob = viewModelScope.launch {
-            while (true) {
-                delay(1000)
-                _sessionElapsedSeconds.value += 1
-            }
         }
 
         heartRateHistoryJob?.cancel()
@@ -468,8 +462,6 @@ class SessionViewModel @Inject constructor(
     }
 
     private fun stopSessionStats() {
-        elapsedJob?.cancel()
-        elapsedJob = null
         heartRateHistoryJob?.cancel()
         heartRateHistoryJob = null
     }

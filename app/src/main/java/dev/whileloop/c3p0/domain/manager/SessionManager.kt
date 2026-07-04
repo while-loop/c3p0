@@ -37,6 +37,7 @@ class SessionManager @Inject constructor(
     private var startDistance = 0
     private var startSteps = 0
     private var startCalories = 0
+    private var startPadTime = 0
     private var activeHeartRateTotal = 0
     private var activeHeartRateSampleCount = 0
     private var maxHeartRate = 0
@@ -85,6 +86,7 @@ class SessionManager @Inject constructor(
             startDistance = startStatus.distance
             startSteps = startStatus.steps
             startCalories = startStatus.calories
+            startPadTime = startStatus.time
             activeHeartRateTotal = 0
             activeHeartRateSampleCount = 0
             maxHeartRate = 0
@@ -180,8 +182,10 @@ class SessionManager @Inject constructor(
             val start = startTime ?: return@launch
             val end = Instant.now()
             accumulateActiveDuration(end)
-            val activeDuration = accumulatedActiveDuration
             val finalStatus = treadmillManager.status.value
+            val padActiveDuration = Duration.ofSeconds(counterDelta(startPadTime, finalStatus.time).toLong())
+            val activeDuration = padActiveDuration.takeIf { !it.isZero && !it.isNegative }
+                ?: accumulatedActiveDuration
             val totalDistance = counterDelta(startDistance, finalStatus.distance)
             val totalSteps = if (finalStatus.hasStepCount) {
                 counterDelta(startSteps, finalStatus.steps)
@@ -200,6 +204,7 @@ class SessionManager @Inject constructor(
             startTime = null
             activeStartedAt = null
             accumulatedActiveDuration = Duration.ZERO
+            startPadTime = 0
 
             val sessionStats = SessionEntity(
                 startTime = start,

@@ -16,7 +16,7 @@
 - [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust aggressively outside Zone 2 while using only slow 0.1 mph edge-guard nudges inside Zone 2.
 - [x] **Zone 2 Max Speed Setting**: Added a Profile max-speed slider for Zone 2, defaulted to 3.5 mph, and clamped controller speed adjustments to the saved cap.
 - [x] **Zone 2 Step Bands**: Reduced out-of-zone speed changes to HR-error-based 0.1/0.2/0.3/0.4/0.5 mph bands so moderate misses do not always jump by 0.5 mph.
-- [x] **Dynamic HR Chart Scale**: Scaled the live heart-rate chart to observed HR plus Zone 2 bounds with 10% padding and aligned y-axis labels to the dynamic grid.
+- [x] **Dynamic HR Chart Scale**: Scaled the live heart-rate chart to observed HR plus Zone 2 bounds with 5% padding and aligned y-axis labels to the dynamic grid.
 - [x] **Zone 2 Controller Tests**: Added unit coverage for in-zone no-op behavior, learned speed bias, and trend-gated edge guard adjustments.
 - [x] **Default Session Mode Setting**: Added a Profile setting for Manual, Automatic, or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
 - [x] **Active Session Keep Awake**: Added a profile setting to keep the phone awake only while a session is active and unpaused.
@@ -29,6 +29,7 @@
 - [x] **Data Persistence**: Room DB schema for sessions and time-series metrics.
 - [x] **Session Aggregates**: Persist session distance/steps as session deltas, plus calories, average HR, max HR, and real cadence.
 - [x] **Live Session Deltas**: Session-screen distance and steps use current-session deltas instead of lifetime WalkingPad counters.
+- [x] **Pad-Reported Elapsed Time**: Session elapsed time uses the WalkingPad running-time counter delta instead of an app-local timer, with fallback calorie estimates also preferring the pad-reported active duration.
 - [x] **Session Metrics UI**: Added elapsed time, calories, current HR, session average HR, and heart-rate history chart with y-axis labels and zone-colored line segments.
 - [x] **Goal Progress Tile**: Added normalized steps remaining to daily goal on the session screen.
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
