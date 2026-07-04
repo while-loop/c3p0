@@ -9,9 +9,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Pause
@@ -150,7 +148,6 @@ fun SessionDashboard(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -174,7 +171,7 @@ fun SessionDashboard(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Stats Grid
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -202,16 +199,16 @@ fun SessionDashboard(
             StatCard("Avg HR", heartRateValue(averageHeartRate), "bpm", Modifier.weight(1f))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         HeartRateHistoryChart(
             heartRates = heartRateHistory,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(170.dp)
+                .height(150.dp)
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Speed Control
         Row(
@@ -225,11 +222,11 @@ fun SessionDashboard(
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp)
+                modifier = Modifier.padding(horizontal = 20.dp)
             ) {
                 Text(
                     text = String.format(Locale.US, "%.1f %s", displayedSpeed.value, displayedSpeed.unit),
-                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp),
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
                     fontSize = 24.sp,
                     color = Color.Green,
                     fontWeight = FontWeight.Bold
@@ -241,7 +238,7 @@ fun SessionDashboard(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Mode and Power
         Column(
@@ -299,7 +296,7 @@ fun SessionDashboard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
@@ -318,7 +315,7 @@ fun SessionDashboard(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
@@ -727,14 +724,26 @@ fun StatusIndicator(
 @Composable
 fun StatCard(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(label, style = MaterialTheme.typography.labelMedium)
+                if (unit.isNotBlank()) {
+                    Text(
+                        text = unit,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            Text(unit, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
