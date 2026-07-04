@@ -34,6 +34,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var connectionStateJob: Job? = null
     private var statusPollingJob: Job? = null
+    private var protocolReadyWatchdogJob: Job? = null
     private val commandMutex = Mutex()
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
@@ -55,6 +56,7 @@ class WalkingPadManagerImpl @Inject constructor(
         connectionStateJob?.cancel()
         connection?.close()
         stopStatusPolling()
+        protocolReadyWatchdogJob?.cancel()
         protocolReady.value = false
         _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(context, address, errorReporter).apply {
@@ -70,6 +72,7 @@ class WalkingPadManagerImpl @Inject constructor(
                     scope.launch {
                         delay(PROTOCOL_READY_DELAY_MS)
                         protocolReady.value = true
+                        protocolReadyWatchdogJob?.cancel()
                         _connectionState.value = ConnectionState.CONNECTED
                         startStatusPolling()
                     }
@@ -86,6 +89,7 @@ class WalkingPadManagerImpl @Inject constructor(
         val result = connection?.connect() ?: false
         if (result) {
             _connectionState.value = ConnectionState.CONNECTING
+            startProtocolReadyWatchdog(address)
             connection?.let { bleConnection ->
                 connectionStateJob?.cancel()
                 connectionStateJob = scope.launch {
@@ -100,6 +104,7 @@ class WalkingPadManagerImpl @Inject constructor(
                                 protocolReady.value = false
                                 _connectionState.value = ConnectionState.DISCONNECTED
                                 stopStatusPolling()
+                                protocolReadyWatchdogJob?.cancel()
                             }
                             else -> _connectionState.value = state
                         }
@@ -117,6 +122,7 @@ class WalkingPadManagerImpl @Inject constructor(
         connectionStateJob?.cancel()
         connectionStateJob = null
         stopStatusPolling()
+        protocolReadyWatchdogJob?.cancel()
         protocolReady.value = false
         connection?.disconnect()
         connection = null
@@ -201,6 +207,20 @@ class WalkingPadManagerImpl @Inject constructor(
     private fun stopStatusPolling() {
         statusPollingJob?.cancel()
         statusPollingJob = null
+    }
+
+    private fun startProtocolReadyWatchdog(address: String) {
+        protocolReadyWatchdogJob?.cancel()
+        protocolReadyWatchdogJob = scope.launch {
+            delay(PROTOCOL_READY_WATCHDOG_MS)
+            if (!protocolReady.value && connectionState.value == ConnectionState.CONNECTING) {
+                errorReporter.report(
+                    "WalkingPad Bluetooth",
+                    "WalkingPad protocol did not become ready",
+                    "address=$address services=${connection?.serviceSummary() ?: "none"}"
+                )
+            }
+        }
     }
 
     private suspend fun sendCommand(cmd: ByteArray): Boolean = commandMutex.withLock {
@@ -401,5 +421,6 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
         private const val PROTOCOL_READY_DELAY_MS = 500L
         private const val PROTOCOL_READY_TIMEOUT_MS = 5_000L
+        private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
     }
 }

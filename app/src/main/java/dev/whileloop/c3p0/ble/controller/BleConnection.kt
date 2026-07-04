@@ -22,6 +22,7 @@ class BleConnection(
     private val errorReporter: BleErrorReporter
 ) {
     private var bluetoothGatt: BluetoothGatt? = null
+    private var discoveredServiceSummary: String = "none"
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState = _connectionState.asStateFlow()
 
@@ -47,6 +48,9 @@ class BleConnection(
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
+                discoveredServiceSummary = gatt.services
+                    .joinToString(separator = ",") { service -> service.uuid.toString() }
+                    .ifBlank { "empty" }
                 Timber.d("Services discovered for $address")
                 onServicesDiscovered?.invoke()
             } else {
@@ -98,6 +102,8 @@ class BleConnection(
 
     var onNotificationReceived: ((UUID, ByteArray) -> Unit)? = null
     var onServicesDiscovered: (() -> Unit)? = null
+
+    fun serviceSummary(): String = discoveredServiceSummary
 
     @SuppressLint("MissingPermission")
     fun writeCharacteristic(serviceUuid: UUID, charUuid: UUID, data: ByteArray): Boolean {

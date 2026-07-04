@@ -102,6 +102,7 @@ fun SessionDashboard(
     val displayedDistance = displayDistance(sessionDistance, unitSystem)
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
     val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds, bodyWeightKg)
+    val isPadReady = connectionState == ConnectionState.CONNECTED
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -220,7 +221,10 @@ fun SessionDashboard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            IconButton(onClick = { viewModel.decrementSpeed() }) {
+            IconButton(
+                onClick = { viewModel.decrementSpeed() },
+                enabled = isPadReady
+            ) {
                 Text("-", fontSize = 32.sp, fontWeight = FontWeight.Bold)
             }
             
@@ -238,7 +242,10 @@ fun SessionDashboard(
                 )
             }
 
-            IconButton(onClick = { viewModel.incrementSpeed() }) {
+            IconButton(
+                onClick = { viewModel.incrementSpeed() },
+                enabled = isPadReady
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase Speed")
             }
         }
@@ -306,6 +313,7 @@ fun SessionDashboard(
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
                     onClick = { viewModel.disableAutoSpeed() },
+                    enabled = isPadReady,
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) {
                     Text("Manual")
@@ -313,6 +321,7 @@ fun SessionDashboard(
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.AUTO || isAutoSpeedEnabled,
                     onClick = { viewModel.enableAutoSpeed() },
+                    enabled = isPadReady,
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) {
                     Text("Automatic")
