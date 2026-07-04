@@ -3,5 +3,6 @@
     <include domain="database" path="c3p0.db"/>
     <include domain="database" path="c3p0.db-shm"/>
     <include domain="database" path="c3p0.db-wal"/>
+    <include domain="file" path="datastore/settings.preferences_pb"/>
     <include domain="sharedpref" path="."/>
 </full-backup-content>

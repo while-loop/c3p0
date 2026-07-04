@@ -7,6 +7,7 @@ import dev.whileloop.c3p0.ble.manager.*
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.repository.SessionRepository
+import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.algorithm.AutoSpeedController
 import dev.whileloop.c3p0.health.HealthConnectManager
 import kotlinx.coroutines.*
@@ -22,6 +23,7 @@ class SessionManager @Inject constructor(
     private val treadmillManager: TreadmillManager,
     private val heartRateManager: HeartRateManager,
     private val sessionRepository: SessionRepository,
+    private val settingsRepository: SettingsRepository,
     private val healthConnectManager: HealthConnectManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -132,6 +134,7 @@ class SessionManager @Inject constructor(
             
             // Write to Health Connect
             healthConnectManager.writeSession(start, end, finalStatus.steps, finalStatus.distance * 10.0)
+            settingsRepository.requestBackupIfEnabled()
             
             currentSessionId = null
             startTime = null

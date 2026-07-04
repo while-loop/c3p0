@@ -34,9 +34,6 @@ class ProfileViewModel @Inject constructor(
     private val _isHealthConnectEnabled = MutableStateFlow(false)
     val isHealthConnectEnabled = _isHealthConnectEnabled.asStateFlow()
 
-    private val _isGoogleDriveSyncEnabled = MutableStateFlow(false)
-    val isGoogleDriveSyncEnabled = _isGoogleDriveSyncEnabled.asStateFlow()
-
     private val _isRefreshingWeight = MutableStateFlow(false)
     val isRefreshingWeight = _isRefreshingWeight.asStateFlow()
 
@@ -47,6 +44,12 @@ class ProfileViewModel @Inject constructor(
     )
 
     val skipInactiveDeviceWarning = settingsRepository.skipInactiveDeviceWarning.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
+    )
+
+    val isGoogleDriveSyncEnabled = settingsRepository.googleDriveSyncEnabled.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         false
@@ -127,7 +130,9 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun toggleGoogleDriveSync(enabled: Boolean) {
-        _isGoogleDriveSyncEnabled.value = enabled
+        viewModelScope.launch {
+            settingsRepository.saveGoogleDriveSyncEnabled(enabled)
+        }
     }
 
     fun updateUnitSystem(unitSystem: UnitSystem) {

@@ -178,9 +178,31 @@ fun ProfileScreen(
         )
         ListItem(
             headlineContent = { Text("Google Drive") },
-            supportingContent = { Text("Backup app data to cloud") },
+            supportingContent = {
+                Text(
+                    if (isGoogleDriveSyncEnabled) {
+                        "Android backup is enabled. Changes request a cloud backup."
+                    } else {
+                        "Backup app data to cloud"
+                    }
+                )
+            },
             trailingContent = {
-                Switch(checked = isGoogleDriveSyncEnabled, onCheckedChange = { viewModel.toggleGoogleDriveSync(it) })
+                Switch(
+                    checked = isGoogleDriveSyncEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.toggleGoogleDriveSync(enabled)
+                        Toast.makeText(
+                            context,
+                            if (enabled) {
+                                "Backup requested. Android will upload it when backup runs."
+                            } else {
+                                "Backup requests disabled."
+                            },
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                )
             }
         )
 
