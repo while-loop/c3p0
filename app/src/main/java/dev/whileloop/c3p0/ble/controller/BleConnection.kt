@@ -178,6 +178,18 @@ class BleConnection(
         }
     }
 
+    fun writeCharacteristicByUuidSubstring(
+        charUuidSubstring: String,
+        data: ByteArray,
+        preferWithoutResponse: Boolean = preferWriteWithoutResponse
+    ): Boolean {
+        val (serviceUuid, charUuid) = findCharacteristicUuidBySubstring(charUuidSubstring) ?: run {
+            reportError("BLE characteristic not found", "address=$address characteristic~=$charUuidSubstring")
+            return false
+        }
+        return writeCharacteristic(serviceUuid, charUuid, data, preferWithoutResponse)
+    }
+
     @SuppressLint("MissingPermission")
     fun enableNotifications(serviceUuid: UUID, charUuid: UUID): Boolean {
         return enableCharacteristicUpdates(
@@ -200,6 +212,22 @@ class BleConnection(
 
     fun hasService(serviceUuid: UUID): Boolean =
         bluetoothGatt?.getService(serviceUuid) != null
+
+    fun hasCharacteristicUuidSubstring(charUuidSubstring: String): Boolean =
+        findCharacteristicUuidBySubstring(charUuidSubstring) != null
+
+    private fun findCharacteristicUuidBySubstring(charUuidSubstring: String): Pair<UUID, UUID>? {
+        val needle = charUuidSubstring.lowercase(Locale.US)
+        val services = bluetoothGatt?.services ?: return null
+        services.forEach { service ->
+            service.characteristics.forEach { characteristic ->
+                if (characteristic.uuid.toString().lowercase(Locale.US).contains(needle)) {
+                    return service.uuid to characteristic.uuid
+                }
+            }
+        }
+        return null
+    }
 
     @SuppressLint("MissingPermission")
     private fun enableCharacteristicUpdates(

@@ -217,15 +217,36 @@ class WalkingPadManagerImpl @Inject constructor(
             return true
         }
 
+        if (stopKsEncryptedBelt()) {
+            return true
+        }
+
         errorReporter.report(
             "WalkingPad Bluetooth",
             "WalkingPad did not apply FTMS stop sequence",
             commandFailureDetail(
                 protocol = WalkingPadProtocol.FitnessMachineService,
-                commandHex = "08 01; 08 02; 01",
+                commandHex = "08 01; 08 02; 01; KS props runState 0",
                 status = status.value
-            )
+            ) + " ksEncryptedWrites=${availableKsEncryptedWriteChars().joinToString().ifBlank { "none" }}"
         )
+        return false
+    }
+
+    private suspend fun stopKsEncryptedBelt(): Boolean {
+        val writeChars = availableKsEncryptedWriteChars()
+        if (writeChars.isEmpty()) return false
+
+        val payloads = ksEncryptedCommandPayloads(KS_ENCRYPTED_STOP_COMMAND)
+        for (writeChar in writeChars) {
+            for (payload in payloads) {
+                if (sendKsEncryptedCommand(writeChar, payload) &&
+                    awaitStatusApplied(KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)
+                ) {
+                    return true
+                }
+            }
+        }
         return false
     }
 
@@ -450,6 +471,47 @@ class WalkingPadManagerImpl @Inject constructor(
         sent
     }
 
+    private suspend fun sendKsEncryptedCommand(
+        writeCharSubstring: String,
+        cmd: ByteArray
+    ): Boolean = commandMutex.withLock {
+        if (!protocolReady.value) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "WalkingPad protocol is not ready",
+                "protocol=KingsmithEncrypted command=${cmd.toHexString()} connection=${connectionState.value}"
+            )
+            return@withLock false
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        val elapsedSinceLastCommand = now - lastCommandElapsedMillis
+        if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < MIN_COMMAND_SPACING_MS) {
+            delay(MIN_COMMAND_SPACING_MS - elapsedSinceLastCommand)
+        }
+
+        Timber.d("Sending WalkingPad encrypted KS command: ${cmd.toHexString()} char~=$writeCharSubstring")
+        var sent = true
+        var offset = 0
+        while (offset < cmd.size && sent) {
+            val end = (offset + KS_ENCRYPTED_WRITE_CHUNK_SIZE).coerceAtMost(cmd.size)
+            val chunk = cmd.copyOfRange(offset, end)
+            sent = connection?.writeCharacteristicByUuidSubstring(
+                charUuidSubstring = writeCharSubstring,
+                data = chunk,
+                preferWithoutResponse = false
+            ) ?: false
+            offset = end
+            if (sent && offset < cmd.size) {
+                delay(KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS)
+            }
+        }
+        if (sent && cmd.isNotEmpty()) {
+            lastCommandElapsedMillis = SystemClock.elapsedRealtime()
+        }
+        sent
+    }
+
     private suspend fun awaitProtocolReady(protocol: WalkingPadProtocol): Boolean {
         val readyFlow = when (protocol) {
             WalkingPadProtocol.LegacyKingsmith -> legacyProtocolReady
@@ -528,6 +590,31 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun isBeltStopped(status: TreadmillStatus): Boolean =
         status.state == TreadmillState.STOPPED || status.speed <= SPEED_APPLIED_TOLERANCE_KMH
+
+    private fun availableKsEncryptedWriteChars(): List<String> =
+        KS_ENCRYPTED_WRITE_CHAR_UUID_SUBSTRINGS.filter { writeChar ->
+            connection?.hasCharacteristicUuidSubstring(writeChar) == true
+        }
+
+    private fun ksEncryptedCommandPayloads(command: String): List<ByteArray> =
+        KS_ENCRYPTION_TABLES
+            .map { table -> encodeKsEncryptedCommand(command, table) }
+            .distinctBy { payload -> payload.contentToString() }
+
+    private fun encodeKsEncryptedCommand(command: String, table: String): ByteArray {
+        val base64 = Base64.getEncoder().encode(command.toByteArray(Charsets.UTF_8))
+        val encoded = ByteArray(base64.size + 1)
+        base64.forEachIndexed { index, byte ->
+            val alphabetIndex = KS_BASE64_ALPHABET.indexOf(byte.toInt().toChar())
+            encoded[index] = if (alphabetIndex >= 0) {
+                table[alphabetIndex].code.toByte()
+            } else {
+                '_'.code.toByte()
+            }
+        }
+        encoded[encoded.lastIndex] = KS_ENCRYPTED_COMMAND_TERMINATOR
+        return encoded
+    }
 
     private suspend fun setPreferenceInt(key: Int, value: Int, type: Int = 0): Boolean {
         val command = byteArrayOf(
@@ -779,6 +866,9 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
         private const val GATT_DESCRIPTOR_WRITE_DELAY_MS = 400L
         private const val FTMS_STOP_APPLY_TIMEOUT_MS = 2_000L
+        private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
+        private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
+        private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
         private const val FTMS_OP_REQUEST_CONTROL: Byte = 0x00
         private const val FTMS_OP_RESET: Byte = 0x01
         private const val FTMS_OP_SET_TARGET_SPEED: Byte = 0x02
@@ -798,6 +888,19 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val FTMS_TREADMILL_HEART_RATE_FLAG = 0x0100
         private const val FTMS_TREADMILL_METABOLIC_EQUIVALENT_FLAG = 0x0200
         private const val FTMS_TREADMILL_ELAPSED_TIME_FLAG = 0x0400
+        private const val KS_ENCRYPTED_STOP_COMMAND = "props runState 0"
+        private const val KS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+        private const val KS_ENCRYPTED_COMMAND_TERMINATOR: Byte = 13
+        private val KS_ENCRYPTED_WRITE_CHAR_UUID_SUBSTRINGS = listOf("0000fed7", "0001fed8", "0002fed7")
+        private val KS_ENCRYPTION_TABLES = listOf(
+            "SaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KZ3=",
+            "ZaCw4FGHIJqLhN+P9RMTU/WcY6ObDdefgEijklmnopQrsBuvVxXz1yA2t5078KS3=",
+            "0aCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5Z78KS3=",
+            "ZaCw4FGHIJqLhN9P+RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KS3=",
+            "iaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEZjklmnopQrsBuvMxXz1yA2t5078KS3=",
+            "ZaCw4FGHIJqLhN+P8RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5079KS3=",
+            "baCw4FGHIJqLhN+P9RVTU/WcY6OZDdefgEijklmnopQrsBuvMxXz1yA2t5078KS3="
+        )
     }
 
     private enum class WalkingPadProtocol {
