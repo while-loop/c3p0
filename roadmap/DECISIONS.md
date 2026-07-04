@@ -7,6 +7,7 @@
 - **Explicit Device Role Selection**: Selecting a BLE device opens a neutral role-choice bottom sheet for WalkingPad or Watch. The app saves the chosen role explicitly instead of inferring it from the advertised name, and if the same address was previously saved under the other role it is cleared from that slot.
 - **Saved Device Reconnect**: Session and profile surfaces attempt to reconnect saved treadmill/watch addresses when opened so the app can recognize devices that are already paired with Android.
 - **Reconnect Cleanup**: Managers close any existing GATT connection before connecting to a new saved or selected address.
+- **WalkingPad BLE Control Loop**: The WalkingPad does not rely on unsolicited status updates. After service discovery, the manager enables notifications, polls current status about every 750 ms, and serializes outbound commands with roughly 700 ms of spacing so preference sync, start/stop, mode, and speed commands are not sent back-to-back.
 - **WalkingPad Command Bounds**: Speed changes are clamped in the UI, auto-speed controller handoff, mock manager, and real BLE manager so no caller can send an out-of-range speed.
 - **WalkingPad Counter Decoding**: Status notifications decode 24-bit time, distance, and step counters explicitly to avoid operator-precedence ambiguity.
 

@@ -49,6 +49,26 @@ class BleConnection(
             }
         }
 
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Timber.w("Characteristic write failed for ${characteristic.uuid}: $status")
+            }
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Timber.w("Descriptor write failed for ${descriptor.uuid}: $status")
+            }
+        }
+
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             onNotificationReceived?.invoke(characteristic.uuid, characteristic.value)
         }
@@ -70,9 +90,20 @@ class BleConnection(
         if (!hasConnectPermission()) return false
         val service = bluetoothGatt?.getService(serviceUuid) ?: return false
         val char = service.getCharacteristic(charUuid) ?: return false
-        char.value = data
+        val writeType =
+            if (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
+                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            } else {
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            }
         return try {
-            bluetoothGatt?.writeCharacteristic(char) ?: false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                bluetoothGatt?.writeCharacteristic(char, data, writeType) == BluetoothStatusCodes.SUCCESS
+            } else {
+                char.writeType = writeType
+                char.value = data
+                bluetoothGatt?.writeCharacteristic(char) ?: false
+            }
         } catch (e: SecurityException) {
             Timber.e(e, "Unable to write BLE characteristic without permission")
             false
@@ -92,9 +123,16 @@ class BleConnection(
         }
         
         val descriptor = char.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")) ?: return false
-        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
         return try {
-            bluetoothGatt?.writeDescriptor(descriptor) ?: false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                bluetoothGatt?.writeDescriptor(
+                    descriptor,
+                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                ) == BluetoothStatusCodes.SUCCESS
+            } else {
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                bluetoothGatt?.writeDescriptor(descriptor) ?: false
+            }
         } catch (e: SecurityException) {
             Timber.e(e, "Unable to write BLE descriptor without permission")
             false
