@@ -117,7 +117,7 @@ class StepNormalizationUseCase @Inject constructor(
     }
 
     companion object {
-        private const val DEFAULT_HISTORY_DAYS = 14
+        private const val DEFAULT_HISTORY_DAYS = 180
         private const val C3P0_PACKAGE_NAME = "dev.whileloop.c3p0"
     }
 }

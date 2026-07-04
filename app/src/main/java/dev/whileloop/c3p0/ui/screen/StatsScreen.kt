@@ -2,14 +2,19 @@ package dev.whileloop.c3p0.ui.screen
 
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +32,8 @@ import dev.whileloop.c3p0.ui.permission.healthConnectStepHistoryPermissions
 import dev.whileloop.c3p0.ui.permission.permissionGuidance
 import dev.whileloop.c3p0.ui.viewmodel.StatsViewModel
 import java.time.Duration
+import java.time.LocalDate
+import java.time.temporal.ChronoField
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -45,6 +52,7 @@ fun StatsScreen(
     val isStepHistoryLoading by viewModel.isStepHistoryLoading.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     var showStepPermissionSheet by remember { mutableStateOf(false) }
+    var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -92,6 +100,8 @@ fun StatsScreen(
                     rows = dailyStepHistory,
                     canReadSteps = canReadHealthConnectSteps,
                     isLoading = isStepHistoryLoading,
+                    selectedPeriod = stepChartPeriod,
+                    onPeriodSelected = { stepChartPeriod = it },
                     onEnable = { showStepPermissionSheet = true },
                     onRefresh = { viewModel.refreshStepHistory() },
                     modifier = Modifier
@@ -123,10 +133,14 @@ private fun HealthConnectStepHistoryCard(
     rows: List<DailyStepHistory>,
     canReadSteps: Boolean,
     isLoading: Boolean,
+    selectedPeriod: StepChartPeriod,
+    onPeriodSelected: (StepChartPeriod) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val chartRows = remember(rows, selectedPeriod) { rows.toStepChartRows(selectedPeriod) }
+
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -146,51 +160,152 @@ private fun HealthConnectStepHistoryCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                StepChartPeriod.entries.forEachIndexed { index, period ->
+                    SegmentedButton(
+                        selected = selectedPeriod == period,
+                        onClick = { onPeriodSelected(period) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = StepChartPeriod.entries.size
+                        )
+                    ) {
+                        Text(period.label)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             when {
                 isLoading -> Text("Loading step history...")
                 !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
                 rows.isEmpty() -> Text("No Health Connect step data found.")
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        itemsIndexed(rows) { index, row ->
-                            DailyStepHistoryRow(row)
-                            if (index < rows.lastIndex) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            }
-                        }
-                    }
-                }
+                chartRows.isEmpty() -> Text("No grouped step data found.")
+                else -> HealthConnectStepChart(
+                    rows = chartRows,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun DailyStepHistoryRow(row: DailyStepHistory) {
-    val formatter = DateTimeFormatter.ofPattern("MMM dd", Locale.US)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(row.date.format(formatter), fontWeight = FontWeight.SemiBold)
-            Text("${row.normalizedSteps} normalized", fontWeight = FontWeight.SemiBold)
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Raw HC ${row.rawSteps}", style = MaterialTheme.typography.bodySmall)
-            Text("C3P0 ${row.c3p0Steps}", style = MaterialTheme.typography.bodySmall)
-            Text("Excluded ${row.excludedOtherSessionSteps}", style = MaterialTheme.typography.bodySmall)
+private fun HealthConnectStepChart(
+    rows: List<StepChartRow>,
+    modifier: Modifier = Modifier
+) {
+    val maxSteps = rows.maxOfOrNull { it.steps }?.coerceAtLeast(1L) ?: 1L
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0)
+    )
+    LaunchedEffect(rows.size) {
+        listState.scrollToItem((rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0))
+    }
+    val barColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+
+    LazyRow(
+        state = listState,
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp)
+    ) {
+        items(rows) { row ->
+            Column(
+                modifier = Modifier
+                    .width(54.dp)
+                    .fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = compactSteps(row.steps),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .width(22.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(trackColor),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight((row.steps.toFloat() / maxSteps).coerceIn(0.02f, 1f))
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(barColor)
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = row.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
+
+private enum class StepChartPeriod(val label: String) {
+    Day("Day"),
+    Week("Week"),
+    Month("Month")
+}
+
+private data class StepChartRow(
+    val startDate: LocalDate,
+    val label: String,
+    val steps: Long
+)
+
+private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): List<StepChartRow> {
+    val chronological = sortedBy { it.date }
+    return when (period) {
+        StepChartPeriod.Day -> chronological.map { row ->
+            StepChartRow(
+                startDate = row.date,
+                label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
+                steps = row.normalizedSteps
+            )
+        }
+        StepChartPeriod.Week -> chronological
+            .groupBy { row ->
+                row.date.with(ChronoField.DAY_OF_WEEK, 1)
+            }
+            .toSortedMap()
+            .map { (weekStart, weekRows) ->
+                StepChartRow(
+                    startDate = weekStart,
+                    label = weekStart.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
+                    steps = weekRows.sumOf { it.normalizedSteps }
+                )
+            }
+        StepChartPeriod.Month -> chronological
+            .groupBy { row -> row.date.withDayOfMonth(1) }
+            .toSortedMap()
+            .map { (monthStart, monthRows) ->
+                StepChartRow(
+                    startDate = monthStart,
+                    label = monthStart.format(DateTimeFormatter.ofPattern("MMM", Locale.US)),
+                    steps = monthRows.sumOf { it.normalizedSteps }
+                )
+            }
+    }
+}
+
+private fun compactSteps(steps: Long): String =
+    when {
+        steps >= 1_000_000 -> String.format(Locale.US, "%.1fm", steps / 1_000_000f)
+        steps >= 10_000 -> "${steps / 1_000}k"
+        steps >= 1_000 -> String.format(Locale.US, "%.1fk", steps / 1_000f)
+        else -> steps.toString()
+    }
 
 @Composable
 fun SessionItem(session: SessionEntity, unitSystem: UnitSystem, onClick: () -> Unit) {
@@ -300,3 +415,5 @@ private fun heartRateSummary(storedValue: Int, fallbackValue: Double?): String {
 
 private fun List<Int>.averageOrNull(): Double? =
     if (isEmpty()) null else average()
+
+private const val DEFAULT_VISIBLE_CHART_BARS = 7
