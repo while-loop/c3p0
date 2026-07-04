@@ -183,7 +183,7 @@ class BleConnection(
         data: ByteArray,
         preferWithoutResponse: Boolean = preferWriteWithoutResponse
     ): Boolean {
-        val (serviceUuid, charUuid) = findCharacteristicUuidBySubstring(charUuidSubstring) ?: run {
+        val (serviceUuid, charUuid) = findCharacteristicBySubstring(charUuidSubstring)?.uuidPair ?: run {
             reportError("BLE characteristic not found", "address=$address characteristic~=$charUuidSubstring")
             return false
         }
@@ -210,19 +210,55 @@ class BleConnection(
         )
     }
 
+    fun enableUpdatesByUuidSubstring(charUuidSubstring: String): Boolean {
+        val match = findCharacteristicBySubstring(charUuidSubstring) ?: run {
+            reportError("BLE characteristic not found", "address=$address characteristic~=$charUuidSubstring")
+            return false
+        }
+        val supportsIndications =
+            match.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+        val supportsNotifications =
+            match.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
+        return when {
+            supportsIndications -> enableCharacteristicUpdates(
+                serviceUuid = match.serviceUuid,
+                charUuid = match.charUuid,
+                descriptorValue = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE,
+                updateLabel = "indications"
+            )
+            supportsNotifications -> enableCharacteristicUpdates(
+                serviceUuid = match.serviceUuid,
+                charUuid = match.charUuid,
+                descriptorValue = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+                updateLabel = "notifications"
+            )
+            else -> {
+                reportError(
+                    "BLE characteristic does not support updates",
+                    "address=$address characteristic=${match.charUuid} properties=${match.properties.toString(16)}"
+                )
+                false
+            }
+        }
+    }
+
     fun hasService(serviceUuid: UUID): Boolean =
         bluetoothGatt?.getService(serviceUuid) != null
 
     fun hasCharacteristicUuidSubstring(charUuidSubstring: String): Boolean =
-        findCharacteristicUuidBySubstring(charUuidSubstring) != null
+        findCharacteristicBySubstring(charUuidSubstring) != null
 
-    private fun findCharacteristicUuidBySubstring(charUuidSubstring: String): Pair<UUID, UUID>? {
+    private fun findCharacteristicBySubstring(charUuidSubstring: String): CharacteristicMatch? {
         val needle = charUuidSubstring.lowercase(Locale.US)
         val services = bluetoothGatt?.services ?: return null
         services.forEach { service ->
             service.characteristics.forEach { characteristic ->
                 if (characteristic.uuid.toString().lowercase(Locale.US).contains(needle)) {
-                    return service.uuid to characteristic.uuid
+                    return CharacteristicMatch(
+                        serviceUuid = service.uuid,
+                        charUuid = characteristic.uuid,
+                        properties = characteristic.properties
+                    )
                 }
             }
         }
@@ -404,6 +440,9 @@ class BleConnection(
         errorReporter.report(BLE_ERROR_SOURCE, message, detail)
     }
 
+    private val CharacteristicMatch.uuidPair: Pair<UUID, UUID>
+        get() = serviceUuid to charUuid
+
     private fun hasConnectPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ContextCompat.checkSelfPermission(
@@ -419,4 +458,10 @@ class BleConnection(
         private val CLIENT_CHARACTERISTIC_CONFIG_UUID: UUID =
             UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
+
+    private data class CharacteristicMatch(
+        val serviceUuid: UUID,
+        val charUuid: UUID,
+        val properties: Int
+    )
 }

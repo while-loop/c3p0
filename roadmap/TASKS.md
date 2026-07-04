@@ -9,6 +9,7 @@
 - [x] **FTMS Stop Reliability**: Fall back from FTMS stop to pause and reset when treadmill data still reports a moving belt.
 - [x] **Encrypted KS Stop Fallback**: Reverse-engineered the Mi WalkingPad APK stop path and added a guarded `props runState 0` fallback for `FED7`/`FED8`-style KS encrypted control characteristics.
 - [x] **Encrypted KS Native Automatic Mode**: Enabled Automatic mode when encrypted KS control characteristics are present by sending `props ControlMode 0/1/2` mode commands with the known model encryption tables.
+- [x] **Encrypted KS Status Telemetry**: Added the Mi WalkingPad APK encrypted-text handshake, subscribed to KS read characteristics, polled `servers getProp`, and parsed `RunningSteps`/distance/time/speed/mode so newer pads can use real WalkingPad counters instead of FTMS step estimates.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated FTMS control and unit-sync preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.

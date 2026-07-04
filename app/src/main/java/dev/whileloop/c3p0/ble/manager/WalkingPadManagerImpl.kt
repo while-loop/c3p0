@@ -35,6 +35,12 @@ class WalkingPadManagerImpl @Inject constructor(
     private var connectionStateJob: Job? = null
     private var statusPollingJob: Job? = null
     private var protocolReadyWatchdogJob: Job? = null
+    private var ksEncryptedHandshakeIndex = 0
+    private var ksEncryptedReadBuffer = ByteArray(0)
+    private var activeKsEncryptedTable: String? = null
+    private var candidateKsEncryptedTables = KingsmithEncryptedProtocol.encryptionTables.toSet()
+    private var activeKsEncryptedReadCharSubstring: String? = null
+    private var activeKsEncryptedWriteCharSubstring: String? = null
     private val commandMutex = Mutex()
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
@@ -73,6 +79,7 @@ class WalkingPadManagerImpl @Inject constructor(
         ksEncryptedProtocolReady.value = false
         ftmsProtocolReady.value = false
         ftmsControlRequested = false
+        resetKsEncryptedState()
         _supportsNativeAutoMode.value = false
         _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(
@@ -89,6 +96,11 @@ class WalkingPadManagerImpl @Inject constructor(
                     NOTIFY_CHAR_UUID -> handleNotification(data)
                     FTMS_TREADMILL_DATA_UUID -> handleFtmsTreadmillData(data)
                     FTMS_CONTROL_POINT_UUID -> handleFtmsControlPoint(data)
+                    else -> {
+                        if (isKsEncryptedReadCharacteristic(uuid)) {
+                            handleKsEncryptedNotification(data)
+                        }
+                    }
                 }
             }
             onServicesDiscovered = {
@@ -162,7 +174,20 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun start(): Boolean {
-        if (ftmsProtocolReady.value) {
+        if (ksEncryptedProtocolReady.value) {
+            if (status.value.mode == TreadmillMode.STANDBY && !setKsEncryptedMode(TreadmillMode.MANUAL)) {
+                return false
+            }
+            val startSpeed = status.value.speed.coerceAtLeast(MIN_MOVING_SPEED_KMH)
+            val started = sendKsEncryptedControlCommand(
+                label = "start belt",
+                command = KingsmithEncryptedProtocol.START_COMMAND,
+                isApplied = { status -> status.state == TreadmillState.ACTIVE || status.state == TreadmillState.STARTING }
+            )
+            if (!started) return false
+            delay(START_COUNTDOWN_SPEED_DELAY_MS)
+            return sendKsEncryptedSpeed(startSpeed)
+        } else if (ftmsProtocolReady.value) {
             if (!ensureFtmsControlRequested()) return false
             val startSpeed = status.value.speed.coerceAtLeast(MIN_MOVING_SPEED_KMH)
             val started = sendCommand(
@@ -188,7 +213,9 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun stop(): Boolean {
-        return if (ftmsProtocolReady.value) {
+        return if (ksEncryptedProtocolReady.value) {
+            stopKsEncryptedBelt()
+        } else if (ftmsProtocolReady.value) {
             stopFtmsBelt()
         } else {
             pause()
@@ -196,7 +223,9 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun pause(): Boolean {
-        return if (ftmsProtocolReady.value) {
+        return if (ksEncryptedProtocolReady.value) {
+            stopKsEncryptedBelt()
+        } else if (ftmsProtocolReady.value) {
             pauseFtmsBelt()
         } else {
             sendLegacySpeed(0f)
@@ -263,24 +292,28 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private suspend fun stopKsEncryptedBelt(): Boolean {
-        val writeChars = availableKsEncryptedWriteChars()
-        if (writeChars.isEmpty()) return false
-
-        val payloads = ksEncryptedCommandPayloads(KS_ENCRYPTED_STOP_COMMAND)
-        for (writeChar in writeChars) {
-            for (payload in payloads) {
-                if (sendKsEncryptedCommand(writeChar, payload) &&
-                    awaitStatusApplied(KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)
-                ) {
-                    return true
-                }
-            }
+        if (sendKsEncryptedControlCommand(
+                label = "stop belt",
+                command = KingsmithEncryptedProtocol.STOP_COMMAND,
+                isApplied = ::isBeltStopped
+            ) && awaitStatusApplied(KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)
+        ) {
+            return true
         }
-        return false
+
+        return sendKsEncryptedCommandVariants(
+            command = KingsmithEncryptedProtocol.STOP_COMMAND,
+            requireReady = ksEncryptedProtocolReady.value
+        ) &&
+            awaitStatusApplied(KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS, ::isBeltStopped)
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
         val targetSpeed = speed.coerceIn(MIN_MOVING_SPEED_KMH, MAX_SPEED_KMH)
+        if (ksEncryptedProtocolReady.value) {
+            return sendKsEncryptedSpeed(targetSpeed)
+        }
+
         if (ftmsProtocolReady.value) {
             return sendFtmsTargetSpeed(targetSpeed)
         }
@@ -318,6 +351,23 @@ class WalkingPadManagerImpl @Inject constructor(
             protocol = WalkingPadProtocol.FitnessMachineService,
             verifyApplied = verifyApplied
         )
+    }
+
+    private suspend fun sendKsEncryptedSpeed(
+        targetSpeed: Float,
+        verifyApplied: Boolean = true
+    ): Boolean {
+        val command = KingsmithEncryptedProtocol.speedCommand(targetSpeed)
+        return if (verifyApplied) {
+            sendKsEncryptedControlCommand(
+                label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
+                command = command,
+                minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
+                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+            )
+        } else {
+            sendKsEncryptedTextCommand(command, minCommandSpacingMs = SPEED_COMMAND_SPACING_MS)
+        }
     }
 
     private suspend fun sendSpeedCommand(
@@ -384,11 +434,15 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private suspend fun setKsEncryptedMode(mode: TreadmillMode): Boolean {
         val command = when (mode) {
-            TreadmillMode.AUTO -> KS_ENCRYPTED_AUTO_MODE_COMMAND
-            TreadmillMode.MANUAL -> KS_ENCRYPTED_MANUAL_MODE_COMMAND
-            TreadmillMode.STANDBY -> KS_ENCRYPTED_STANDBY_MODE_COMMAND
+            TreadmillMode.AUTO -> KingsmithEncryptedProtocol.AUTO_MODE_COMMAND
+            TreadmillMode.MANUAL -> KingsmithEncryptedProtocol.MANUAL_MODE_COMMAND
+            TreadmillMode.STANDBY -> KingsmithEncryptedProtocol.STANDBY_MODE_COMMAND
         }
-        val sent = sendKsEncryptedCommandVariants(command)
+        val sent = sendKsEncryptedControlCommand(
+            label = "set mode $mode",
+            command = command,
+            isApplied = { status -> status.mode == mode }
+        )
         if (sent) {
             _status.value = status.value.copy(mode = mode)
         } else {
@@ -426,6 +480,16 @@ class WalkingPadManagerImpl @Inject constructor(
             )
         }
 
+    private suspend fun askKsEncryptedStatus(): Boolean =
+        if (!ksEncryptedProtocolReady.value) {
+            true
+        } else {
+            sendKsEncryptedTextCommand(
+                command = KingsmithEncryptedProtocol.POLL_PROPS_COMMAND,
+                minCommandSpacingMs = SPEED_COMMAND_SPACING_MS
+            )
+        }
+
     private suspend fun askParams(): Boolean =
         if (!legacyProtocolReady.value) {
             true
@@ -453,6 +517,7 @@ class WalkingPadManagerImpl @Inject constructor(
             askParams()
             while (isActive) {
                 askStatus()
+                askKsEncryptedStatus()
                 delay(STATUS_POLL_INTERVAL_MS)
             }
         }
@@ -533,21 +598,23 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private suspend fun sendKsEncryptedCommand(
         writeCharSubstring: String,
-        cmd: ByteArray
+        cmd: ByteArray,
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        requireReady: Boolean = true
     ): Boolean = commandMutex.withLock {
-        if (!protocolReady.value) {
+        if (requireReady && !awaitProtocolReady(WalkingPadProtocol.KingsmithEncrypted)) {
             errorReporter.report(
                 "WalkingPad Bluetooth",
                 "WalkingPad protocol is not ready",
-                "protocol=KingsmithEncrypted command=${cmd.toHexString()} connection=${connectionState.value}"
+                "protocol=${WalkingPadProtocol.KingsmithEncrypted} command=${cmd.toHexString()} connection=${connectionState.value}"
             )
             return@withLock false
         }
 
         val now = SystemClock.elapsedRealtime()
         val elapsedSinceLastCommand = now - lastCommandElapsedMillis
-        if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < MIN_COMMAND_SPACING_MS) {
-            delay(MIN_COMMAND_SPACING_MS - elapsedSinceLastCommand)
+        if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < minCommandSpacingMs) {
+            delay(minCommandSpacingMs - elapsedSinceLastCommand)
         }
 
         Timber.d("Sending WalkingPad encrypted KS command: ${cmd.toHexString()} char~=$writeCharSubstring")
@@ -572,15 +639,54 @@ class WalkingPadManagerImpl @Inject constructor(
         sent
     }
 
-    private suspend fun sendKsEncryptedCommandVariants(command: String): Boolean {
+    private suspend fun sendKsEncryptedTextCommand(
+        command: String,
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        requireReady: Boolean = true
+    ): Boolean {
+        val writeChar = activeKsEncryptedWriteCharSubstring ?: availableKsEncryptedWriteChars().firstOrNull()
+        if (writeChar == null) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "Encrypted KS write characteristic is not available",
+                "command=$command services=${connection?.serviceSummary() ?: "none"}"
+            )
+            return false
+        }
+        val table = activeKsEncryptedTable
+        if (table == null) {
+            var anySent = false
+            KingsmithEncryptedProtocol.commandPayloads(command).forEach { payload ->
+                if (sendKsEncryptedCommand(
+                        writeCharSubstring = writeChar,
+                        cmd = payload,
+                        minCommandSpacingMs = minCommandSpacingMs,
+                        requireReady = requireReady
+                    )
+                ) {
+                    anySent = true
+                }
+            }
+            return anySent
+        }
+        val payload = KingsmithEncryptedProtocol.encode(command, table)
+        return sendKsEncryptedCommand(
+            writeCharSubstring = writeChar,
+            cmd = payload,
+            minCommandSpacingMs = minCommandSpacingMs,
+            requireReady = requireReady
+        )
+    }
+
+    private suspend fun sendKsEncryptedCommandVariants(command: String, requireReady: Boolean = true): Boolean {
         val writeChars = availableKsEncryptedWriteChars()
         if (writeChars.isEmpty()) return false
 
-        val payloads = ksEncryptedCommandPayloads(command)
+        val payloads = KingsmithEncryptedProtocol.commandPayloads(command)
         var anySent = false
         for (writeChar in writeChars) {
             for (payload in payloads) {
-                if (sendKsEncryptedCommand(writeChar, payload)) {
+                if (sendKsEncryptedCommand(writeChar, payload, requireReady = requireReady)) {
                     anySent = true
                 }
             }
@@ -591,6 +697,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private suspend fun awaitProtocolReady(protocol: WalkingPadProtocol): Boolean {
         val readyFlow = when (protocol) {
             WalkingPadProtocol.LegacyKingsmith -> legacyProtocolReady
+            WalkingPadProtocol.KingsmithEncrypted -> ksEncryptedProtocolReady
             WalkingPadProtocol.FitnessMachineService -> ftmsProtocolReady
         }
         return readyFlow.value ||
@@ -644,6 +751,36 @@ class WalkingPadManagerImpl @Inject constructor(
         return sent
     }
 
+    private suspend fun sendKsEncryptedControlCommand(
+        label: String,
+        command: String,
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        isApplied: (TreadmillStatus) -> Boolean
+    ): Boolean {
+        val previousStatusAt = lastStatusReceivedElapsedMillis
+        val sent = sendKsEncryptedTextCommand(command, minCommandSpacingMs)
+        if (sent) {
+            scope.launch {
+                delay(COMMAND_REPLY_TIMEOUT_MS)
+                val latestStatus = status.value
+                val statusUpdated = lastStatusReceivedElapsedMillis > previousStatusAt
+                val applied = statusUpdated && isApplied(latestStatus)
+                if (!applied) {
+                    errorReporter.report(
+                        "WalkingPad Bluetooth",
+                        if (statusUpdated) {
+                            "WalkingPad did not apply $label"
+                        } else {
+                            "No status reply after $label"
+                        },
+                        commandFailureDetail(WalkingPadProtocol.KingsmithEncrypted, command, latestStatus)
+                    )
+                }
+            }
+        }
+        return sent
+    }
+
     private fun commandFailureDetail(
         protocol: WalkingPadProtocol,
         commandHex: String,
@@ -669,29 +806,9 @@ class WalkingPadManagerImpl @Inject constructor(
         status.state == TreadmillState.STOPPED || status.speed <= SPEED_APPLIED_TOLERANCE_KMH
 
     private fun availableKsEncryptedWriteChars(): List<String> =
-        KS_ENCRYPTED_WRITE_CHAR_UUID_SUBSTRINGS.filter { writeChar ->
+        KingsmithEncryptedProtocol.characteristicPairs.map { it.writeCharSubstring }.filter { writeChar ->
             connection?.hasCharacteristicUuidSubstring(writeChar) == true
         }
-
-    private fun ksEncryptedCommandPayloads(command: String): List<ByteArray> =
-        KS_ENCRYPTION_TABLES
-            .map { table -> encodeKsEncryptedCommand(command, table) }
-            .distinctBy { payload -> payload.contentToString() }
-
-    private fun encodeKsEncryptedCommand(command: String, table: String): ByteArray {
-        val base64 = Base64.getEncoder().encode(command.toByteArray(Charsets.UTF_8))
-        val encoded = ByteArray(base64.size + 1)
-        base64.forEachIndexed { index, byte ->
-            val alphabetIndex = KS_BASE64_ALPHABET.indexOf(byte.toInt().toChar())
-            encoded[index] = if (alphabetIndex >= 0) {
-                table[alphabetIndex].code.toByte()
-            } else {
-                '_'.code.toByte()
-            }
-        }
-        encoded[encoded.lastIndex] = KS_ENCRYPTED_COMMAND_TERMINATOR
-        return encoded
-    }
 
     private suspend fun setPreferenceInt(key: Int, value: Int, type: Int = 0): Boolean {
         val command = byteArrayOf(
@@ -738,12 +855,31 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private fun activateKsEncryptedProtocolIfAvailable() {
-        val hasEncryptedControl = availableKsEncryptedWriteChars().isNotEmpty()
-        ksEncryptedProtocolReady.value = hasEncryptedControl
-        if (hasEncryptedControl) {
-            _supportsNativeAutoMode.value = true
-            markAnyProtocolReady()
-            Timber.d("WalkingPad encrypted KS control ready")
+        val pair = KingsmithEncryptedProtocol.characteristicPairs.firstOrNull { candidate ->
+            connection?.hasCharacteristicUuidSubstring(candidate.readCharSubstring) == true &&
+                connection?.hasCharacteristicUuidSubstring(candidate.writeCharSubstring) == true
+        } ?: return
+
+        activeKsEncryptedReadCharSubstring = pair.readCharSubstring
+        activeKsEncryptedWriteCharSubstring = pair.writeCharSubstring
+        val updatesEnabled = connection?.enableUpdatesByUuidSubstring(pair.readCharSubstring) ?: false
+        Timber.d(
+            "WalkingPad encrypted KS updates enabled: $updatesEnabled " +
+                "read~=${pair.readCharSubstring} write~=${pair.writeCharSubstring}"
+        )
+        if (!updatesEnabled) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "Encrypted KS updates were not enabled",
+                "read~=${pair.readCharSubstring} write~=${pair.writeCharSubstring}"
+            )
+            return
+        }
+
+        scope.launch {
+            delay(GATT_DESCRIPTOR_WRITE_DELAY_MS)
+            ksEncryptedHandshakeIndex = 0
+            sendKsEncryptedHandshakeCommand()
         }
     }
 
@@ -798,6 +934,121 @@ class WalkingPadManagerImpl @Inject constructor(
         ksEncryptedProtocolReady.value = false
         ftmsProtocolReady.value = false
         ftmsControlRequested = false
+        resetKsEncryptedState()
+    }
+
+    private fun resetKsEncryptedState() {
+        ksEncryptedHandshakeIndex = 0
+        ksEncryptedReadBuffer = ByteArray(0)
+        activeKsEncryptedTable = null
+        candidateKsEncryptedTables = KingsmithEncryptedProtocol.encryptionTables.toSet()
+        activeKsEncryptedReadCharSubstring = null
+        activeKsEncryptedWriteCharSubstring = null
+    }
+
+    private suspend fun sendKsEncryptedHandshakeCommand(): Boolean {
+        val command = KingsmithEncryptedProtocol.handshakeCommand(ksEncryptedHandshakeIndex) ?: return false
+        return sendKsEncryptedTextCommand(
+            command = command,
+            minCommandSpacingMs = KS_ENCRYPTED_HANDSHAKE_SPACING_MS,
+            requireReady = false
+        )
+    }
+
+    private fun isKsEncryptedReadCharacteristic(uuid: UUID): Boolean {
+        val activeRead = activeKsEncryptedReadCharSubstring
+        val lowerUuid = uuid.toString().lowercase(Locale.US)
+        if (activeRead != null) {
+            return lowerUuid.contains(activeRead.lowercase(Locale.US))
+        }
+        return KingsmithEncryptedProtocol.characteristicPairs.any { pair ->
+            lowerUuid.contains(pair.readCharSubstring.lowercase(Locale.US))
+        }
+    }
+
+    private fun handleKsEncryptedNotification(data: ByteArray) {
+        lastRawNotificationHex = data.toHexString()
+        ksEncryptedReadBuffer += data
+        if (ksEncryptedReadBuffer.lastOrNull() != KingsmithEncryptedProtocol.TERMINATOR) return
+
+        val packet = ksEncryptedReadBuffer
+        ksEncryptedReadBuffer = ByteArray(0)
+        val decodeTables = activeKsEncryptedTable?.let { setOf(it) } ?: candidateKsEncryptedTables
+        val candidates = KingsmithEncryptedProtocol.decodeCandidates(packet, decodeTables)
+            .ifEmpty { KingsmithEncryptedProtocol.decodeCandidates(packet) }
+        val decoded = selectKsEncryptedDecodedText(candidates) ?: run {
+            Timber.w("Unable to decode encrypted KS notification: ${packet.toHexString()}")
+            return
+        }
+        val matchingCandidates = candidates.filter { candidate ->
+            if (ksEncryptedProtocolReady.value) {
+                KingsmithEncryptedProtocol.parseProps(candidate.text) != null
+            } else {
+                KingsmithEncryptedProtocol.parseProps(candidate.text) != null ||
+                    KingsmithEncryptedProtocol.handshakeResponseMatches(ksEncryptedHandshakeIndex, candidate.text)
+            }
+        }
+        if (matchingCandidates.isNotEmpty()) {
+            candidateKsEncryptedTables = matchingCandidates.map { it.table }.toSet()
+            if (candidateKsEncryptedTables.size == 1) {
+                activeKsEncryptedTable = candidateKsEncryptedTables.first()
+            }
+        }
+        Timber.d("Decoded encrypted KS notification: ${decoded.text}")
+
+        val props = KingsmithEncryptedProtocol.parseProps(decoded.text)
+        if (props != null) {
+            lastStatusReceivedElapsedMillis = SystemClock.elapsedRealtime()
+            _status.value = KingsmithEncryptedProtocol.applyProps(status.value, props)
+            if (!ksEncryptedProtocolReady.value) {
+                ksEncryptedProtocolReady.value = true
+                _supportsNativeAutoMode.value = true
+                markAnyProtocolReady()
+                startStatusPolling()
+            }
+            return
+        }
+
+        handleKsEncryptedHandshakeText(decoded.text)
+    }
+
+    private fun selectKsEncryptedDecodedText(
+        candidates: List<KingsmithEncryptedProtocol.DecodedText>
+    ): KingsmithEncryptedProtocol.DecodedText? {
+        if (candidates.isEmpty()) return null
+        return if (ksEncryptedProtocolReady.value) {
+            candidates.firstOrNull { KingsmithEncryptedProtocol.parseProps(it.text) != null } ?: candidates.first()
+        } else {
+            candidates.firstOrNull {
+                KingsmithEncryptedProtocol.handshakeResponseMatches(ksEncryptedHandshakeIndex, it.text)
+            } ?: candidates.firstOrNull { KingsmithEncryptedProtocol.parseProps(it.text) != null } ?: candidates.first()
+        }
+    }
+
+    private fun handleKsEncryptedHandshakeText(text: String) {
+        if (ksEncryptedProtocolReady.value) return
+        if (!KingsmithEncryptedProtocol.handshakeResponseMatches(ksEncryptedHandshakeIndex, text)) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "Encrypted KS handshake response was unexpected",
+                "step=$ksEncryptedHandshakeIndex response=$text"
+            )
+            return
+        }
+
+        ksEncryptedHandshakeIndex += 1
+        if (ksEncryptedHandshakeIndex > KS_ENCRYPTED_LAST_HANDSHAKE_INDEX) {
+            ksEncryptedProtocolReady.value = true
+            _supportsNativeAutoMode.value = true
+            markAnyProtocolReady()
+            startStatusPolling()
+            Timber.d("WalkingPad encrypted KS protocol ready")
+            return
+        }
+
+        scope.launch {
+            sendKsEncryptedHandshakeCommand()
+        }
     }
 
     private fun handleNotification(data: ByteArray) {
@@ -865,6 +1116,11 @@ class WalkingPadManagerImpl @Inject constructor(
             readUInt16LE(data, offset)
         } else {
             status.value.time
+        }
+
+        if (ksEncryptedProtocolReady.value && status.value.hasStepCount) {
+            _status.value = status.value.copy(calories = calories)
+            return
         }
 
         _status.value = status.value.copy(
@@ -981,6 +1237,7 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
         private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
+        private const val KS_ENCRYPTED_HANDSHAKE_SPACING_MS = 25L
         private const val FTMS_OP_REQUEST_CONTROL: Byte = 0x00
         private const val FTMS_OP_RESET: Byte = 0x01
         private const val FTMS_OP_SET_TARGET_SPEED: Byte = 0x02
@@ -1000,26 +1257,12 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val FTMS_TREADMILL_HEART_RATE_FLAG = 0x0100
         private const val FTMS_TREADMILL_METABOLIC_EQUIVALENT_FLAG = 0x0200
         private const val FTMS_TREADMILL_ELAPSED_TIME_FLAG = 0x0400
-        private const val KS_ENCRYPTED_STOP_COMMAND = "props runState 0"
-        private const val KS_ENCRYPTED_AUTO_MODE_COMMAND = "props ControlMode 0"
-        private const val KS_ENCRYPTED_MANUAL_MODE_COMMAND = "props ControlMode 1"
-        private const val KS_ENCRYPTED_STANDBY_MODE_COMMAND = "props ControlMode 2"
-        private const val KS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-        private const val KS_ENCRYPTED_COMMAND_TERMINATOR: Byte = 13
-        private val KS_ENCRYPTED_WRITE_CHAR_UUID_SUBSTRINGS = listOf("0000fed7", "0001fed8", "0002fed7")
-        private val KS_ENCRYPTION_TABLES = listOf(
-            "SaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KZ3=",
-            "ZaCw4FGHIJqLhN+P9RMTU/WcY6ObDdefgEijklmnopQrsBuvVxXz1yA2t5078KS3=",
-            "0aCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5Z78KS3=",
-            "ZaCw4FGHIJqLhN9P+RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KS3=",
-            "iaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEZjklmnopQrsBuvMxXz1yA2t5078KS3=",
-            "ZaCw4FGHIJqLhN+P8RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5079KS3=",
-            "baCw4FGHIJqLhN+P9RVTU/WcY6OZDdefgEijklmnopQrsBuvMxXz1yA2t5078KS3="
-        )
+        private const val KS_ENCRYPTED_LAST_HANDSHAKE_INDEX = 7
     }
 
     private enum class WalkingPadProtocol {
         LegacyKingsmith,
+        KingsmithEncrypted,
         FitnessMachineService
     }
 }
