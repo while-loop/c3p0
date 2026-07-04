@@ -283,12 +283,19 @@ class SessionViewModel @Inject constructor(
     }
 
     fun incrementSpeed() {
-        adjustManualSpeed(SPEED_STEP_KMH)
+        adjustManualSpeed(manualSpeedStepKmh())
     }
 
     fun decrementSpeed() {
-        adjustManualSpeed(-SPEED_STEP_KMH)
+        adjustManualSpeed(-manualSpeedStepKmh())
     }
+
+    private fun manualSpeedStepKmh(): Float =
+        if (unitSystem.value == UnitSystem.Imperial) {
+            SPEED_STEP_MPH * KM_PER_MILE
+        } else {
+            SPEED_STEP_KMH
+        }
 
     private fun adjustManualSpeed(deltaKmh: Float) {
         val targetSpeed = ((pendingManualSpeedKmh ?: treadmillStatus.value.speed) + deltaKmh)
@@ -391,6 +398,8 @@ class SessionViewModel @Inject constructor(
     companion object {
         private const val MAX_HEART_RATE_SAMPLES = 180
         private const val SPEED_STEP_KMH = 0.1f
+        private const val SPEED_STEP_MPH = 0.1f
+        private const val KM_PER_MILE = 1.60934f
         private const val MIN_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
