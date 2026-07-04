@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface HeartRateManager {
     val heartRate: StateFlow<Int>
+    val lastHeartRateReceivedAtMillis: StateFlow<Long>
     val connectionState: StateFlow<ConnectionState>
 
     suspend fun connect(address: String): Boolean

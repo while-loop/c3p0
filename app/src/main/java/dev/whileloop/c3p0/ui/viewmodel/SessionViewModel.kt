@@ -78,6 +78,12 @@ class SessionViewModel @Inject constructor(
         heartRateManager.heartRate.value
     )
 
+    val lastHeartRateReceivedAtMillis = heartRateManager.lastHeartRateReceivedAtMillis.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        heartRateManager.lastHeartRateReceivedAtMillis.value
+    )
+
     val isSessionActive = sessionManager.isSessionActive.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),

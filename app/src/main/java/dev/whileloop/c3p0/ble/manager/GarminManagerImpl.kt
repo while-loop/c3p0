@@ -1,6 +1,7 @@
 package dev.whileloop.c3p0.ble.manager
 
 import android.content.Context
+import android.os.SystemClock
 import dev.whileloop.c3p0.ble.controller.BleConnection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,9 @@ class GarminManagerImpl @Inject constructor(
     private var connectionStateJob: Job? = null
     private val _heartRate = MutableStateFlow(0)
     override val heartRate: StateFlow<Int> = _heartRate.asStateFlow()
+
+    private val _lastHeartRateReceivedAtMillis = MutableStateFlow(0L)
+    override val lastHeartRateReceivedAtMillis: StateFlow<Long> = _lastHeartRateReceivedAtMillis.asStateFlow()
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -83,5 +87,8 @@ class GarminManagerImpl @Inject constructor(
         }
         
         _heartRate.value = hr
+        if (hr > 0) {
+            _lastHeartRateReceivedAtMillis.value = SystemClock.elapsedRealtime()
+        }
     }
 }

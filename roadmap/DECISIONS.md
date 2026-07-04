@@ -17,7 +17,7 @@
 - **Device Commands**: Session start sends WalkingPad start, pause sends stop, resume sends start, and stop captures final counters before sending stop.
 - **Session Aggregates**: Stored session totals use deltas from the start counters. Calories use a MET estimate based on active duration, body weight, and average speed. HR aggregates come from active readings only. Cadence uses step deltas over elapsed metric time.
 - **Live Session Stats**: The session dashboard also displays distance and steps as deltas from the session start counters, matching persisted session totals.
-- **Inactive Devices**: Starting/resuming with an inactive watch or WalkingPad shows a bottom sheet with Pair, Continue, and Never Ask Again options.
+- **Inactive Devices**: Starting/resuming with an inactive watch, stale/missing HR broadcast, or inactive WalkingPad shows a bottom sheet with Pair, Continue, and Never Ask Again options. A connected watch is not considered HR-ready until a positive heart-rate sample has arrived recently.
 - **Time Display Caveat**: Current session time behaves like active/moving time because it pauses with the session. If a separate wall-clock elapsed time is needed, add a second stat instead of changing active time semantics.
 
 ## 3. Data Strategy

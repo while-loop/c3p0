@@ -1,5 +1,6 @@
 package dev.whileloop.c3p0.ui.screen
 
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -62,6 +63,7 @@ fun SessionDashboard(
     val unitSystem by viewModel.unitSystem.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val currentHeartRate by viewModel.currentHeartRate.collectAsState()
+    val lastHeartRateReceivedAtMillis by viewModel.lastHeartRateReceivedAtMillis.collectAsState()
     val averageHeartRate by viewModel.averageHeartRate.collectAsState()
     val heartRateHistory by viewModel.heartRateHistory.collectAsState()
     val sessionElapsedSeconds by viewModel.sessionElapsedSeconds.collectAsState()
@@ -72,12 +74,18 @@ fun SessionDashboard(
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
     var pendingSessionAction by remember { mutableStateOf(SessionAction.Start) }
     var neverAskAgain by remember { mutableStateOf(false) }
+    var currentElapsedMillis by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    val heartRateActive = hasFreshHeartRateData(
+        currentHeartRate = currentHeartRate,
+        lastHeartRateReceivedAtMillis = lastHeartRateReceivedAtMillis,
+        nowElapsedMillis = currentElapsedMillis
+    )
     val permissions = remember { sessionPermissions() }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.all { it }) {
-            if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, skipInactiveDeviceWarning)) {
+            if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
                 neverAskAgain = false
                 pendingSessionAction = SessionAction.Start
                 showInactiveDeviceSheet = true
@@ -89,6 +97,13 @@ fun SessionDashboard(
     val displayedDistance = displayDistance(sessionDistance, unitSystem)
     val displayedSpeed = displaySpeed(status.speed, unitSystem)
     val estimatedCalories = estimateCalories(status.speed, sessionElapsedSeconds, bodyWeightKg)
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentElapsedMillis = SystemClock.elapsedRealtime()
+            delay(1000)
+        }
+    }
 
     if (showPermissionSheet) {
         PermissionGuidanceBottomSheet(
@@ -104,7 +119,8 @@ fun SessionDashboard(
     if (showInactiveDeviceSheet) {
         InactiveDeviceWarningBottomSheet(
             padActive = connectionState == ConnectionState.CONNECTED,
-            watchActive = watchConnectionState == ConnectionState.CONNECTED,
+            watchConnected = watchConnectionState == ConnectionState.CONNECTED,
+            heartRateActive = heartRateActive,
             neverAskAgain = neverAskAgain,
             onNeverAskAgainChange = { neverAskAgain = it },
             onPair = {
@@ -150,6 +166,8 @@ fun SessionDashboard(
                 StatusIndicator("Pad", connectionState == ConnectionState.CONNECTED)
                 Spacer(modifier = Modifier.width(12.dp))
                 StatusIndicator("Watch", watchConnectionState == ConnectionState.CONNECTED)
+                Spacer(modifier = Modifier.width(12.dp))
+                StatusIndicator("HR", heartRateActive)
             }
         }
 
@@ -226,7 +244,7 @@ fun SessionDashboard(
                     Button(
                         onClick = {
                             if (isSessionPaused) {
-                                if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, skipInactiveDeviceWarning)) {
+                                if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
                                     neverAskAgain = false
                                     pendingSessionAction = SessionAction.Resume
                                     showInactiveDeviceSheet = true
@@ -251,7 +269,7 @@ fun SessionDashboard(
                 Button(
                     onClick = {
                         if (context.hasPermissions(permissions)) {
-                            if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, skipInactiveDeviceWarning)) {
+                            if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
                                 neverAskAgain = false
                                 pendingSessionAction = SessionAction.Start
                                 showInactiveDeviceSheet = true
@@ -469,7 +487,8 @@ private fun heartRateZone(heartRate: Int): Int {
 @Composable
 private fun InactiveDeviceWarningBottomSheet(
     padActive: Boolean,
-    watchActive: Boolean,
+    watchConnected: Boolean,
+    heartRateActive: Boolean,
     neverAskAgain: Boolean,
     onNeverAskAgainChange: (Boolean) -> Unit,
     onPair: () -> Unit,
@@ -486,7 +505,7 @@ private fun InactiveDeviceWarningBottomSheet(
             Text("Device not active", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                inactiveDeviceMessage(padActive, watchActive),
+                inactiveDeviceMessage(padActive, watchConnected, heartRateActive),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -539,17 +558,33 @@ private fun displaySpeed(speedKmh: Float, unitSystem: UnitSystem): DisplayMeasur
 private fun shouldWarnAboutInactiveDevices(
     padConnectionState: ConnectionState,
     watchConnectionState: ConnectionState,
+    heartRateActive: Boolean,
     skipWarning: Boolean
 ): Boolean =
     !skipWarning &&
-        (padConnectionState != ConnectionState.CONNECTED || watchConnectionState != ConnectionState.CONNECTED)
+        (
+            padConnectionState != ConnectionState.CONNECTED ||
+                watchConnectionState != ConnectionState.CONNECTED ||
+                !heartRateActive
+            )
 
-private fun inactiveDeviceMessage(padActive: Boolean, watchActive: Boolean): String =
+private fun inactiveDeviceMessage(padActive: Boolean, watchConnected: Boolean, heartRateActive: Boolean): String =
     when {
-        !padActive && !watchActive -> "Your WalkingPad and watch are not active. Pair them now, or continue without live device data."
+        !padActive && !watchConnected -> "Your WalkingPad and watch are not active. Pair them now, or continue without live device data."
         !padActive -> "Your WalkingPad is not active. Pair it now, or continue without pad controls and live distance."
-        else -> "Your watch is not active. Pair it now, or continue without live heart-rate data."
+        !watchConnected -> "Your watch is not active. Pair it now, or continue without live heart-rate data."
+        !heartRateActive -> "Your watch is connected, but C3P0 has not received recent heart-rate data. Start broadcasting heart rate on the watch, pair again, or continue without live heart-rate data."
+        else -> "Your devices are not sending expected live data. Pair them now, or continue anyway."
     }
+
+private fun hasFreshHeartRateData(
+    currentHeartRate: Int,
+    lastHeartRateReceivedAtMillis: Long,
+    nowElapsedMillis: Long
+): Boolean =
+    currentHeartRate > 0 &&
+        lastHeartRateReceivedAtMillis > 0L &&
+        nowElapsedMillis - lastHeartRateReceivedAtMillis <= HEART_RATE_FRESHNESS_WINDOW_MS
 
 private enum class SessionAction {
     Start,
@@ -618,3 +653,4 @@ private const val CHART_MIN_HEART_RATE = 50
 private const val CHART_MAX_HEART_RATE = 190
 private const val DEFAULT_BODY_WEIGHT_KG = 70f
 private const val STOP_HOLD_DURATION_MS = 5000L
+private const val HEART_RATE_FRESHNESS_WINDOW_MS = 15_000L

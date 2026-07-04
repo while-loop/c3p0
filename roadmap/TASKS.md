@@ -9,7 +9,7 @@
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 5-second long press.
 - [x] **Session Control Commands**: Start, pause/resume, and stop now send WalkingPad control commands, not just app-local state changes.
-- [x] **Inactive Device Warning**: Added a bottom sheet before start/resume when the watch or WalkingPad is inactive, including pair, continue, and never-ask-again controls.
+- [x] **Inactive Device Warning**: Added a bottom sheet before start/resume when the watch, live HR broadcast, or WalkingPad is inactive, including pair, continue, and never-ask-again controls.
 - [x] **Auto-Speed**: Implemented smooth Zone 2 adjustment algorithm with moving average smoothing and wired Automatic mode to enable it.
 - [x] **Data Persistence**: Room DB schema for sessions and time-series metrics.
 - [x] **Session Aggregates**: Persist session distance/steps as session deltas, plus calories, average HR, max HR, and real cadence.
