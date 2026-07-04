@@ -3,6 +3,9 @@ package dev.whileloop.c3p0.ui.screen
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -29,11 +32,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.model.TreadmillMode
@@ -328,6 +333,16 @@ private fun LongPressStopButton(
     var holdProgress by remember { mutableStateOf(0f) }
     val ringColor = MaterialTheme.colorScheme.onError
     val trackColor = MaterialTheme.colorScheme.errorContainer
+    val scale by animateFloatAsState(
+        targetValue = if (isHolding) STOP_HOLD_SCALE else 1f,
+        animationSpec = tween(durationMillis = STOP_HOLD_ANIMATION_MS),
+        label = "stopButtonScale"
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (isHolding) STOP_HOLD_ELEVATION else 0.dp,
+        animationSpec = tween(durationMillis = STOP_HOLD_ANIMATION_MS),
+        label = "stopButtonElevation"
+    )
 
     LaunchedEffect(isHolding) {
         if (isHolding) {
@@ -350,6 +365,11 @@ private fun LongPressStopButton(
     Box(
         modifier = modifier
             .size(STOP_BUTTON_SIZE)
+            .zIndex(if (isHolding) 1f else 0f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .pointerInput(onStop) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
@@ -364,6 +384,7 @@ private fun LongPressStopButton(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.error,
             contentColor = MaterialTheme.colorScheme.onError,
+            shadowElevation = elevation,
             modifier = Modifier.fillMaxSize()
         ) {
             Column(
@@ -782,6 +803,9 @@ private const val CHART_MAX_HEART_RATE = 190
 private const val DEFAULT_BODY_WEIGHT_KG = 70f
 private const val STOP_HOLD_DURATION_MS = 3_000L
 private const val STOP_PROGRESS_FRAME_MS = 16L
+private const val STOP_HOLD_SCALE = 2f
+private const val STOP_HOLD_ANIMATION_MS = 160
 private val STOP_BUTTON_SIZE = 72.dp
+private val STOP_HOLD_ELEVATION = 24.dp
 private val STOP_RING_STROKE_WIDTH = 4.dp
 private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
