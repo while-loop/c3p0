@@ -240,31 +240,19 @@ class SessionViewModel @Inject constructor(
     }
 
     fun startSession() {
-        viewModelScope.launch {
-            treadmillManager.setUnitSystem(settingsRepository.unitSystem.first())
-            sessionManager.startSession()
-        }
+        sessionManager.startSession()
     }
 
     fun stopSession() {
-        viewModelScope.launch {
-            treadmillManager.setUnitSystem(settingsRepository.unitSystem.first())
-            sessionManager.stopSession()
-        }
+        sessionManager.stopSession()
     }
 
     fun pauseSession() {
-        viewModelScope.launch {
-            treadmillManager.setUnitSystem(settingsRepository.unitSystem.first())
-            sessionManager.pauseSession()
-        }
+        sessionManager.pauseSession()
     }
 
     fun resumeSession() {
-        viewModelScope.launch {
-            treadmillManager.setUnitSystem(settingsRepository.unitSystem.first())
-            sessionManager.resumeSession()
-        }
+        sessionManager.resumeSession()
     }
 
     fun updateSkipInactiveDeviceWarning(skip: Boolean) {

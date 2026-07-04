@@ -39,6 +39,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
     private var lastRawNotificationHex: String? = null
+    private var ftmsControlRequested = false
     private val protocolReady = MutableStateFlow(false)
     private val legacyProtocolReady = MutableStateFlow(false)
     private val ftmsProtocolReady = MutableStateFlow(false)
@@ -69,6 +70,7 @@ class WalkingPadManagerImpl @Inject constructor(
         protocolReady.value = false
         legacyProtocolReady.value = false
         ftmsProtocolReady.value = false
+        ftmsControlRequested = false
         _supportsNativeAutoMode.value = false
         _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(
@@ -158,7 +160,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     override suspend fun start(): Boolean {
         if (ftmsProtocolReady.value) {
-            requestFtmsControl()
+            if (!ensureFtmsControlRequested()) return false
             val startSpeed = status.value.speed.coerceAtLeast(MIN_MOVING_SPEED_KMH)
             val started = sendCommand(
                 cmd = byteArrayOf(FTMS_OP_START_OR_RESUME),
@@ -199,7 +201,7 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private suspend fun pauseFtmsBelt(): Boolean {
-        requestFtmsControl()
+        if (!ensureFtmsControlRequested()) return false
         return sendCommand(
             cmd = byteArrayOf(FTMS_OP_STOP_OR_PAUSE, FTMS_PAUSE),
             protocol = WalkingPadProtocol.FitnessMachineService
@@ -207,7 +209,7 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private suspend fun stopFtmsBelt(): Boolean {
-        requestFtmsControl()
+        if (!ensureFtmsControlRequested()) return false
 
         if (!isBeltStopped(status.value)) {
             pauseFtmsBelt()
@@ -719,7 +721,14 @@ class WalkingPadManagerImpl @Inject constructor(
         sendCommand(
             cmd = byteArrayOf(FTMS_OP_REQUEST_CONTROL),
             protocol = WalkingPadProtocol.FitnessMachineService
-        )
+        ).also { sent ->
+            if (sent) {
+                ftmsControlRequested = true
+            }
+        }
+
+    private suspend fun ensureFtmsControlRequested(): Boolean =
+        ftmsControlRequested || requestFtmsControl()
 
     private fun markAnyProtocolReady() {
         protocolReady.value = true
@@ -731,6 +740,7 @@ class WalkingPadManagerImpl @Inject constructor(
         protocolReady.value = false
         legacyProtocolReady.value = false
         ftmsProtocolReady.value = false
+        ftmsControlRequested = false
     }
 
     private fun handleNotification(data: ByteArray) {
