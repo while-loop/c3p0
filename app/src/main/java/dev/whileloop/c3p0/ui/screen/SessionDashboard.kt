@@ -56,6 +56,9 @@ import dev.whileloop.c3p0.ui.permission.sessionPermissions
 import dev.whileloop.c3p0.ui.viewmodel.SessionViewModel
 import kotlinx.coroutines.delay
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 @Composable
 fun SessionDashboard(
@@ -492,10 +495,9 @@ private fun HeartRateHistoryChart(
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val zone2Color = Color(0xFF16A34A)
     val zoneColors = heartRateZoneColors()
-    val yAxisLabels = (listOf(190, 160, zone2MaxHeartRate, zone2MinHeartRate, 130, 100, 70))
-        .map { it.coerceIn(CHART_MIN_HEART_RATE, CHART_MAX_HEART_RATE) }
-        .distinct()
-        .sortedDescending()
+    val chartScale = remember(heartRates, zone2MinHeartRate, zone2MaxHeartRate) {
+        heartRateChartScale(heartRates, zone2MinHeartRate, zone2MaxHeartRate)
+    }
 
     Column(modifier = modifier) {
         Row(
@@ -512,14 +514,21 @@ private fun HeartRateHistoryChart(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .width(36.dp)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.End
+                    .width(40.dp)
+                    .fillMaxHeight()
             ) {
-                yAxisLabels.forEach { label ->
+                val labelHeight = 14.dp
+                val maxOffset = (maxHeight - labelHeight).coerceAtLeast(0.dp)
+                chartScale.yAxisLabels.forEach { label ->
+                    val labelOffset = (heartRateLabelOffset(
+                        heartRate = label,
+                        minHeartRate = chartScale.minHeartRate,
+                        range = chartScale.range,
+                        height = maxHeight,
+                        padding = CHART_PADDING
+                    ) - labelHeight / 2).coerceIn(0.dp, maxOffset)
                     Text(
                         text = label.toString(),
                         style = MaterialTheme.typography.labelSmall,
@@ -527,7 +536,10 @@ private fun HeartRateHistoryChart(
                             zone2Color
                         } else {
                             labelColor
-                        }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(y = labelOffset)
                     )
                 }
             }
@@ -539,14 +551,13 @@ private fun HeartRateHistoryChart(
             ) {
                 val width = size.width
                 val height = size.height
-                val padding = 8.dp.toPx()
+                val padding = CHART_PADDING.toPx()
                 val chartHeight = height - padding * 2
                 val chartWidth = width - padding * 2
-                val minHr = CHART_MIN_HEART_RATE
-                val maxHr = CHART_MAX_HEART_RATE
-                val range = maxHr - minHr
+                val minHr = chartScale.minHeartRate
+                val range = chartScale.range
 
-                yAxisLabels.forEach { label ->
+                chartScale.yAxisLabels.forEach { label ->
                     val y = padding + chartHeight - ((label - minHr).toFloat() / range * chartHeight)
                     drawLine(
                         color = gridColor,
@@ -632,6 +643,74 @@ private fun heartRateY(
     val clampedHeartRate = heartRate.coerceIn(minHeartRate, minHeartRate + range)
     return padding + chartHeight - ((clampedHeartRate - minHeartRate).toFloat() / range * chartHeight)
 }
+
+private data class HeartRateChartScale(
+    val minHeartRate: Int,
+    val maxHeartRate: Int,
+    val yAxisLabels: List<Int>
+) {
+    val range: Int = (maxHeartRate - minHeartRate).coerceAtLeast(1)
+}
+
+private fun heartRateChartScale(
+    heartRates: List<Int>,
+    zone2MinHeartRate: Int,
+    zone2MaxHeartRate: Int
+): HeartRateChartScale {
+    val validHeartRates = heartRates.filter { it > 0 }
+    val baseMin = (validHeartRates.minOrNull() ?: zone2MinHeartRate)
+        .coerceAtMost(zone2MinHeartRate)
+    val baseMax = (validHeartRates.maxOrNull() ?: zone2MaxHeartRate)
+        .coerceAtLeast(zone2MaxHeartRate)
+    val minPadding = (baseMin * CHART_DOMAIN_PADDING_FRACTION).roundToInt().coerceAtLeast(5)
+    val maxPadding = (baseMax * CHART_DOMAIN_PADDING_FRACTION).roundToInt().coerceAtLeast(5)
+    val minHeartRate = floorToNearestFive(
+        (baseMin - minPadding).coerceAtLeast(CHART_ABSOLUTE_MIN_HEART_RATE)
+    )
+    val paddedMaxHeartRate = ceilToNearestFive(
+        (baseMax + maxPadding).coerceAtMost(CHART_ABSOLUTE_MAX_HEART_RATE)
+    )
+    val maxHeartRate = paddedMaxHeartRate.coerceAtLeast(minHeartRate + CHART_MIN_VISIBLE_RANGE)
+    val midpoint = roundToNearestFive((minHeartRate + maxHeartRate) / 2)
+    val yAxisLabels = listOf(
+        maxHeartRate,
+        zone2MaxHeartRate,
+        midpoint,
+        zone2MinHeartRate,
+        minHeartRate
+    )
+        .map { it.coerceIn(minHeartRate, maxHeartRate) }
+        .distinct()
+        .sortedDescending()
+
+    return HeartRateChartScale(
+        minHeartRate = minHeartRate,
+        maxHeartRate = maxHeartRate,
+        yAxisLabels = yAxisLabels
+    )
+}
+
+private fun heartRateLabelOffset(
+    heartRate: Int,
+    minHeartRate: Int,
+    range: Int,
+    height: androidx.compose.ui.unit.Dp,
+    padding: androidx.compose.ui.unit.Dp
+): androidx.compose.ui.unit.Dp {
+    val chartHeight = height - padding * 2
+    val clampedHeartRate = heartRate.coerceIn(minHeartRate, minHeartRate + range)
+    val yFraction = 1f - ((clampedHeartRate - minHeartRate).toFloat() / range)
+    return padding + chartHeight * yFraction
+}
+
+private fun floorToNearestFive(value: Int): Int =
+    (floor(value / 5f) * 5).toInt()
+
+private fun ceilToNearestFive(value: Int): Int =
+    (ceil(value / 5f) * 5).toInt()
+
+private fun roundToNearestFive(value: Int): Int =
+    (value / 5f).roundToInt() * 5
 
 private fun heartRateZone(heartRate: Int): Int {
     val percentOfMax = heartRate.toFloat() / CHART_MAX_HEART_RATE
@@ -876,8 +955,12 @@ private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int, bodyWeightKg:
     return (met * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG).toFloat() * hours).toInt()
 }
 
-private const val CHART_MIN_HEART_RATE = 50
+private const val CHART_ABSOLUTE_MIN_HEART_RATE = 40
+private const val CHART_ABSOLUTE_MAX_HEART_RATE = 220
+private const val CHART_MIN_VISIBLE_RANGE = 20
+private const val CHART_DOMAIN_PADDING_FRACTION = 0.10f
 private const val CHART_MAX_HEART_RATE = 190
+private val CHART_PADDING = 8.dp
 private const val DEFAULT_BODY_WEIGHT_KG = 70f
 private const val STOP_HOLD_DURATION_MS = 3_000L
 private const val STOP_PROGRESS_FRAME_MS = 16L
