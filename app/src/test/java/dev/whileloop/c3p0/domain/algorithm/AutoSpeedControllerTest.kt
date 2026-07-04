@@ -44,4 +44,75 @@ class AutoSpeedControllerTest {
 
         assertTrue(adjustments.isEmpty())
     }
+
+    @Test
+    fun lowerZoneEdgeTrendingDownNudgesSpeedUp() {
+        val adjustments = mutableListOf<Float>()
+        val controller = edgeGuardController(adjustments)
+
+        controller.feedDecisionWindow(hr = 116, speedKmh = 4.0f, timestamp = 100_000)
+        controller.feedDecisionWindow(hr = 115, speedKmh = 4.0f, timestamp = 101_000)
+        controller.feedDecisionWindow(hr = 114, speedKmh = 4.0f, timestamp = 102_000)
+
+        assertEquals(1, adjustments.size)
+        assertEquals(0.1f * KM_PER_MILE, adjustments.first(), 0.0001f)
+    }
+
+    @Test
+    fun lowerZoneEdgeTrendingUpDoesNotAdjust() {
+        val adjustments = mutableListOf<Float>()
+        val controller = edgeGuardController(adjustments)
+
+        controller.feedDecisionWindow(hr = 114, speedKmh = 4.0f, timestamp = 100_000)
+        controller.feedDecisionWindow(hr = 115, speedKmh = 4.0f, timestamp = 101_000)
+        controller.feedDecisionWindow(hr = 116, speedKmh = 4.0f, timestamp = 102_000)
+
+        assertTrue(adjustments.isEmpty())
+    }
+
+    @Test
+    fun upperZoneEdgeTrendingUpNudgesSpeedDown() {
+        val adjustments = mutableListOf<Float>()
+        val controller = edgeGuardController(adjustments)
+
+        controller.feedDecisionWindow(hr = 131, speedKmh = 4.0f, timestamp = 100_000)
+        controller.feedDecisionWindow(hr = 132, speedKmh = 4.0f, timestamp = 101_000)
+        controller.feedDecisionWindow(hr = 133, speedKmh = 4.0f, timestamp = 102_000)
+
+        assertEquals(1, adjustments.size)
+        assertEquals(-0.1f * KM_PER_MILE, adjustments.first(), 0.0001f)
+    }
+
+    @Test
+    fun upperZoneEdgeTrendingDownDoesNotAdjust() {
+        val adjustments = mutableListOf<Float>()
+        val controller = edgeGuardController(adjustments)
+
+        controller.feedDecisionWindow(hr = 133, speedKmh = 4.0f, timestamp = 100_000)
+        controller.feedDecisionWindow(hr = 132, speedKmh = 4.0f, timestamp = 101_000)
+        controller.feedDecisionWindow(hr = 131, speedKmh = 4.0f, timestamp = 102_000)
+
+        assertTrue(adjustments.isEmpty())
+    }
+
+    private fun edgeGuardController(adjustments: MutableList<Float>): AutoSpeedController =
+        AutoSpeedController(
+            targetHr = 123,
+            zoneMinHr = 114,
+            zoneMaxHr = 133,
+            adjustmentIntervalSeconds = 1
+        ).apply {
+            onSpeedAdjustmentRequired = { adjustment -> adjustments += adjustment }
+        }
+
+    private fun AutoSpeedController.feedDecisionWindow(hr: Int, speedKmh: Float, timestamp: Long) {
+        if (timestamp == 100_000L) {
+            addHrSample(hr = hr, speedKmh = speedKmh, timestamp = timestamp - 1_000)
+        }
+        addHrSample(hr = hr, speedKmh = speedKmh, timestamp = timestamp)
+    }
+
+    private companion object {
+        private const val KM_PER_MILE = 1.60934f
+    }
 }
