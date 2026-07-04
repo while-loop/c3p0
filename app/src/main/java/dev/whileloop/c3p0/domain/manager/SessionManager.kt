@@ -123,7 +123,11 @@ class SessionManager @Inject constructor(
                     }
                 
                 if (_isAutoSpeedEnabled.value && metric.heartRate != null) {
-                    autoSpeedController?.addHrSample(metric.heartRate, System.currentTimeMillis())
+                    autoSpeedController?.addHrSample(
+                        hr = metric.heartRate,
+                        speedKmh = metric.speed ?: status.speed,
+                        timestamp = System.currentTimeMillis()
+                    )
                 }
                 settingsRepository.requestBackupIfEnabled(SESSION_BACKUP_REQUEST_INTERVAL_MS)
             }
@@ -200,8 +204,12 @@ class SessionManager @Inject constructor(
         }
     }
 
-    fun enableAutoSpeed(targetHr: Int) {
-        autoSpeedController = AutoSpeedController(targetHr).apply {
+    fun enableAutoSpeed(targetHr: Int, zoneMinHr: Int, zoneMaxHr: Int) {
+        autoSpeedController = AutoSpeedController(
+            targetHr = targetHr,
+            zoneMinHr = zoneMinHr,
+            zoneMaxHr = zoneMaxHr
+        ).apply {
             onSpeedAdjustmentRequired = { adjustment ->
                 scope.launch {
                     val currentSpeed = treadmillManager.status.value.speed

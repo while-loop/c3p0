@@ -299,8 +299,13 @@ class SessionViewModel @Inject constructor(
 
     fun enableZone2Mode() {
         viewModelScope.launch {
+            val zone = zone2HeartRateRange(age.value)
             treadmillManager.setMode(TreadmillMode.MANUAL)
-            sessionManager.enableAutoSpeed(targetZone2HeartRate(age.value))
+            sessionManager.enableAutoSpeed(
+                targetHr = zone.target,
+                zoneMinHr = zone.min,
+                zoneMaxHr = zone.max
+            )
         }
     }
 
@@ -311,9 +316,13 @@ class SessionViewModel @Inject constructor(
         }
     }
 
-    private fun targetZone2HeartRate(age: Int): Int {
+    private fun zone2HeartRateRange(age: Int): HeartRateRange {
         val maxHeartRate = 220 - age
-        return (maxHeartRate * 0.65f).toInt()
+        return HeartRateRange(
+            min = (maxHeartRate * 0.60f).toInt(),
+            target = (maxHeartRate * 0.65f).toInt(),
+            max = (maxHeartRate * 0.70f).toInt()
+        )
     }
 
     private fun startSessionStats(reset: Boolean) {
@@ -369,4 +378,10 @@ class SessionViewModel @Inject constructor(
 
     private fun counterDelta(start: Int, end: Int): Int =
         if (end >= start) end - start else end
+
+    private data class HeartRateRange(
+        val min: Int,
+        val target: Int,
+        val max: Int
+    )
 }
