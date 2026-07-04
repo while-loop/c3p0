@@ -653,4 +653,4 @@ private const val CHART_MIN_HEART_RATE = 50
 private const val CHART_MAX_HEART_RATE = 190
 private const val DEFAULT_BODY_WEIGHT_KG = 70f
 private const val STOP_HOLD_DURATION_MS = 5000L
-private const val HEART_RATE_FRESHNESS_WINDOW_MS = 15_000L
+private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
