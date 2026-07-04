@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -92,7 +93,10 @@ fun StatsScreen(
                     canReadSteps = canReadHealthConnectSteps,
                     isLoading = isStepHistoryLoading,
                     onEnable = { showStepPermissionSheet = true },
-                    onRefresh = { viewModel.refreshStepHistory() }
+                    onRefresh = { viewModel.refreshStepHistory() },
+                    modifier = Modifier
+                        .fillParentMaxHeight(0.25f)
+                        .heightIn(min = 180.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -120,10 +124,15 @@ private fun HealthConnectStepHistoryCard(
     canReadSteps: Boolean,
     isLoading: Boolean,
     onEnable: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -142,10 +151,16 @@ private fun HealthConnectStepHistoryCard(
                 !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
                 rows.isEmpty() -> Text("No Health Connect step data found.")
                 else -> {
-                    rows.forEach { row ->
-                        DailyStepHistoryRow(row)
-                        if (row != rows.last()) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        itemsIndexed(rows) { index, row ->
+                            DailyStepHistoryRow(row)
+                            if (index < rows.lastIndex) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            }
                         }
                     }
                 }

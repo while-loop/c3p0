@@ -39,7 +39,7 @@
 - **Permission Rationale**: Code paths that require Android permissions should show a bottom sheet explaining the request before invoking the system prompt.
 - **Session Dashboard Density**: Session stats are compact tiles because the screen now shows distance, steps, normalized steps remaining to goal, active time, calories, current HR, average HR, speed controls, device status, and the HR chart. Steps remaining uses today's normalized Health Connect baseline plus in-progress session steps. Session action controls are centered to avoid the control row feeling lopsided.
 - **Heart-Rate Chart**: The session chart includes y-axis labels and zone-colored line segments for Zone 0 through Zone 4.
-- **Stats History**: The History screen shows daily Health Connect raw/normalized step history and selected-session details with stored aggregates, metric-derived fallback summaries, and Health Connect normalized step counts when available.
+- **Stats History**: The History screen shows daily Health Connect raw/normalized step history and selected-session details with stored aggregates, metric-derived fallback summaries, and Health Connect normalized step counts when available. The Health Connect daily step section is constrained to roughly a quarter of the page and scrolls internally so other history content remains reachable.
 
 ## 5. CI & Distribution
 - **Debug APK Workflow**: GitHub Actions builds a debug APK on every push and uploads it as an artifact for remote install testing. Release APKs are deferred until signing keys exist.
