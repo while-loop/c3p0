@@ -22,6 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
@@ -41,6 +42,7 @@ fun ProfileScreen(
     val isHealthConnectEnabled by viewModel.isHealthConnectEnabled.collectAsState()
     val isGoogleDriveSyncEnabled by viewModel.isGoogleDriveSyncEnabled.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
+    val sessionStartMode by viewModel.sessionStartMode.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
@@ -277,6 +279,22 @@ fun ProfileScreen(
                 )
             }
         )
+        ListItem(
+            headlineContent = { Text("Default session mode") },
+            supportingContent = { Text("Mode selected when starting a new session") }
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SessionStartMode.entries.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = sessionStartMode == mode,
+                    onClick = { viewModel.updateSessionStartMode(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = SessionStartMode.entries.size),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(startModeLabel(mode))
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
         
@@ -362,4 +380,11 @@ private fun formatWeight(weightKg: Double, unitSystem: UnitSystem): String =
         String.format(java.util.Locale.US, "%.0f lb", weightKg * 2.2046226218)
     } else {
         String.format(java.util.Locale.US, "%.1f kg", weightKg)
+    }
+
+private fun startModeLabel(mode: SessionStartMode): String =
+    when (mode) {
+        SessionStartMode.Manual -> "Manual"
+        SessionStartMode.Automatic -> "Auto"
+        SessionStartMode.Zone2 -> "Zone 2"
     }

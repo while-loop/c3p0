@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.manager.HeartRateManager
 import dev.whileloop.c3p0.ble.manager.TreadmillManager
+import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.health.HealthConnectManager
@@ -47,6 +48,12 @@ class ProfileViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         30
+    )
+
+    val sessionStartMode = settingsRepository.sessionStartMode.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        SessionStartMode.Zone2
     )
 
     val skipInactiveDeviceWarning = settingsRepository.skipInactiveDeviceWarning.stateIn(
@@ -152,6 +159,12 @@ class ProfileViewModel @Inject constructor(
     fun updateAge(age: Int) {
         viewModelScope.launch {
             settingsRepository.saveAge(age)
+        }
+    }
+
+    fun updateSessionStartMode(mode: SessionStartMode) {
+        viewModelScope.launch {
+            settingsRepository.saveSessionStartMode(mode)
         }
     }
 

@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -34,6 +35,7 @@ class SettingsRepository @Inject constructor(
         val GOOGLE_DRIVE_SYNC_ENABLED = booleanPreferencesKey("google_drive_sync_enabled")
         val STEP_GOAL = intPreferencesKey("step_goal")
         val AGE = intPreferencesKey("age")
+        val SESSION_START_MODE = stringPreferencesKey("session_start_mode")
         val KEEP_SCREEN_ON_DURING_ACTIVE_SESSION = booleanPreferencesKey("keep_screen_on_during_active_session")
         val NO_LOAD_STOP_ENABLED = booleanPreferencesKey("no_load_stop_enabled")
         val NO_LOAD_STOP_TIMEOUT_SECONDS = intPreferencesKey("no_load_stop_timeout_seconds")
@@ -59,6 +61,10 @@ class SettingsRepository @Inject constructor(
     }
     val age: Flow<Int> = context.dataStore.data.map {
         it[Keys.AGE] ?: DEFAULT_AGE
+    }
+    val sessionStartMode: Flow<SessionStartMode> = context.dataStore.data.map { preferences ->
+        preferences[Keys.SESSION_START_MODE]?.let { runCatching { SessionStartMode.valueOf(it) }.getOrNull() }
+            ?: SessionStartMode.Zone2
     }
     val keepScreenOnDuringActiveSession: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.KEEP_SCREEN_ON_DURING_ACTIVE_SESSION] ?: false
@@ -119,6 +125,11 @@ class SettingsRepository @Inject constructor(
 
     suspend fun saveAge(age: Int) {
         context.dataStore.edit { it[Keys.AGE] = age.coerceIn(MIN_AGE, MAX_AGE) }
+        requestBackupIfEnabled()
+    }
+
+    suspend fun saveSessionStartMode(mode: SessionStartMode) {
+        context.dataStore.edit { it[Keys.SESSION_START_MODE] = mode.name }
         requestBackupIfEnabled()
     }
 

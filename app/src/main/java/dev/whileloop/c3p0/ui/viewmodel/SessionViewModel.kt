@@ -7,6 +7,8 @@ import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.manager.HeartRateManager
 import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.ble.model.TreadmillMode
+import dev.whileloop.c3p0.ble.model.TreadmillState
+import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.manager.SessionManager
@@ -122,6 +124,12 @@ class SessionViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         UnitSystem.Imperial
+    )
+
+    val sessionStartMode = settingsRepository.sessionStartMode.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        SessionStartMode.Zone2
     )
 
     val age = settingsRepository.age.stateIn(
@@ -256,7 +264,10 @@ class SessionViewModel @Inject constructor(
     }
 
     fun startSession() {
-        sessionManager.startSession()
+        viewModelScope.launch {
+            applyDefaultStartMode()
+            sessionManager.startSession()
+        }
     }
 
     fun stopSession() {
@@ -333,6 +344,33 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    private suspend fun applyDefaultStartMode() {
+        when (sessionStartMode.value) {
+            SessionStartMode.Manual -> {
+                sessionManager.disableAutoSpeed()
+                treadmillManager.setMode(TreadmillMode.MANUAL)
+            }
+            SessionStartMode.Automatic -> {
+                sessionManager.disableAutoSpeed()
+                val canUseNativeAutomatic =
+                    supportsNativeAutoMode.value &&
+                        treadmillStatus.value.state != TreadmillState.ACTIVE &&
+                        treadmillManager.setMode(TreadmillMode.AUTO)
+                if (!canUseNativeAutomatic) {
+                    treadmillManager.setMode(TreadmillMode.MANUAL)
+                }
+            }
+            SessionStartMode.Zone2 -> {
+                if (hasFreshHeartRateData()) {
+                    enableZone2ModeNow()
+                } else {
+                    sessionManager.disableAutoSpeed()
+                    treadmillManager.setMode(TreadmillMode.MANUAL)
+                }
+            }
+        }
+    }
+
     fun setMode(mode: TreadmillMode) {
         viewModelScope.launch {
             sessionManager.disableAutoSpeed()
@@ -343,14 +381,18 @@ class SessionViewModel @Inject constructor(
     fun enableZone2Mode() {
         viewModelScope.launch {
             if (!hasFreshHeartRateData()) return@launch
-            val zone = zone2HeartRateRange(age.value)
-            treadmillManager.setMode(TreadmillMode.MANUAL)
-            sessionManager.enableAutoSpeed(
-                targetHr = zone.target,
-                zoneMinHr = zone.min,
-                zoneMaxHr = zone.max
-            )
+            enableZone2ModeNow()
         }
+    }
+
+    private suspend fun enableZone2ModeNow() {
+        val zone = zone2HeartRateRange(age.value)
+        treadmillManager.setMode(TreadmillMode.MANUAL)
+        sessionManager.enableAutoSpeed(
+            targetHr = zone.target,
+            zoneMinHr = zone.min,
+            zoneMaxHr = zone.max
+        )
     }
 
     fun disableAutoSpeed() {
