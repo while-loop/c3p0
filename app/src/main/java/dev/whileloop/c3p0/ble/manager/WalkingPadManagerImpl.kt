@@ -64,7 +64,8 @@ class WalkingPadManagerImpl @Inject constructor(
             address = address,
             errorReporter = errorReporter,
             requiredServiceUuid = SERVICE_UUID,
-            refreshGattOnConnect = true
+            refreshGattOnConnect = true,
+            preferWriteWithoutResponse = true
         ).apply {
             onNotificationReceived = { uuid, data ->
                 if (uuid == NOTIFY_CHAR_UUID) {
@@ -136,10 +137,13 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun start(): Boolean {
+        if (status.value.mode != TreadmillMode.MANUAL && !setMode(TreadmillMode.MANUAL)) {
+            return false
+        }
         return sendControlCommand(
             label = "start belt",
             cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()),
-            isApplied = { status -> status.state != TreadmillState.STANDBY }
+            isApplied = { status -> status.state != TreadmillState.STOPPED && status.state != TreadmillState.STANDBY }
         )
     }
 
@@ -353,10 +357,11 @@ class WalkingPadManagerImpl @Inject constructor(
         lastStatusReceivedElapsedMillis = SystemClock.elapsedRealtime()
 
         val state = when (data[2].toInt() and 0xFF) {
-            0 -> TreadmillState.STANDBY
-            1 -> TreadmillState.MANUAL
-            2 -> TreadmillState.AUTOMATIC
-            else -> TreadmillState.STANDBY
+            0 -> TreadmillState.STOPPED
+            1 -> TreadmillState.ACTIVE
+            5 -> TreadmillState.STANDBY
+            9 -> TreadmillState.STARTING
+            else -> TreadmillState.ERROR
         }
         
         val speed = (data[3].toInt() and 0xFF) / 10f

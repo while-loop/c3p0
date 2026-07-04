@@ -13,7 +13,7 @@ data class TreadmillStatus(
 )
 
 enum class TreadmillState {
-    STANDBY, MANUAL, AUTOMATIC, RUNNING, STOPPING, ERROR
+    STOPPED, ACTIVE, STANDBY, STARTING, ERROR
 }
 
 enum class TreadmillMode {

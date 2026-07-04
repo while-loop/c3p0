@@ -23,7 +23,8 @@ class BleConnection(
     private val address: String,
     private val errorReporter: BleErrorReporter,
     private val requiredServiceUuid: UUID? = null,
-    private val refreshGattOnConnect: Boolean = false
+    private val refreshGattOnConnect: Boolean = false,
+    private val preferWriteWithoutResponse: Boolean = false
 ) {
     private var bluetoothGatt: BluetoothGatt? = null
     private var discoveredServiceSummary: String = "none"
@@ -143,12 +144,16 @@ class BleConnection(
             reportError("BLE characteristic not found", "address=$address characteristic=$charUuid")
             return false
         }
-        val writeType =
-            if (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            } else {
+        val supportsWrite = char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
+        val supportsWriteWithoutResponse =
+            char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+        val writeType = when {
+            preferWriteWithoutResponse && supportsWriteWithoutResponse ->
                 BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            }
+            supportsWrite -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            supportsWriteWithoutResponse -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            else -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        }
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 bluetoothGatt?.writeCharacteristic(char, data, writeType) == BluetoothStatusCodes.SUCCESS

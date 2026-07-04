@@ -34,12 +34,12 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
     }
 
     override suspend fun start(): Boolean {
-        _status.value = _status.value.copy(state = TreadmillState.MANUAL)
+        _status.value = _status.value.copy(state = TreadmillState.ACTIVE)
         return true
     }
 
     override suspend fun stop(): Boolean {
-        _status.value = _status.value.copy(state = TreadmillState.STANDBY, speed = 0f)
+        _status.value = _status.value.copy(state = TreadmillState.STOPPED, speed = 0f)
         return true
     }
 
@@ -62,7 +62,7 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
     suspend fun simulateWalking() {
         while (true) {
             val s = _status.value
-            if (s.state == TreadmillState.MANUAL && s.speed > 0) {
+            if (s.state == TreadmillState.ACTIVE && s.speed > 0) {
                 _status.value = s.copy(
                     time = s.time + 1,
                     distance = s.distance + (s.speed / 3.6).toInt(), // very rough
