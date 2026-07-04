@@ -564,21 +564,17 @@ private fun DeviceReadinessRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(if (isReady) Color.Green else MaterialTheme.colorScheme.error)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-        }
+        StatusIndicator(
+            label = label,
+            isConnected = isReady,
+            labelStyle = MaterialTheme.typography.bodyMedium,
+            dotSize = 12.dp
+        )
         Text(
             text = if (isReady) readyText else notReadyText,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            color = if (isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            color = if (isReady) Color.Green else Color.Gray
         )
     }
 }
@@ -639,16 +635,21 @@ private enum class SessionAction {
 }
 
 @Composable
-fun StatusIndicator(label: String, isConnected: Boolean) {
+fun StatusIndicator(
+    label: String,
+    isConnected: Boolean,
+    labelStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelSmall,
+    dotSize: androidx.compose.ui.unit.Dp = 10.dp
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .size(10.dp)
+                .size(dotSize)
                 .clip(CircleShape)
                 .background(if (isConnected) Color.Green else Color.Gray)
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall)
+        Text(label, style = labelStyle)
     }
 }
 
