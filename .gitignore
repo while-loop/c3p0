@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local reverse-engineering references. Keep proprietary APK/decompiled output off Git.
+/thirdparty/ks-fit-6.0.2/apk/
+/thirdparty/ks-fit-6.0.2/decompiled/
+/thirdparty/ks-fit-6.0.2/extracted/
+/thirdparty/ks-fit-6.0.2/tools/
+/thirdparty/ks-fit-6.0.2/*.zip
