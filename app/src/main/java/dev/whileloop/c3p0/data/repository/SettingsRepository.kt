@@ -2,6 +2,7 @@ package dev.whileloop.c3p0.data.repository
 
 import android.app.backup.BackupManager
 import android.content.Context
+import android.os.SystemClock
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -21,6 +22,8 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 class SettingsRepository @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) {
+    private var lastBackupRequestElapsedMillis = 0L
+
     private object Keys {
         val TREADMILL_ADDRESS = stringPreferencesKey("treadmill_address")
         val WATCH_ADDRESS = stringPreferencesKey("watch_address")
@@ -78,13 +81,18 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    suspend fun requestBackupIfEnabled() {
+    suspend fun requestBackupIfEnabled(minIntervalMillis: Long = 0L) {
         if (googleDriveSyncEnabled.first()) {
+            val now = SystemClock.elapsedRealtime()
+            if (minIntervalMillis > 0L && now - lastBackupRequestElapsedMillis < minIntervalMillis) {
+                return
+            }
             requestBackup()
         }
     }
 
     private fun requestBackup() {
+        lastBackupRequestElapsedMillis = SystemClock.elapsedRealtime()
         BackupManager(context).dataChanged()
     }
 }

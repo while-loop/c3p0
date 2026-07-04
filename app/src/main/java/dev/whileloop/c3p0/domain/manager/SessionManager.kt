@@ -87,6 +87,7 @@ class SessionManager @Inject constructor(
                 if (_isAutoSpeedEnabled.value) {
                     autoSpeedController?.addHrSample(metric.heartRate ?: 0, System.currentTimeMillis())
                 }
+                settingsRepository.requestBackupIfEnabled(SESSION_BACKUP_REQUEST_INTERVAL_MS)
             }
         }
     }
@@ -157,5 +158,9 @@ class SessionManager @Inject constructor(
     fun disableAutoSpeed() {
         _isAutoSpeedEnabled.value = false
         autoSpeedController = null
+    }
+
+    companion object {
+        private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
     }
 }
