@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.math.abs
 
 @HiltViewModel
 class SessionViewModel @Inject constructor(
@@ -35,6 +36,8 @@ class SessionViewModel @Inject constructor(
 ) : ViewModel() {
     private var elapsedJob: Job? = null
     private var heartRateHistoryJob: Job? = null
+    private var speedCommandJob: Job? = null
+    private var pendingManualSpeedKmh: Float? = null
     private var statsStarted = false
     private var activeHeartRateTotal = 0
     private var activeHeartRateSampleCount = 0
@@ -197,6 +200,15 @@ class SessionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            treadmillManager.status.collect { status ->
+                val pendingSpeed = pendingManualSpeedKmh ?: return@collect
+                if (abs(status.speed - pendingSpeed) <= SPEED_APPLIED_TOLERANCE_KMH) {
+                    pendingManualSpeedKmh = null
+                }
+            }
+        }
+
+        viewModelScope.launch {
             settingsRepository.stepGoal.distinctUntilChanged().collect {
                 updateNormalizedStepsToGoal()
             }
@@ -283,16 +295,30 @@ class SessionViewModel @Inject constructor(
     }
 
     fun incrementSpeed() {
-        viewModelScope.launch {
-            val current = treadmillStatus.value.speed
-            treadmillManager.setSpeed((current + SPEED_STEP_KMH).coerceAtMost(MAX_SPEED_KMH))
-        }
+        adjustManualSpeed(SPEED_STEP_KMH)
     }
 
     fun decrementSpeed() {
-        viewModelScope.launch {
-            val current = treadmillStatus.value.speed
-            treadmillManager.setSpeed((current - SPEED_STEP_KMH).coerceAtLeast(MIN_SPEED_KMH))
+        adjustManualSpeed(-SPEED_STEP_KMH)
+    }
+
+    private fun adjustManualSpeed(deltaKmh: Float) {
+        val targetSpeed = ((pendingManualSpeedKmh ?: treadmillStatus.value.speed) + deltaKmh)
+            .coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH)
+        pendingManualSpeedKmh = targetSpeed
+        speedCommandJob?.cancel()
+        speedCommandJob = viewModelScope.launch {
+            val sent = treadmillManager.setSpeed(targetSpeed)
+            if (!sent) {
+                if (pendingManualSpeedKmh == targetSpeed) {
+                    pendingManualSpeedKmh = null
+                }
+                return@launch
+            }
+            delay(PENDING_SPEED_TIMEOUT_MS)
+            if (pendingManualSpeedKmh == targetSpeed) {
+                pendingManualSpeedKmh = null
+            }
         }
     }
 
@@ -379,6 +405,8 @@ class SessionViewModel @Inject constructor(
         private const val SPEED_STEP_KMH = 0.1f
         private const val MIN_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
+        private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
+        private const val PENDING_SPEED_TIMEOUT_MS = 3_000L
         private const val DEFAULT_STEP_GOAL = 10000
     }
 

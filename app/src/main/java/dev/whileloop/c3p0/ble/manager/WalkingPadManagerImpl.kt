@@ -277,7 +277,6 @@ class WalkingPadManagerImpl @Inject constructor(
     override suspend fun setSpeed(speed: Float): Boolean {
         val targetSpeed = speed.coerceIn(MIN_MOVING_SPEED_KMH, MAX_SPEED_KMH)
         if (ftmsProtocolReady.value) {
-            requestFtmsControl()
             return sendFtmsTargetSpeed(targetSpeed)
         }
 
@@ -327,10 +326,11 @@ class WalkingPadManagerImpl @Inject constructor(
                 label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
                 cmd = cmd,
                 protocol = protocol,
+                minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
                 isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
             )
         } else {
-            sendCommand(cmd, protocol)
+            sendCommand(cmd, protocol, SPEED_COMMAND_SPACING_MS)
         }
 
     override suspend fun setMode(mode: TreadmillMode): Boolean {
@@ -445,7 +445,11 @@ class WalkingPadManagerImpl @Inject constructor(
         }
     }
 
-    private suspend fun sendCommand(cmd: ByteArray, protocol: WalkingPadProtocol): Boolean = commandMutex.withLock {
+    private suspend fun sendCommand(
+        cmd: ByteArray,
+        protocol: WalkingPadProtocol,
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS
+    ): Boolean = commandMutex.withLock {
         if (!awaitProtocolReady(protocol)) {
             val fixed = if (protocol == WalkingPadProtocol.FitnessMachineService) {
                 cmd
@@ -462,8 +466,8 @@ class WalkingPadManagerImpl @Inject constructor(
 
         val now = SystemClock.elapsedRealtime()
         val elapsedSinceLastCommand = now - lastCommandElapsedMillis
-        if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < MIN_COMMAND_SPACING_MS) {
-            delay(MIN_COMMAND_SPACING_MS - elapsedSinceLastCommand)
+        if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < minCommandSpacingMs) {
+            delay(minCommandSpacingMs - elapsedSinceLastCommand)
         }
 
         val fixed = if (protocol == WalkingPadProtocol.FitnessMachineService) {
@@ -560,10 +564,11 @@ class WalkingPadManagerImpl @Inject constructor(
         label: String,
         cmd: ByteArray,
         protocol: WalkingPadProtocol,
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
         isApplied: (TreadmillStatus) -> Boolean
     ): Boolean {
         val previousStatusAt = lastStatusReceivedElapsedMillis
-        val sent = sendCommand(cmd, protocol)
+        val sent = sendCommand(cmd, protocol, minCommandSpacingMs)
         if (sent) {
             val commandHex = if (protocol == WalkingPadProtocol.FitnessMachineService) {
                 cmd.toHexString()
@@ -881,7 +886,8 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val MAX_SPEED_KMH = 6f
         private const val START_COUNTDOWN_SPEED_DELAY_MS = 3_200L
         private const val INITIAL_POLL_DELAY_MS = 250L
-        private const val MIN_COMMAND_SPACING_MS = 700L
+        private const val MIN_COMMAND_SPACING_MS = 250L
+        private const val SPEED_COMMAND_SPACING_MS = 100L
         private const val STATUS_POLL_INTERVAL_MS = 750L
         private const val COMMAND_REPLY_TIMEOUT_MS = 2_500L
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
