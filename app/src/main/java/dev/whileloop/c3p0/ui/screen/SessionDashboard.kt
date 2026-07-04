@@ -312,19 +312,27 @@ fun SessionDashboard(
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
-                    onClick = { viewModel.disableAutoSpeed() },
+                    onClick = { viewModel.setMode(TreadmillMode.MANUAL) },
                     enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = SESSION_MODE_COUNT)
                 ) {
                     Text("Manual")
                 }
                 SegmentedButton(
-                    selected = status.mode == TreadmillMode.AUTO || isAutoSpeedEnabled,
-                    onClick = { viewModel.enableAutoSpeed() },
+                    selected = status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
+                    onClick = { viewModel.setMode(TreadmillMode.AUTO) },
                     enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = SESSION_MODE_COUNT)
                 ) {
                     Text("Automatic")
+                }
+                SegmentedButton(
+                    selected = isAutoSpeedEnabled,
+                    onClick = { viewModel.enableZone2Mode() },
+                    enabled = isPadReady,
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = SESSION_MODE_COUNT)
+                ) {
+                    Text("Zone 2")
                 }
             }
         }
@@ -818,3 +826,4 @@ private val STOP_BUTTON_SIZE = 72.dp
 private val STOP_HOLD_ELEVATION = 24.dp
 private val STOP_RING_STROKE_WIDTH = 4.dp
 private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
+private const val SESSION_MODE_COUNT = 3

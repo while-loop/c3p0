@@ -292,16 +292,14 @@ class SessionViewModel @Inject constructor(
 
     fun setMode(mode: TreadmillMode) {
         viewModelScope.launch {
+            sessionManager.disableAutoSpeed()
             treadmillManager.setMode(mode)
-            if (mode == TreadmillMode.MANUAL) {
-                sessionManager.disableAutoSpeed()
-            }
         }
     }
 
-    fun enableAutoSpeed() {
+    fun enableZone2Mode() {
         viewModelScope.launch {
-            treadmillManager.setMode(TreadmillMode.AUTO)
+            treadmillManager.setMode(TreadmillMode.MANUAL)
             sessionManager.enableAutoSpeed(targetZone2HeartRate(age.value))
         }
     }

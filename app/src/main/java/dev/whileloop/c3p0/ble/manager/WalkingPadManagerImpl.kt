@@ -137,7 +137,7 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun start(): Boolean {
-        if (status.value.mode != TreadmillMode.MANUAL && !setMode(TreadmillMode.MANUAL)) {
+        if (status.value.mode == TreadmillMode.STANDBY && !setMode(TreadmillMode.MANUAL)) {
             return false
         }
         return sendControlCommand(
