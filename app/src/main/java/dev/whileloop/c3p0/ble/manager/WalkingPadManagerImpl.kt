@@ -33,6 +33,8 @@ class WalkingPadManagerImpl @Inject constructor(
     private var statusPollingJob: Job? = null
     private val commandMutex = Mutex()
     private var lastCommandElapsedMillis = 0L
+    private var lastStatusReceivedElapsedMillis = 0L
+    private var lastRawNotificationHex: String? = null
     private val _status = MutableStateFlow(TreadmillStatus())
     override val status: StateFlow<TreadmillStatus> = _status.asStateFlow()
 
@@ -100,7 +102,11 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun start(): Boolean {
-        return sendCommand(byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()))
+        return sendControlCommand(
+            label = "start belt",
+            cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x04.toByte(), 0x01.toByte(), 0x00, 0xFD.toByte()),
+            isApplied = { status -> status.state != TreadmillState.STANDBY }
+        )
     }
 
     override suspend fun stop(): Boolean {
@@ -108,8 +114,13 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
-        val s = (speed.coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH) * 10).toInt().toByte()
-        return sendCommand(byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte()))
+        val targetSpeed = speed.coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH)
+        val s = (targetSpeed * 10).toInt().toByte()
+        return sendControlCommand(
+            label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
+            cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte()),
+            isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+        )
     }
 
     override suspend fun setMode(mode: TreadmillMode): Boolean {
@@ -118,7 +129,11 @@ class WalkingPadManagerImpl @Inject constructor(
             TreadmillMode.MANUAL -> 0x01
             TreadmillMode.STANDBY -> 0x02
         }.toByte()
-        return sendCommand(byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x02.toByte(), m, 0x00, 0xFD.toByte()))
+        return sendControlCommand(
+            label = "set mode $mode",
+            cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x02.toByte(), m, 0x00, 0xFD.toByte()),
+            isApplied = { status -> status.mode == mode }
+        )
     }
 
     override suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean {
@@ -189,6 +204,50 @@ class WalkingPadManagerImpl @Inject constructor(
         sent
     }
 
+    private suspend fun sendControlCommand(
+        label: String,
+        cmd: ByteArray,
+        isApplied: (TreadmillStatus) -> Boolean
+    ): Boolean {
+        val previousStatusAt = lastStatusReceivedElapsedMillis
+        val sent = sendCommand(cmd)
+        if (sent) {
+            val commandHex = fixCrc(cmd.copyOf()).toHexString()
+            scope.launch {
+                delay(COMMAND_REPLY_TIMEOUT_MS)
+                val latestStatus = status.value
+                val statusUpdated = lastStatusReceivedElapsedMillis > previousStatusAt
+                val applied = statusUpdated && isApplied(latestStatus)
+                if (!applied) {
+                    errorReporter.report(
+                        "WalkingPad Bluetooth",
+                        if (statusUpdated) {
+                            "WalkingPad did not apply $label"
+                        } else {
+                            "No status reply after $label"
+                        },
+                        commandFailureDetail(commandHex, latestStatus)
+                    )
+                }
+            }
+        }
+        return sent
+    }
+
+    private fun commandFailureDetail(commandHex: String, status: TreadmillStatus): String =
+        buildString {
+            append("command=")
+            append(commandHex)
+            append(" connection=")
+            append(connectionState.value)
+            append(" status=")
+            append("state=${status.state},mode=${status.mode},speed=${status.speed}")
+            lastRawNotificationHex?.let {
+                append(" lastNotification=")
+                append(it)
+            }
+        }
+
     private suspend fun setPreferenceInt(key: Int, value: Int, type: Int = 0): Boolean {
         val command = byteArrayOf(
             0xF7.toByte(),
@@ -214,6 +273,7 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private fun handleNotification(data: ByteArray) {
+        lastRawNotificationHex = data.toHexString()
         if (data.size < 2 || data[0] != 0xF8.toByte()) {
             return
         }
@@ -226,6 +286,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun handleStatusNotification(data: ByteArray) {
         if (data.size < 15) return
+        lastStatusReceivedElapsedMillis = SystemClock.elapsedRealtime()
 
         val state = when (data[2].toInt() and 0xFF) {
             0 -> TreadmillState.STANDBY
@@ -298,5 +359,7 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val INITIAL_POLL_DELAY_MS = 250L
         private const val MIN_COMMAND_SPACING_MS = 700L
         private const val STATUS_POLL_INTERVAL_MS = 750L
+        private const val COMMAND_REPLY_TIMEOUT_MS = 2_500L
+        private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
     }
 }
