@@ -6,7 +6,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -32,6 +31,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -64,6 +64,7 @@ import java.time.temporal.ChronoField
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -797,6 +798,8 @@ private fun WeightTrendChart(
     val timeRangeDays = (timeRange.toDouble() / MILLIS_PER_DAY).coerceAtLeast(1.0)
     val clampedVisibleDays = visibleDays.coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
     val widthMultiplier = (timeRangeDays / clampedVisibleDays).coerceAtLeast(1.0)
+    val latestVisibleDays by rememberUpdatedState(clampedVisibleDays)
+    val latestOnVisibleDaysChange by rememberUpdatedState(onVisibleDaysChange)
 
     LaunchedEffect(points.size, points.last().time) {
         withFrameNanos { }
@@ -850,12 +853,34 @@ private fun WeightTrendChart(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(clampedVisibleDays) {
-                        detectTransformGestures { _, _, zoom, _ ->
-                            if (zoom != 1f) {
-                                val nextVisibleDays = (clampedVisibleDays / zoom)
-                                    .coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
-                                onVisibleDaysChange(nextVisibleDays)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            var previousDistance: Float? = null
+                            var gestureVisibleDays = latestVisibleDays
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val pressed = event.changes.filter { it.pressed }
+                                if (pressed.size >= 2) {
+                                    val currentDistance = (pressed[0].position - pressed[1].position).getDistance()
+                                    val lastDistance = previousDistance
+                                    if (lastDistance == null || lastDistance <= 0f) {
+                                        gestureVisibleDays = latestVisibleDays
+                                    } else if (currentDistance > 0f) {
+                                        val zoom = (currentDistance / lastDistance).coerceIn(
+                                            MIN_WEIGHT_PINCH_ZOOM,
+                                            MAX_WEIGHT_PINCH_ZOOM
+                                        )
+                                        if (abs(zoom - 1f) >= MIN_WEIGHT_PINCH_DELTA) {
+                                            gestureVisibleDays = (gestureVisibleDays / zoom)
+                                                .coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
+                                            latestOnVisibleDaysChange(gestureVisibleDays)
+                                        }
+                                    }
+                                    previousDistance = currentDistance
+                                    pressed.forEach { pointer -> pointer.consume() }
+                                } else {
+                                    previousDistance = null
+                                }
                             }
                         }
                     }
@@ -1670,5 +1695,8 @@ private const val WEIGHT_LINE_SMOOTHING = 0.16f
 private const val MILLIS_PER_DAY = 86_400_000.0
 private const val MIN_WEIGHT_VISIBLE_DAYS = 3f
 private const val MAX_WEIGHT_VISIBLE_DAYS = 365f
+private const val MIN_WEIGHT_PINCH_ZOOM = 0.85f
+private const val MAX_WEIGHT_PINCH_ZOOM = 1.18f
+private const val MIN_WEIGHT_PINCH_DELTA = 0.01f
 private const val DEFAULT_VISIBLE_CHART_BARS = 9
 private const val PREVIEW_DAY_COUNT = 7

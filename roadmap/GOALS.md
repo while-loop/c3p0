@@ -42,6 +42,7 @@
 - [x] Persist profile step goal and age settings.
 - [x] Add permission explanation bottom sheets before permission requests.
 - [x] Add heart-rate history chart with y-axis labels and zone-colored line segments.
+- [x] Support direct two-finger pinch adjustment of the weight chart's visible x-axis period.
 
 ## Phase 5: Cloud Sync & Final Polish [COMPLETED]
 - [x] Integrate Google Drive via Android Auto Backup.
