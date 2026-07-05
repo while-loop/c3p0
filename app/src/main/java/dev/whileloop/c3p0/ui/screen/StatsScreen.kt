@@ -796,7 +796,7 @@ private fun WeightTrendChart(
     val clampedVisibleDays = visibleDays.coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
     val widthMultiplier = (timeRangeDays / clampedVisibleDays).coerceAtLeast(1.0)
 
-    LaunchedEffect(points.size, points.last().time, clampedVisibleDays) {
+    LaunchedEffect(points.size, points.last().time) {
         withFrameNanos { }
         scrollState.scrollTo(scrollState.maxValue)
     }
@@ -806,13 +806,6 @@ private fun WeightTrendChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, _, zoom, _ ->
-                        val nextVisibleDays = (clampedVisibleDays / zoom)
-                            .coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
-                        onVisibleDaysChange(nextVisibleDays)
-                    }
-                }
         ) {
             val contentWidth = maxWidth * widthMultiplier.toFloat()
             val viewportWidthPx = with(density) { maxWidth.toPx() }
@@ -855,6 +848,15 @@ private fun WeightTrendChart(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .pointerInput(clampedVisibleDays) {
+                        detectTransformGestures { _, _, zoom, _ ->
+                            if (zoom != 1f) {
+                                val nextVisibleDays = (clampedVisibleDays / zoom)
+                                    .coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
+                                onVisibleDaysChange(nextVisibleDays)
+                            }
+                        }
+                    }
                     .horizontalScroll(scrollState)
             ) {
                 Canvas(
