@@ -42,4 +42,8 @@ class SessionRepositoryImpl @Inject constructor(
     override fun getMetricsForSession(sessionId: Long): Flow<List<SessionMetricEntity>> {
         return sessionDao.getMetricsForSession(sessionId)
     }
+
+    override suspend fun getMetricsForSessionSnapshot(sessionId: Long): List<SessionMetricEntity> {
+        return sessionDao.getMetricsForSessionSnapshot(sessionId)
+    }
 }

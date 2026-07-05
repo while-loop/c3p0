@@ -210,5 +210,8 @@ class StepNormalizationUseCaseTest {
 
         override fun getMetricsForSession(sessionId: Long): Flow<List<SessionMetricEntity>> =
             flowOf(emptyList())
+
+        override suspend fun getMetricsForSessionSnapshot(sessionId: Long): List<SessionMetricEntity> =
+            emptyList()
     }
 }

@@ -81,7 +81,7 @@ fun permissionGuidance(kind: PermissionRequestKind): PermissionGuidance =
 
         PermissionRequestKind.HealthConnect -> PermissionGuidance(
             title = "Sync with Health Connect",
-            body = "C3P0 needs Health Connect access before it can read step history and write completed walking sessions with time, steps, distance, and calories.",
+            body = "C3P0 needs Health Connect access before it can read step history and write completed walking sessions with time, steps, distance, speed, and active calories.",
             actionLabel = "Continue"
         )
 

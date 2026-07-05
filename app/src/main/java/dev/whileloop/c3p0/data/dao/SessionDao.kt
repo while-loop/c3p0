@@ -30,4 +30,7 @@ interface SessionDao {
 
     @Query("SELECT * FROM session_metrics WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     fun getMetricsForSession(sessionId: Long): Flow<List<SessionMetricEntity>>
+
+    @Query("SELECT * FROM session_metrics WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getMetricsForSessionSnapshot(sessionId: Long): List<SessionMetricEntity>
 }

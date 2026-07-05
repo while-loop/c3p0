@@ -10,6 +10,7 @@ import dev.whileloop.c3p0.data.repository.SessionRepository
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.algorithm.AutoSpeedController
 import dev.whileloop.c3p0.health.HealthConnectManager
+import dev.whileloop.c3p0.health.HealthConnectSpeedSample
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
@@ -231,9 +232,24 @@ class SessionManager @Inject constructor(
             )
             startCalories = 0
             sessionRepository.endSession(id, sessionStats)
+            val sessionMetrics = sessionRepository.getMetricsForSessionSnapshot(id)
             
             // Write to Health Connect
-            healthConnectManager.writeSession(start, end, totalSteps, distanceMeters, reportedCalories)
+            healthConnectManager.writeSession(
+                startTime = start,
+                endTime = end,
+                steps = totalSteps,
+                distanceMeters = distanceMeters,
+                activeCaloriesKcal = reportedCalories,
+                speedSamples = sessionMetrics.mapNotNull { metric ->
+                    metric.speed?.takeIf { it >= 0f }?.let { speedKmh ->
+                        HealthConnectSpeedSample(
+                            time = metric.timestamp,
+                            speedKmh = speedKmh.toDouble()
+                        )
+                    }
+                }
+            )
             settingsRepository.requestBackupIfEnabled()
 
             Timber.d("Session stopped and saved")

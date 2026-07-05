@@ -11,4 +11,5 @@ interface SessionRepository {
     fun getAllSessions(): Flow<List<SessionEntity>>
     suspend fun getSessionsBetween(startTime: java.time.Instant, endTime: java.time.Instant): List<SessionEntity>
     fun getMetricsForSession(sessionId: Long): Flow<List<SessionMetricEntity>>
+    suspend fun getMetricsForSessionSnapshot(sessionId: Long): List<SessionMetricEntity>
 }

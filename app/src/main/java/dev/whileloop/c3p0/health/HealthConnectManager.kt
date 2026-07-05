@@ -3,11 +3,12 @@ package dev.whileloop.c3p0.health
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.Record
+import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.StepsRecord
-import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
@@ -16,6 +17,7 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Length
+import androidx.health.connect.client.units.Velocity
 import dev.whileloop.c3p0.domain.usecase.StepCountRecord
 import dev.whileloop.c3p0.domain.usecase.StepHistoryDataSource
 import timber.log.Timber
@@ -141,7 +143,8 @@ class HealthConnectManager @Inject constructor(
         endTime: Instant,
         steps: Int,
         distanceMeters: Double,
-        caloriesKcal: Int
+        activeCaloriesKcal: Int,
+        speedSamples: List<HealthConnectSpeedSample>
     ) {
         if (!hasPermissions(WRITE_SESSION_PERMISSIONS)) return
         if (!endTime.isAfter(startTime)) return
@@ -180,10 +183,10 @@ class HealthConnectManager @Inject constructor(
                 distance = Length.meters(distanceMeters.coerceAtLeast(0.0)),
                 metadata = metadata
             )
-            val calorieRecord = caloriesKcal
+            val calorieRecord = activeCaloriesKcal
                 .takeIf { it > 0 }
                 ?.let { calories ->
-                    TotalCaloriesBurnedRecord(
+                    ActiveCaloriesBurnedRecord(
                         startTime = startTime,
                         startZoneOffset = startZoneOffset,
                         endTime = endTime,
@@ -192,12 +195,31 @@ class HealthConnectManager @Inject constructor(
                         metadata = metadata
                     )
                 }
+            val speedRecord = speedSamples
+                .filter { sample -> sample.time in startTime..endTime }
+                .map { sample ->
+                    SpeedRecord.Sample(
+                        time = sample.time,
+                        speed = Velocity.kilometersPerHour(sample.speedKmh.coerceAtLeast(0.0))
+                    )
+                }
+                .takeIf { it.isNotEmpty() }
+                ?.let { samples ->
+                    SpeedRecord(
+                        startTime = startTime,
+                        startZoneOffset = startZoneOffset,
+                        endTime = endTime,
+                        endZoneOffset = endZoneOffset,
+                        samples = samples,
+                        metadata = metadata
+                    )
+                }
             healthConnectClient.insertRecords(
                 listOf<Record>(
                     exerciseSessionRecord,
                     stepsRecord,
                     distanceRecord
-                ) + listOfNotNull(calorieRecord)
+                ) + listOfNotNull<Record>(calorieRecord, speedRecord)
             )
         } catch (e: Exception) {
             Timber.e(e, "Error writing session to Health Connect")
@@ -219,7 +241,8 @@ class HealthConnectManager @Inject constructor(
             HealthPermission.getWritePermission(StepsRecord::class),
             HealthPermission.getWritePermission(DistanceRecord::class),
             HealthPermission.getWritePermission(ExerciseSessionRecord::class),
-            HealthPermission.getWritePermission(TotalCaloriesBurnedRecord::class)
+            HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
+            HealthPermission.getWritePermission(SpeedRecord::class)
         )
         val PERMISSIONS: Set<String> = STEP_HISTORY_PERMISSIONS + WRITE_SESSION_PERMISSIONS
         private const val READ_HEALTH_DATA_HISTORY_PERMISSION =
@@ -230,4 +253,9 @@ class HealthConnectManager @Inject constructor(
 data class WeightHistoryRecord(
     val time: Instant,
     val weightKg: Double
+)
+
+data class HealthConnectSpeedSample(
+    val time: Instant,
+    val speedKmh: Double
 )
