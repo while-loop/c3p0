@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -764,6 +765,7 @@ private fun WeightTrendChart(
 ) {
     val scrollState = rememberScrollState()
     val hapticFeedback = LocalHapticFeedback.current
+    val density = LocalDensity.current
     var selectedPointIndex by remember(points) { mutableStateOf<Int?>(null) }
     val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val trendColor = MaterialTheme.colorScheme.primary
@@ -771,11 +773,6 @@ private fun WeightTrendChart(
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val pointFillColor = MaterialTheme.colorScheme.surface
     val hoverLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.56f)
-    val minValue = points.minOf { minOf(it.rawWeight, it.trailingAverage) }
-    val maxValue = points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
-    val paddedMin = floor((minValue - WEIGHT_CHART_PADDING).coerceAtLeast(0.0))
-    val paddedMax = ceil(maxValue + WEIGHT_CHART_PADDING).coerceAtLeast(paddedMin + 1.0)
-    val valueRange = (paddedMax - paddedMin).coerceAtLeast(1.0)
     val startTime = points.first().time.toEpochMilli()
     val endTime = points.last().time.toEpochMilli()
     val timeRange = (endTime - startTime).coerceAtLeast(1L)
@@ -802,6 +799,38 @@ private fun WeightTrendChart(
                 }
         ) {
             val contentWidth = maxWidth * widthMultiplier.toFloat()
+            val viewportWidthPx = with(density) { maxWidth.toPx() }
+            val contentWidthPx = with(density) { contentWidth.toPx() }
+            val leftPaddingPx = with(density) { 4.dp.toPx() }
+            val rightPaddingPx = with(density) { 36.dp.toPx() }
+            val visibleWindow = remember(
+                points,
+                scrollState.value,
+                viewportWidthPx,
+                contentWidthPx,
+                startTime,
+                timeRange,
+                leftPaddingPx,
+                rightPaddingPx
+            ) {
+                visibleWeightWindow(
+                    points = points,
+                    startTime = startTime,
+                    timeRange = timeRange,
+                    scrollOffsetPx = scrollState.value.toFloat(),
+                    viewportWidthPx = viewportWidthPx,
+                    contentWidthPx = contentWidthPx,
+                    leftPaddingPx = leftPaddingPx,
+                    rightPaddingPx = rightPaddingPx
+                )
+            }
+            val visibleMinValue = visibleWindow.points.minOf { minOf(it.rawWeight, it.trailingAverage) }
+            val visibleMaxValue = visibleWindow.points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
+            val paddedMin = floor((visibleMinValue - WEIGHT_CHART_PADDING).coerceAtLeast(0.0))
+            val paddedMax = ceil(visibleMaxValue + WEIGHT_CHART_PADDING).coerceAtLeast(paddedMin + 1.0)
+            val valueRange = (paddedMax - paddedMin).coerceAtLeast(1.0)
+            val axisLabels = weightAxisLabels(paddedMin, paddedMax)
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -842,8 +871,8 @@ private fun WeightTrendChart(
                             )
                         }
                 ) {
-                    val leftPadding = 4.dp.toPx()
-                    val rightPadding = 36.dp.toPx()
+                    val leftPadding = leftPaddingPx
+                    val rightPadding = rightPaddingPx
                     val topPadding = 8.dp.toPx()
                     val bottomPadding = 10.dp.toPx()
                     val chartWidth = size.width - leftPadding - rightPadding
@@ -855,8 +884,7 @@ private fun WeightTrendChart(
                     fun yFor(value: Double): Float =
                         topPadding + ((paddedMax - value).toFloat() / valueRange.toFloat()) * usableHeight
 
-                    val labels = weightAxisLabels(paddedMin, paddedMax)
-                    labels.forEach { label ->
+                    axisLabels.forEach { label ->
                         val y = yFor(label)
                         drawLine(
                             color = gridColor,
@@ -939,7 +967,7 @@ private fun WeightTrendChart(
                 verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.End
             ) {
-                weightAxisLabels(paddedMin, paddedMax).forEach { label ->
+                axisLabels.forEach { label ->
                     Text(
                         text = label.toInt().toString(),
                         style = MaterialTheme.typography.labelSmall,
@@ -1394,6 +1422,44 @@ private fun selectedWeightPointIndexForX(
     return points.indices.minByOrNull { index ->
         kotlin.math.abs(points[index].time.toEpochMilli() - selectedTime)
     }
+}
+
+private data class VisibleWeightWindow(
+    val points: List<WeightChartPoint>,
+    val startTime: Long,
+    val endTime: Long
+)
+
+private fun visibleWeightWindow(
+    points: List<WeightChartPoint>,
+    startTime: Long,
+    timeRange: Long,
+    scrollOffsetPx: Float,
+    viewportWidthPx: Float,
+    contentWidthPx: Float,
+    leftPaddingPx: Float,
+    rightPaddingPx: Float
+): VisibleWeightWindow {
+    if (points.isEmpty()) {
+        return VisibleWeightWindow(emptyList(), startTime, startTime)
+    }
+
+    val chartWidth = (contentWidthPx - leftPaddingPx - rightPaddingPx).coerceAtLeast(1f)
+    val visibleStartFraction = ((scrollOffsetPx - leftPaddingPx) / chartWidth).coerceIn(0f, 1f)
+    val visibleEndFraction = ((scrollOffsetPx + viewportWidthPx - leftPaddingPx) / chartWidth).coerceIn(0f, 1f)
+    val visibleStartTime = startTime + (visibleStartFraction * timeRange).toLong()
+    val visibleEndTime = startTime + (visibleEndFraction * timeRange).toLong()
+    val startIndex = points.indexOfLast { it.time.toEpochMilli() <= visibleStartTime }
+        .coerceAtLeast(0)
+    val endIndex = points.indexOfFirst { it.time.toEpochMilli() >= visibleEndTime }
+        .let { if (it == -1) points.lastIndex else it }
+        .coerceAtLeast(startIndex)
+
+    return VisibleWeightWindow(
+        points = points.subList(startIndex, endIndex + 1),
+        startTime = visibleStartTime,
+        endTime = visibleEndTime
+    )
 }
 
 private fun formatVisibleWeightRange(visibleDays: Float): String {
