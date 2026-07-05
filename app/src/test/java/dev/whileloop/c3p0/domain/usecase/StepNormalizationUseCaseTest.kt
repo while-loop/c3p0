@@ -108,6 +108,23 @@ class StepNormalizationUseCaseTest {
         assertEquals(1_200L, result.excludedOtherSessionSteps)
     }
 
+    @Test
+    fun defaultDailyHistoryRequestsOneHundredEightyDays() = runBlocking {
+        val today = LocalDate.now(zone)
+        val expectedStart = today.minusDays(179).atStartOfDay(zone).toInstant()
+        val expectedEnd = today.plusDays(1).atStartOfDay(zone).toInstant()
+        val dataSource = FakeStepHistoryDataSource()
+        val useCase = StepNormalizationUseCase(dataSource, FakeSessionRepository())
+
+        val result = useCase.getDailyStepHistory()
+
+        assertEquals(180, result.size)
+        assertEquals(expectedStart, dataSource.lastRawStartTime)
+        assertEquals(expectedEnd, dataSource.lastRawEndTime)
+        assertEquals(expectedStart, dataSource.firstAggregateStartTime)
+        assertEquals(expectedEnd, dataSource.lastAggregateEndTime)
+    }
+
     private fun instant(value: String): Instant = Instant.parse(value)
 
     private fun stepRecord(
@@ -148,15 +165,27 @@ class StepNormalizationUseCaseTest {
         private val aggregateSteps: Map<Instant, Long> = emptyMap(),
         private val hasPermission: Boolean = true
     ) : StepHistoryDataSource {
+        var lastRawStartTime: Instant? = null
+            private set
+        var lastRawEndTime: Instant? = null
+            private set
+        var firstAggregateStartTime: Instant? = null
+            private set
         var lastAggregateEndTime: Instant? = null
             private set
 
         override suspend fun hasStepHistoryPermission(): Boolean = hasPermission
 
-        override suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepCountRecord> =
-            records.filter { it.startTime < endTime && it.endTime > startTime }
+        override suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepCountRecord> {
+            lastRawStartTime = startTime
+            lastRawEndTime = endTime
+            return records.filter { it.startTime < endTime && it.endTime > startTime }
+        }
 
         override suspend fun readAggregatedSteps(startTime: Instant, endTime: Instant): Long {
+            if (firstAggregateStartTime == null) {
+                firstAggregateStartTime = startTime
+            }
             lastAggregateEndTime = endTime
             return aggregateSteps[startTime] ?: 0L
         }
