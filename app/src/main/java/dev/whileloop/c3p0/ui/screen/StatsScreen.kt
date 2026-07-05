@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -23,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -760,11 +763,14 @@ private fun WeightTrendChart(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val hapticFeedback = LocalHapticFeedback.current
+    var selectedPointIndex by remember(points) { mutableStateOf<Int?>(null) }
     val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val trendColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val pointFillColor = MaterialTheme.colorScheme.surface
+    val hoverLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.56f)
     val minValue = points.minOf { minOf(it.rawWeight, it.trailingAverage) }
     val maxValue = points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
     val paddedMin = floor((minValue - WEIGHT_CHART_PADDING).coerceAtLeast(0.0))
@@ -805,6 +811,36 @@ private fun WeightTrendChart(
                     modifier = Modifier
                         .width(contentWidth)
                         .fillMaxHeight()
+                        .pointerInput(points, startTime, endTime) {
+                            var lastHapticIndex: Int? = null
+
+                            fun updateSelection(x: Float) {
+                                val nextIndex = selectedWeightPointIndexForX(
+                                    x = x,
+                                    width = size.width.toFloat(),
+                                    points = points,
+                                    startTime = startTime,
+                                    timeRange = timeRange,
+                                    leftPadding = 4.dp.toPx(),
+                                    rightPadding = 36.dp.toPx()
+                                )
+                                selectedPointIndex = nextIndex
+                                if (nextIndex != null && nextIndex != lastHapticIndex) {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    lastHapticIndex = nextIndex
+                                }
+                            }
+
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { offset -> updateSelection(offset.x) },
+                                onDragEnd = { selectedPointIndex = null },
+                                onDragCancel = { selectedPointIndex = null },
+                                onDrag = { change, _ ->
+                                    updateSelection(change.position.x)
+                                    change.consume()
+                                }
+                            )
+                        }
                 ) {
                     val leftPadding = 4.dp.toPx()
                     val rightPadding = 36.dp.toPx()
@@ -859,7 +895,42 @@ private fun WeightTrendChart(
                             center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
                         )
                     }
+
+                    selectedPointIndex?.let { index ->
+                        val point = points[index]
+                        val selectedX = xFor(point.time.toEpochMilli())
+                        drawLine(
+                            color = hoverLineColor,
+                            start = Offset(selectedX, topPadding),
+                            end = Offset(selectedX, size.height - bottomPadding),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        drawCircle(
+                            color = rawColor,
+                            radius = 5.dp.toPx(),
+                            center = Offset(selectedX, yFor(point.rawWeight))
+                        )
+                        drawCircle(
+                            color = pointFillColor,
+                            radius = 5.dp.toPx(),
+                            center = Offset(selectedX, yFor(point.trailingAverage))
+                        )
+                        drawCircle(
+                            color = trendColor,
+                            radius = 3.dp.toPx(),
+                            center = Offset(selectedX, yFor(point.trailingAverage))
+                        )
+                    }
                 }
+            }
+            selectedPointIndex?.let { index ->
+                WeightChartHoverCard(
+                    point = points[index],
+                    unitSystem = unitSystem,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 8.dp, top = 8.dp)
+                )
             }
             Column(
                 modifier = Modifier
@@ -885,6 +956,38 @@ private fun WeightTrendChart(
             Text(points.first().dateLabel(), style = MaterialTheme.typography.labelSmall)
             Text(weightUnitLabel(unitSystem), style = MaterialTheme.typography.labelSmall, color = labelColor)
             Text(points.last().dateLabel(), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun WeightChartHoverCard(
+    point: WeightChartPoint,
+    unitSystem: UnitSystem,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp,
+        shadowElevation = 4.dp
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(
+                text = point.displayDateLabel(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Raw ${formatWeight(point.rawWeight, unitSystem)}",
+                style = MaterialTheme.typography.labelSmall
+            )
+            Text(
+                text = "7-day ${formatWeight(point.trailingAverage, unitSystem)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -1258,10 +1361,39 @@ private fun List<WeightChartPoint>.dateRangeLabel(): String {
 private fun WeightChartPoint.dateLabel(): String =
     date.format(DateTimeFormatter.ofPattern("M/d", Locale.US))
 
+private fun WeightChartPoint.displayDateLabel(): String {
+    val formatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+    return if (date == endDate) {
+        "${date.format(formatter)}, ${date.year}"
+    } else if (date.year == endDate.year) {
+        "${date.format(formatter)} - ${endDate.format(formatter)}, ${endDate.year}"
+    } else {
+        "${date.format(formatter)}, ${date.year} - ${endDate.format(formatter)}, ${endDate.year}"
+    }
+}
+
 private fun weightAxisLabels(minValue: Double, maxValue: Double): List<Double> {
     val range = (maxValue - minValue).coerceAtLeast(1.0)
     val step = (range / 4.0).coerceAtLeast(1.0)
     return (4 downTo 0).map { minValue + (step * it) }
+}
+
+private fun selectedWeightPointIndexForX(
+    x: Float,
+    width: Float,
+    points: List<WeightChartPoint>,
+    startTime: Long,
+    timeRange: Long,
+    leftPadding: Float,
+    rightPadding: Float
+): Int? {
+    if (points.isEmpty()) return null
+    val chartWidth = (width - leftPadding - rightPadding).coerceAtLeast(1f)
+    val positionFraction = ((x - leftPadding) / chartWidth).coerceIn(0f, 1f)
+    val selectedTime = startTime + (positionFraction * timeRange).toLong()
+    return points.indices.minByOrNull { index ->
+        kotlin.math.abs(points[index].time.toEpochMilli() - selectedTime)
+    }
 }
 
 private fun formatVisibleWeightRange(visibleDays: Float): String {
