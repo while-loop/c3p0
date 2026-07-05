@@ -35,6 +35,28 @@ class KingsmithFtmsProtocolTest {
     }
 
     @Test
+    fun noLoadStopResponseParsesSupplementAutoStopAck() {
+        val response = KingsmithFtmsProtocol.parseNoLoadStopResponse(
+            byteArrayOf(0x72, 0x81.toByte(), 0x02, 0x02, 0x00, 0xf7.toByte())
+        )
+
+        checkNotNull(response)
+        assertEquals(false, response.enabled)
+        assertEquals(null, response.timeoutSeconds)
+    }
+
+    @Test
+    fun noLoadStopResponseParsesEnabledTimeoutAck() {
+        val response = KingsmithFtmsProtocol.parseNoLoadStopResponse(
+            byteArrayOf(0x72, 0x81.toByte(), 0x02, 0x02, 0x05, 0xf7.toByte())
+        )
+
+        checkNotNull(response)
+        assertEquals(true, response.enabled)
+        assertEquals(5, response.timeoutSeconds)
+    }
+
+    @Test
     fun treadmillDataParsesKingSmithStepExtension() {
         val flags = 0x2404
         val data = byteArrayOf(

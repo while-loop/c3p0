@@ -6,6 +6,11 @@ import dev.whileloop.c3p0.ble.model.TreadmillStatus
 import java.util.UUID
 
 internal object KingsmithFtmsProtocol {
+    data class NoLoadStopResponse(
+        val enabled: Boolean,
+        val timeoutSeconds: Int?
+    )
+
     val SERVICE_UUID: UUID = UUID.fromString("00001826-0000-1000-8000-00805f9b34fb")
     const val TREADMILL_DATA_CHAR = "00002acd"
     const val TRAINING_STATUS_CHAR = "00002ad3"
@@ -13,6 +18,10 @@ internal object KingsmithFtmsProtocol {
     const val FITNESS_MACHINE_STATUS_CHAR = "00002ada"
 
     const val ODM_WRITE_CHAR = "d18d2c10"
+    val supplementNotifyCharSubstrings = listOf(
+        "c5330b00fdf7",
+        "c5330e00fdf7"
+    )
     val supplementWriteCharSubstrings = listOf(
         "d18d2c10",
         "c5330d00fdf7",
@@ -69,6 +78,19 @@ internal object KingsmithFtmsProtocol {
             (body.size + 1).toByte(),
             0x00
         ) + body + checksum.toByte()
+    }
+
+    fun parseNoLoadStopResponse(data: ByteArray): NoLoadStopResponse? {
+        if (data.size < 6) return null
+        if (data.first() != 0x72.toByte() || data.last() != 0xF7.toByte()) return null
+        val propertyIndex = (3 until data.lastIndex).firstOrNull { index ->
+            (data[index].toInt() and 0xFF) == SUPPLEMENT_PROPERTY_AUTO_STOP
+        } ?: return null
+        val value = data.getOrNull(propertyIndex + 1)?.toInt()?.and(0xFF) ?: return null
+        return NoLoadStopResponse(
+            enabled = value > 0,
+            timeoutSeconds = value.takeIf { it > 0 }
+        )
     }
 
     fun parseTreadmillData(data: ByteArray, current: TreadmillStatus): TreadmillStatus? {

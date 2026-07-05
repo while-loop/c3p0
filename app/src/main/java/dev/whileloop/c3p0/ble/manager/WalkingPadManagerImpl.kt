@@ -50,12 +50,16 @@ class WalkingPadManagerImpl @Inject constructor(
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
     private var lastRawNotificationHex: String? = null
+    private var lastKsFtmsSupplementNotificationHex: String? = null
+    private var lastKsFtmsSupplementNotificationSeq = 0L
+    private var lastKsFtmsNoLoadStopResponse: KingsmithFtmsProtocol.NoLoadStopResponse? = null
     private var connectionGeneration = 0
     private val protocolReady = MutableStateFlow(false)
     private val legacyProtocolReady = MutableStateFlow(false)
     private val ksEncryptedProtocolReady = MutableStateFlow(false)
     private val ksFtmsProtocolReady = MutableStateFlow(false)
     private var activeKsFtmsSupplementWriteCharSubstring: String? = null
+    private var activeKsFtmsSupplementNotifyCharSubstring: String? = null
     private val _status = MutableStateFlow(TreadmillStatus())
     override val status: StateFlow<TreadmillStatus> = _status.asStateFlow()
 
@@ -84,6 +88,10 @@ class WalkingPadManagerImpl @Inject constructor(
         ksFtmsProtocolReady.value = false
         resetKsEncryptedState()
         activeKsFtmsSupplementWriteCharSubstring = null
+        activeKsFtmsSupplementNotifyCharSubstring = null
+        lastKsFtmsSupplementNotificationHex = null
+        lastKsFtmsSupplementNotificationSeq = 0L
+        lastKsFtmsNoLoadStopResponse = null
         _supportsNativeAutoMode.value = false
         _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(
@@ -99,6 +107,8 @@ class WalkingPadManagerImpl @Inject constructor(
                     else -> {
                         if (isKsFtmsCharacteristic(uuid)) {
                             handleKsFtmsNotification(uuid, data)
+                        } else if (isKsFtmsSupplementNotifyCharacteristic(uuid)) {
+                            handleKsFtmsSupplementNotification(data)
                         } else if (isKsEncryptedReadCharacteristic(uuid)) {
                             handleKsEncryptedNotification(data)
                         }
@@ -483,6 +493,7 @@ class WalkingPadManagerImpl @Inject constructor(
         val timeout = timeoutSeconds.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
             ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
         val commands = KingsmithFtmsProtocol.noLoadStopCommands(enabled, timeout)
+        val previousSupplementNotificationSeq = lastKsFtmsSupplementNotificationSeq
         for (command in commands) {
             if (!sendKsFtmsSupplementCommand(command)) {
                 errorReporter.report(
@@ -494,12 +505,36 @@ class WalkingPadManagerImpl @Inject constructor(
             }
         }
 
-        _status.value = status.value.copy(
-            noLoadStopEnabled = enabled,
-            noLoadStopTimeoutSeconds = timeout
+        delay(FTMS_SUPPLEMENT_RESPONSE_WAIT_MS)
+        val response = lastKsFtmsNoLoadStopResponse
+        if (lastKsFtmsSupplementNotificationSeq > previousSupplementNotificationSeq &&
+            response != null &&
+            noLoadStopResponseMatches(response, enabled, timeout)
+        ) {
+            _status.value = status.value.copy(
+                noLoadStopEnabled = enabled,
+                noLoadStopTimeoutSeconds = timeout
+            )
+            return true
+        }
+
+        errorReporter.report(
+            "WalkingPad Bluetooth",
+            "KS FTMS no-load command was not confirmed; setting was not saved",
+            "commands=${commands.joinToString(separator = ";") { it.toHexString() }} enabled=$enabled timeoutSeconds=$timeout " +
+                "write~=${activeKsFtmsSupplementWriteCharSubstring ?: "none"} notify~=${activeKsFtmsSupplementNotifyCharSubstring ?: "none"} " +
+                "response=$response latestNotify=${lastKsFtmsSupplementNotificationHex ?: "none"}"
         )
-        return true
+        return false
     }
+
+    private fun noLoadStopResponseMatches(
+        response: KingsmithFtmsProtocol.NoLoadStopResponse,
+        enabled: Boolean,
+        timeoutSeconds: Int
+    ): Boolean =
+        response.enabled == enabled &&
+            (!enabled || response.timeoutSeconds == timeoutSeconds)
 
     private suspend fun applyUnitSystem(unitSystem: UnitSystem): Boolean {
         if (!legacyProtocolReady.value) {
@@ -1080,12 +1115,26 @@ class WalkingPadManagerImpl @Inject constructor(
             .firstOrNull { writeChar ->
                 connection?.hasWriteCharacteristicUuidSubstring(writeChar) == true
             }
+        activeKsFtmsSupplementNotifyCharSubstring = KingsmithFtmsProtocol.supplementNotifyCharSubstrings
+            .firstOrNull { notifyChar ->
+                connection?.hasUpdateCharacteristicUuidSubstring(notifyChar) == true
+            }
+        val supplementUpdatesEnabled = activeKsFtmsSupplementNotifyCharSubstring?.let { notifyChar ->
+            connection?.enableUpdatesByUuidSubstring(notifyChar)
+        } ?: false
         val preambleSent = sendKsFtmsPreamble()
         if (!preambleSent) {
             errorReporter.report(
                 "WalkingPad Bluetooth",
                 "KS FTMS property preamble was not accepted",
                 "address=$address write~=${activeKsFtmsSupplementWriteCharSubstring ?: "none"}"
+            )
+        }
+        if (activeKsFtmsSupplementNotifyCharSubstring != null && !supplementUpdatesEnabled) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "KS FTMS supplement updates were not enabled",
+                "address=$address notify~=$activeKsFtmsSupplementNotifyCharSubstring"
             )
         }
 
@@ -1167,6 +1216,10 @@ class WalkingPadManagerImpl @Inject constructor(
         ksFtmsProtocolReady.value = false
         ksEncryptedProtocolReady.value = false
         activeKsFtmsSupplementWriteCharSubstring = null
+        activeKsFtmsSupplementNotifyCharSubstring = null
+        lastKsFtmsSupplementNotificationHex = null
+        lastKsFtmsSupplementNotificationSeq = 0L
+        lastKsFtmsNoLoadStopResponse = null
         resetKsEncryptedState()
     }
 
@@ -1209,6 +1262,32 @@ class WalkingPadManagerImpl @Inject constructor(
             lowerUuid.contains(KingsmithFtmsProtocol.FITNESS_MACHINE_STATUS_CHAR) ||
             lowerUuid.contains(KingsmithFtmsProtocol.TRAINING_STATUS_CHAR) ||
             lowerUuid.contains(KingsmithFtmsProtocol.CONTROL_POINT_CHAR)
+    }
+
+    private fun isKsFtmsSupplementNotifyCharacteristic(uuid: UUID): Boolean {
+        val lowerUuid = uuid.toString().lowercase(Locale.US)
+        return KingsmithFtmsProtocol.supplementNotifyCharSubstrings.any { notifyChar ->
+            lowerUuid.contains(notifyChar.lowercase(Locale.US))
+        }
+    }
+
+    private fun handleKsFtmsSupplementNotification(data: ByteArray) {
+        lastKsFtmsSupplementNotificationHex = data.toHexString()
+        lastKsFtmsSupplementNotificationSeq += 1
+        KingsmithFtmsProtocol.parseNoLoadStopResponse(data)?.let { response ->
+            lastKsFtmsNoLoadStopResponse = response
+            _status.value = status.value.copy(
+                noLoadStopEnabled = response.enabled,
+                noLoadStopTimeoutSeconds = response.timeoutSeconds ?: status.value.noLoadStopTimeoutSeconds
+            )
+            return
+        }
+
+        errorReporter.report(
+            "WalkingPad Bluetooth",
+            "KS FTMS supplement notification received",
+            "notify~=${activeKsFtmsSupplementNotifyCharSubstring ?: "unknown"} data=${data.toHexString()}"
+        )
     }
 
     private fun handleKsFtmsNotification(uuid: UUID, data: ByteArray) {
@@ -1465,6 +1544,7 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
         private const val GATT_DESCRIPTOR_WRITE_DELAY_MS = 400L
         private const val FTMS_SUBSCRIPTION_STAGGER_MS = 200L
+        private const val FTMS_SUPPLEMENT_RESPONSE_WAIT_MS = 750L
         private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
         private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
