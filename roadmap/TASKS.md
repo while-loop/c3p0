@@ -64,6 +64,7 @@
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
 - [x] **Weight Pinch Anchor Zoom**: Keep the timestamp under the stationary pinch finger fixed while the opposite side of the x-axis changes.
 - [x] **Incremental Chart Refresh**: Refresh cached Health Connect chart data from the latest cached point plus a 7-day overlap on startup, while keeping manual refresh full-history.
+- [x] **Full Chart Refresh Upserts**: Keep existing chart cache rows during manual full refresh and overwrite only matching Health Connect dates or timestamps.
 - [x] **Zone 2 HR Chart Guides**: Draw session chart Zone 2 min/max guides as dashed lines so they read as thresholds instead of data.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
 - [x] **Health Connect Permissions**: Scoped runtime checks by operation, refreshed permission state on profile resume, and opened Health Connect settings when the user wants to revoke access.

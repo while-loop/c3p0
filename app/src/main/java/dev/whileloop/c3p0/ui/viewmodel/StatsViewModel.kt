@@ -146,13 +146,19 @@ class StatsViewModel @Inject constructor(
 
     fun refreshStepHistory() {
         viewModelScope.launch {
-            refreshStepHistoryRange(startDate = defaultStepHistoryStartDate(), cachedHistory = emptyList())
+            refreshStepHistoryRange(
+                startDate = defaultStepHistoryStartDate(),
+                cachedHistory = stepHistoryCacheRepository.readDailyStepHistory()
+            )
         }
     }
 
     fun refreshWeightHistory() {
         viewModelScope.launch {
-            refreshWeightHistoryRange(startTime = defaultWeightHistoryStartTime(), cachedHistory = emptyList())
+            refreshWeightHistoryRange(
+                startTime = defaultWeightHistoryStartTime(),
+                cachedHistory = weightHistoryCacheRepository.readWeightHistory()
+            )
         }
     }
 
@@ -182,8 +188,7 @@ class StatsViewModel @Inject constructor(
                 )
                 val mergedHistory = mergeStepHistory(
                     cachedHistory = cachedHistory,
-                    freshHistory = freshHistory,
-                    refreshStartDate = startDate
+                    freshHistory = freshHistory
                 )
                 _dailyStepHistory.value = mergedHistory.map { it.toDailyStepHistory() }
                 stepHistoryCacheRepository.saveDailyStepHistory(
@@ -221,8 +226,7 @@ class StatsViewModel @Inject constructor(
                     .map { it.toCachedWeightHistoryRecord() }
                 val mergedHistory = mergeWeightHistory(
                     cachedHistory = cachedHistory,
-                    freshHistory = freshHistory,
-                    refreshStartTime = startTime
+                    freshHistory = freshHistory
                 )
                 _weightHistory.value = mergedHistory.map { it.toWeightHistoryRecord() }
                 weightHistoryCacheRepository.saveWeightHistory(
@@ -267,21 +271,20 @@ class StatsViewModel @Inject constructor(
 
     private fun mergeStepHistory(
         cachedHistory: List<CachedDailyStepHistory>,
-        freshHistory: List<DailyStepHistory>,
-        refreshStartDate: LocalDate
+        freshHistory: List<DailyStepHistory>
     ): List<CachedDailyStepHistory> =
-        (cachedHistory.filter { it.date < refreshStartDate } +
-            freshHistory.map { it.toCachedDailyStepHistory() })
-            .distinctBy { it.date }
+        (cachedHistory.associateBy { it.date } +
+            freshHistory.associate { it.date to it.toCachedDailyStepHistory() })
+            .values
             .sortedByDescending { it.date }
 
     private fun mergeWeightHistory(
         cachedHistory: List<CachedWeightHistoryRecord>,
-        freshHistory: List<CachedWeightHistoryRecord>,
-        refreshStartTime: Instant
+        freshHistory: List<CachedWeightHistoryRecord>
     ): List<CachedWeightHistoryRecord> =
-        (cachedHistory.filter { it.time < refreshStartTime } + freshHistory)
-            .distinctBy { it.time }
+        (cachedHistory.associateBy { it.time } +
+            freshHistory.associateBy { it.time })
+            .values
             .sortedBy { it.time }
 
     private fun defaultStepHistoryStartDate(): LocalDate {
