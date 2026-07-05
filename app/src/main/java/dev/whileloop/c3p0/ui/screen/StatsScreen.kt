@@ -607,9 +607,9 @@ private fun HealthConnectWeightHistoryCard(
     val chartPoints = remember(records, unitSystem, selectedGrouping) {
         records.toWeightChartPoints(unitSystem, selectedGrouping)
     }
-    val latestRange = remember(chartPoints) {
-        chartPoints.dateRangeLabel()
-    }
+    var visibleSummaryPoints by remember(chartPoints) { mutableStateOf(chartPoints) }
+    val summaryPoints = visibleSummaryPoints.takeIf { it.isNotEmpty() } ?: chartPoints
+    val latestRange = remember(summaryPoints) { summaryPoints.dateRangeLabel() }
 
     Card(modifier = modifier) {
         Column(
@@ -653,13 +653,14 @@ private fun HealthConnectWeightHistoryCard(
                 records.isEmpty() -> Text("No Health Connect weight data found.")
                 chartPoints.size < 2 -> Text("Add at least two weight entries in Health Connect to show a trend.")
                 else -> {
-                    WeightSummaryRow(chartPoints, unitSystem, latestRange)
+                    WeightSummaryRow(summaryPoints, unitSystem, latestRange)
                     Spacer(modifier = Modifier.height(8.dp))
                     WeightTrendChart(
                         points = chartPoints,
                         unitSystem = unitSystem,
                         visibleDays = visibleDays,
                         onVisibleDaysChange = onVisibleDaysChange,
+                        onVisiblePointsChange = { visibleSummaryPoints = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(220.dp)
@@ -771,6 +772,7 @@ private fun WeightTrendChart(
     unitSystem: UnitSystem,
     visibleDays: Float,
     onVisibleDaysChange: (Float) -> Unit,
+    onVisiblePointsChange: (List<WeightChartPoint>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -838,6 +840,7 @@ private fun WeightTrendChart(
             LaunchedEffect(visibleWindow.startTime, visibleWindow.endTime) {
                 visibleDateLabels = formatWeightAxisDate(visibleWindow.startTime) to
                     formatWeightAxisDate(visibleWindow.endTime)
+                onVisiblePointsChange(visibleWindow.points)
             }
             val visibleMinValue = visibleWindow.points.minOf { minOf(it.rawWeight, it.trailingAverage) }
             val visibleMaxValue = visibleWindow.points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
