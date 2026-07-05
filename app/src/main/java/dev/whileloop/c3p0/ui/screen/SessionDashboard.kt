@@ -209,8 +209,8 @@ fun SessionDashboard(
         AdaptiveStatGrid(
             tiles = listOf(
                 StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
-                StatTile("Steps", sessionSteps.toString(), "steps"),
-                StatTile("Steps to goal", normalizedStepsToGoal?.toString() ?: "---", "nrm"),
+                StatTile("Steps", sessionSteps.toString(), ""),
+                StatTile("Steps to goal", normalizedStepsToGoal?.toString() ?: "---", ""),
                 StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
                 StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
                 StatTile("Calories", sessionCalories.toString(), "kcal"),
