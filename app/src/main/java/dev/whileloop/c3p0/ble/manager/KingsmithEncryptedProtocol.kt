@@ -26,7 +26,8 @@ internal object KingsmithEncryptedProtocol {
         CharacteristicPair(
             readCharSubstring = "5833ff03",
             writeCharSubstring = "5833ff02",
-            transport = Transport.Ais
+            transport = Transport.Ais,
+            initialAisBusPayloadPrefix = true
         )
     )
 
@@ -244,7 +245,8 @@ internal object KingsmithEncryptedProtocol {
     data class CharacteristicPair(
         val readCharSubstring: String,
         val writeCharSubstring: String,
-        val transport: Transport = Transport.EncryptedText
+        val transport: Transport = Transport.EncryptedText,
+        val initialAisBusPayloadPrefix: Boolean = false
     )
 
     data class DecodedText(

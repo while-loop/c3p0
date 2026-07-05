@@ -15,6 +15,7 @@
 - [x] **Encrypted KS Disconnect Guard**: Stamped delayed encrypted handshake/AIS fallback writes with the active connection generation and blocked characteristic writes after Android reports the GATT as disconnected.
 - [x] **Encrypted KS Handshake Pacing**: Paced unknown-table encrypted handshake candidate writes and AIS frames to avoid Android GATT `133` failures on write-with-response characteristics while keeping ready-state commands responsive.
 - [x] **BLE GATT Operation Queue**: Serialized descriptor writes and characteristic writes in `BleConnection`, waiting for Android callbacks where available so notification setup and command writes cannot race each other.
+- [x] **AIS Bus Prefix First**: Start the `5833ff02` AIS handshake with KS Fit's BLE sub-version 18 bus payload prefix, then toggle to unprefixed AIS only if the prefixed handshake does not answer.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.

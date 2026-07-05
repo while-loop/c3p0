@@ -101,4 +101,14 @@ class KingsmithEncryptedProtocolTest {
         assertArrayEquals(byteArrayOf(1, 2, 3), packets[0].payload)
         assertArrayEquals(byteArrayOf(4, 5), packets[1].payload)
     }
+
+    @Test
+    fun ais5833PairStartsWithBusPayloadPrefix() {
+        val pair = KingsmithEncryptedProtocol.characteristicPairs.single {
+            it.writeCharSubstring == "5833ff02"
+        }
+
+        assertEquals(KingsmithEncryptedProtocol.Transport.Ais, pair.transport)
+        assertTrue(pair.initialAisBusPayloadPrefix)
+    }
 }

@@ -828,6 +828,7 @@ class WalkingPadManagerImpl @Inject constructor(
         activeKsEncryptedReadCharSubstring = pair.readCharSubstring
         activeKsEncryptedWriteCharSubstring = pair.writeCharSubstring
         activeKsEncryptedTransport = pair.transport
+        useAisBusPayloadPrefix = pair.initialAisBusPayloadPrefix
         val updatesEnabled = connection?.enableUpdatesByUuidSubstring(pair.readCharSubstring) ?: false
         Timber.d(
             "WalkingPad encrypted KS updates enabled: $updatesEnabled " +
@@ -852,7 +853,7 @@ class WalkingPadManagerImpl @Inject constructor(
                 delay(KS_ENCRYPTED_AIS_BUS_FALLBACK_DELAY_MS)
                 if (!isCurrentConnection(generation)) return@launch
                 if (!ksEncryptedProtocolReady.value && ksEncryptedHandshakeIndex == 0) {
-                    useAisBusPayloadPrefix = true
+                    useAisBusPayloadPrefix = !useAisBusPayloadPrefix
                     aisPayloadBuffers.clear()
                     sendKsEncryptedHandshakeCommand()
                 }
