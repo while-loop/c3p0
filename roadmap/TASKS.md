@@ -5,13 +5,13 @@
 - [x] **BLE Core**: Implemented `BleScanner`, `BleConnection`, and `BleModule` (DI).
 - [x] **WalkingPad Support**: Reverse-engineered C2 protocol, CRC calculation, and status parsing.
 - [x] **WalkingPad Guardrails**: Decode 24-bit counters explicitly and clamp speed commands at the BLE manager boundary.
-- [x] **WalkingPad FTMS Calories And Step Fallback**: Read FTMS total energy when present and use pad-distance-based step estimates for FTMS-only pads that do not expose a step counter.
-- [x] **FTMS Stop Reliability**: Fall back from FTMS stop to pause and reset when treadmill data still reports a moving belt.
+- [x] **WalkingPad KS Counters**: Read steps from legacy KS status packets and steps/calories from encrypted KS `RunningSteps`/`BurnCalories` props when present.
+- [x] **KS-Only Protocol Direction**: Removed the generic treadmill protocol path so C3P0 can focus on fully integrating with this specific WalkingPad's legacy and encrypted KS protocols.
 - [x] **Encrypted KS Stop Fallback**: Reverse-engineered the Mi WalkingPad APK stop path and added a guarded `props runState 0` fallback for `FED7`/`FED8`-style KS encrypted control characteristics.
 - [x] **Encrypted KS Native Automatic Mode**: Enabled Automatic mode when encrypted KS control characteristics are present by sending `props ControlMode 0/1/2` mode commands with the known model encryption tables.
-- [x] **Encrypted KS Status Telemetry**: Added the Mi WalkingPad APK encrypted-text handshake, subscribed to KS read characteristics, polled `servers getProp`, and parsed `RunningSteps`/distance/time/speed/mode so newer pads can use real WalkingPad counters instead of FTMS step estimates.
+- [x] **Encrypted KS Status Telemetry**: Added the Mi WalkingPad APK encrypted-text handshake, subscribed to KS read characteristics, polled `servers getProp`, and parsed `RunningSteps`/distance/time/speed/mode so newer pads can use real WalkingPad counters.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
-- [x] **Responsive WalkingPad Commands**: Removed repeated FTMS control and unit-sync preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
+- [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
 - [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust aggressively outside Zone 2 while using only slow 0.1 mph edge-guard nudges inside Zone 2.
 - [x] **Zone 2 Max Speed Setting**: Added a Profile max-speed slider for Zone 2, defaulted to 3.5 mph, and clamped controller speed adjustments to the saved cap.
@@ -39,7 +39,7 @@
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
-- [x] **Protocol-Aware Session Modes**: Hide native Automatic mode for FTMS-only pads while keeping Manual and app-controlled Zone 2 available, and route commands per protocol when both FTMS and legacy KS services are present.
+- [x] **Protocol-Aware Session Modes**: Always show Manual, Automatic, and Zone 2 while enabling native Automatic only when the connected KS protocol exposes the WalkingPad mode command.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
 - [x] **Health Connect Weight**: Added weight refresh from Health Connect on cold start/resume and from the profile refresh button.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
