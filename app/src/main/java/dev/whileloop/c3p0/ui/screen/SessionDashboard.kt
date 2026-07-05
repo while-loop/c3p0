@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -567,7 +568,8 @@ private fun HeartRateHistoryChart(
                         start = androidx.compose.ui.geometry.Offset(padding, y),
                         end = androidx.compose.ui.geometry.Offset(width - padding, y),
                         strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Round
+                        cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))
                     )
                 }
 
