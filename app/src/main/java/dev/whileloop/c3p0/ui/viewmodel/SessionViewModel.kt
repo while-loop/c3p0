@@ -48,6 +48,7 @@ class SessionViewModel @Inject constructor(
     private var sessionStartCalories = 0
     private var sessionStartPadTime = 0
     private var normalizedStepsToday: Int? = null
+    private var stepGoalEtaSamples = emptyList<StepGoalEtaSample>()
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
     val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
@@ -207,6 +208,10 @@ class SessionViewModel @Inject constructor(
                     _sessionDistance.value = distanceDelta
                     _sessionSteps.value = sessionStepDelta(status.hasStepCount, status.steps, distanceDelta)
                     _sessionCalories.value = sessionCalorieDelta(status.calories)
+                    updateStepGoalEtaSamples(
+                        elapsedSeconds = _sessionElapsedSeconds.value,
+                        sessionSteps = _sessionSteps.value
+                    )
                     updateNormalizedStepsToGoal()
                 }
             }
@@ -323,14 +328,10 @@ class SessionViewModel @Inject constructor(
             return
         }
 
-        val elapsedSeconds = _sessionElapsedSeconds.value
-        val sessionSteps = _sessionSteps.value
-        if (elapsedSeconds < MIN_STEP_RATE_SAMPLE_SECONDS || sessionSteps < MIN_STEP_RATE_SAMPLE_STEPS) {
+        val stepsPerMinute = recentStepsPerMinute() ?: run {
             _estimatedSecondsToStepGoal.value = null
             return
         }
-
-        val stepsPerMinute = sessionSteps / (elapsedSeconds / 60f)
         if (stepsPerMinute < MIN_STEPS_PER_MINUTE_FOR_GOAL_ETA) {
             _estimatedSecondsToStepGoal.value = null
             return
@@ -456,6 +457,7 @@ class SessionViewModel @Inject constructor(
             _sessionDistance.value = 0
             _sessionSteps.value = 0
             _sessionCalories.value = 0
+            stepGoalEtaSamples = emptyList()
             activeHeartRateTotal = 0
             activeHeartRateSampleCount = 0
         }
@@ -480,6 +482,45 @@ class SessionViewModel @Inject constructor(
         heartRateHistoryJob = null
     }
 
+    private fun updateStepGoalEtaSamples(elapsedSeconds: Int, sessionSteps: Int) {
+        if (elapsedSeconds < 0 || sessionSteps < 0) return
+        val nextSample = StepGoalEtaSample(elapsedSeconds, sessionSteps)
+        val withoutDuplicateTimestamp = stepGoalEtaSamples.dropLastWhile {
+            it.elapsedSeconds >= elapsedSeconds
+        }
+        val updated = withoutDuplicateTimestamp + nextSample
+        val cutoff = elapsedSeconds - STEP_GOAL_ETA_WINDOW_SECONDS
+        val firstKeptIndex = updated.indexOfFirst { it.elapsedSeconds >= cutoff }
+            .let { index ->
+                when {
+                    index <= 0 -> 0
+                    else -> index - 1
+                }
+            }
+        stepGoalEtaSamples = updated.drop(firstKeptIndex)
+    }
+
+    private fun recentStepsPerMinute(): Float? {
+        val latest = stepGoalEtaSamples.lastOrNull() ?: return null
+        val cutoff = latest.elapsedSeconds - STEP_GOAL_ETA_WINDOW_SECONDS
+        val baseline = stepGoalEtaSamples
+            .filter { it.elapsedSeconds <= cutoff }
+            .lastOrNull()
+            ?: stepGoalEtaSamples.firstOrNull()
+            ?: return null
+        val elapsedSeconds = latest.elapsedSeconds - baseline.elapsedSeconds
+        val stepDelta = latest.sessionSteps - baseline.sessionSteps
+        if (elapsedSeconds < MIN_STEP_RATE_SAMPLE_SECONDS || stepDelta < MIN_STEP_RATE_SAMPLE_STEPS) {
+            return null
+        }
+        return stepDelta / (elapsedSeconds / 60f)
+    }
+
+    private data class StepGoalEtaSample(
+        val elapsedSeconds: Int,
+        val sessionSteps: Int
+    )
+
     companion object {
         private const val MAX_HEART_RATE_SAMPLES = 180
         private const val SPEED_STEP_KMH = 0.1f
@@ -492,6 +533,7 @@ class SessionViewModel @Inject constructor(
         private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
         private const val HEART_RATE_ZONE2_GUARD_INTERVAL_MS = 1_000L
         private const val DEFAULT_STEP_GOAL = 10000
+        private const val STEP_GOAL_ETA_WINDOW_SECONDS = 180
         private const val MIN_STEP_RATE_SAMPLE_SECONDS = 30
         private const val MIN_STEP_RATE_SAMPLE_STEPS = 10
         private const val MIN_STEPS_PER_MINUTE_FOR_GOAL_ETA = 1f

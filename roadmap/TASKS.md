@@ -44,6 +44,7 @@
 - [x] **Session Metrics UI**: Added elapsed time, calories, current HR, session average HR, and heart-rate history chart with y-axis labels and zone-colored line segments.
 - [x] **Goal Progress Tile**: Added normalized steps remaining to daily goal on the session screen.
 - [x] **Step Goal ETA Tile**: Added a session tile that estimates time to daily step goal from current-session steps per minute after enough step data exists.
+- [x] **Recent Step Goal ETA**: Estimate time to daily goal from the last 3 minutes of session steps instead of full-session average pace.
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
 - [x] **Stats Details**: Added selected-session history details and normalized Health Connect step breakdown.
 - [x] **Historical Step History**: Added Health Connect daily step history with aggregate raw totals, C3P0 steps, excluded other-source session steps, and normalized totals.
