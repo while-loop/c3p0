@@ -25,7 +25,8 @@ enum class PermissionRequestKind {
     BleScan,
     Session,
     HealthConnect,
-    HealthConnectSteps
+    HealthConnectSteps,
+    HealthConnectWeight
 }
 
 data class PermissionGuidance(
@@ -57,6 +58,8 @@ fun healthConnectPermissions(): Set<String> = HealthConnectManager.PERMISSIONS
 
 fun healthConnectStepHistoryPermissions(): Set<String> = HealthConnectManager.STEP_HISTORY_PERMISSIONS
 
+fun healthConnectWeightHistoryPermissions(): Set<String> = HealthConnectManager.WEIGHT_HISTORY_PERMISSIONS
+
 fun Context.hasPermissions(permissions: Array<String>): Boolean =
     permissions.all { permission ->
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
@@ -85,6 +88,12 @@ fun permissionGuidance(kind: PermissionRequestKind): PermissionGuidance =
         PermissionRequestKind.HealthConnectSteps -> PermissionGuidance(
             title = "Read step history",
             body = "C3P0 needs Health Connect step access to show historical totals and exclude other apps' steps during C3P0 sessions.",
+            actionLabel = "Continue"
+        )
+
+        PermissionRequestKind.HealthConnectWeight -> PermissionGuidance(
+            title = "Read weight history",
+            body = "C3P0 needs Health Connect weight access to show your raw weight trend and 7-day trailing average.",
             actionLabel = "Continue"
         )
     }

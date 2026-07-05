@@ -36,7 +36,7 @@ This plan outlines the development of C3P0, an Android companion app for Walking
 - **DataStore**: Stores saved devices, unit system, backup toggle, inactive-device warning preference, goals, and WalkingPad preferences.
 - **Android Auto Backup**: Configured via `backup_rules.xml` and `data_extraction_rules.xml` to sync Room DB files, DataStore preferences, and SharedPreferences to Google Drive/device transfer.
 - **Backup Triggers**: Call `BackupManager.dataChanged()` when enabled on cold start, persisted settings changes, session progress with a throttle, and session completion.
-- **Health Connect**: Write completed sessions, steps, and distance. Read steps for history and normalization. Do not request weight or write HR records because the WalkingPad owns calories and watches should own HR data.
+- **Health Connect**: Write completed sessions, steps, and distance. Read steps for history and normalization, and read weight history for the Stats trend chart. Do not write HR records because the WalkingPad owns calories and watches should own HR data.
 
 ### 4. UI Layer (Jetpack Compose)
 - **`SessionDashboard`**: Mirroring the provided screenshots (Distance, Steps, Time, Energy).

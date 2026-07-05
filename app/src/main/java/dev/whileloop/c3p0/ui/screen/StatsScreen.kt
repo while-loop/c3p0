@@ -2,6 +2,7 @@ package dev.whileloop.c3p0.ui.screen
 
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,17 +34,22 @@ import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
+import dev.whileloop.c3p0.health.WeightHistoryRecord
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
 import dev.whileloop.c3p0.ui.permission.healthConnectStepHistoryPermissions
+import dev.whileloop.c3p0.ui.permission.healthConnectWeightHistoryPermissions
 import dev.whileloop.c3p0.ui.permission.permissionGuidance
 import dev.whileloop.c3p0.ui.viewmodel.StatsViewModel
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
-import java.time.temporal.ChronoField
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoField
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 
 @Composable
 fun StatsScreen(
@@ -55,15 +63,25 @@ fun StatsScreen(
     val dailyStepHistory by viewModel.dailyStepHistory.collectAsState()
     val canReadHealthConnectSteps by viewModel.canReadHealthConnectSteps.collectAsState()
     val isStepHistoryLoading by viewModel.isStepHistoryLoading.collectAsState()
+    val weightHistory by viewModel.weightHistory.collectAsState()
+    val canReadHealthConnectWeight by viewModel.canReadHealthConnectWeight.collectAsState()
+    val isWeightHistoryLoading by viewModel.isWeightHistoryLoading.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     var showStepPermissionSheet by remember { mutableStateOf(false) }
+    var showWeightPermissionSheet by remember { mutableStateOf(false) }
     var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
     var isStepHistoryExpanded by rememberSaveable { mutableStateOf(true) }
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
+    val weightHistoryPermissions = remember { healthConnectWeightHistoryPermissions() }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) {
         viewModel.refreshStepHistory()
+    }
+    val weightPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) {
+        viewModel.refreshWeightHistory()
     }
 
     if (showStepPermissionSheet) {
@@ -82,6 +100,25 @@ fun StatsScreen(
                 }
             },
             onDismiss = { showStepPermissionSheet = false }
+        )
+    }
+
+    if (showWeightPermissionSheet) {
+        PermissionGuidanceBottomSheet(
+            guidance = permissionGuidance(PermissionRequestKind.HealthConnectWeight),
+            onContinue = {
+                showWeightPermissionSheet = false
+                if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
+                    weightPermissionLauncher.launch(weightHistoryPermissions)
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Health Connect is not available on this device.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+            onDismiss = { showWeightPermissionSheet = false }
         )
     }
     
@@ -119,6 +156,21 @@ fun StatsScreen(
                     } else {
                         Modifier.fillMaxWidth()
                     }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            item {
+                HealthConnectWeightHistoryCard(
+                    records = weightHistory,
+                    canReadWeight = canReadHealthConnectWeight,
+                    isLoading = isWeightHistoryLoading,
+                    unitSystem = unitSystem,
+                    onEnable = { showWeightPermissionSheet = true },
+                    onRefresh = { viewModel.refreshWeightHistory() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 300.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -238,6 +290,230 @@ private fun HealthConnectStepHistoryCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HealthConnectWeightHistoryCard(
+    records: List<WeightHistoryRecord>,
+    canReadWeight: Boolean,
+    isLoading: Boolean,
+    unitSystem: UnitSystem,
+    onEnable: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val chartPoints = remember(records, unitSystem) {
+        records.toWeightChartPoints(unitSystem)
+    }
+    val latestRange = remember(chartPoints) {
+        chartPoints.dateRangeLabel()
+    }
+
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Weight trend", style = MaterialTheme.typography.titleMedium)
+                TextButton(
+                    onClick = if (canReadWeight) onRefresh else onEnable,
+                    enabled = !isLoading,
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(if (canReadWeight) "Refresh" else "Enable")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            when {
+                isLoading && records.isEmpty() -> Text("Loading weight history...")
+                !canReadWeight && records.isEmpty() -> Text("Enable Health Connect weight access to view raw weight and 7-day trend.")
+                records.isEmpty() -> Text("No Health Connect weight data found.")
+                chartPoints.size < 2 -> Text("Add at least two weight entries in Health Connect to show a trend.")
+                else -> {
+                    WeightSummaryRow(chartPoints, unitSystem, latestRange)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    WeightTrendChart(
+                        points = chartPoints,
+                        unitSystem = unitSystem,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(190.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    WeightChartLegend()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeightSummaryRow(
+    points: List<WeightChartPoint>,
+    unitSystem: UnitSystem,
+    dateRange: String
+) {
+    val average = points.map { it.rawWeight }.average()
+    val difference = points.last().rawWeight - points.first().rawWeight
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Average", style = MaterialTheme.typography.labelMedium)
+            Text(
+                formatWeight(average, unitSystem),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(dateRange, style = MaterialTheme.typography.bodySmall)
+        }
+        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+            Text("Difference", style = MaterialTheme.typography.labelMedium)
+            Text(
+                formatSignedWeight(difference, unitSystem),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text("first to latest", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun WeightTrendChart(
+    points: List<WeightChartPoint>,
+    unitSystem: UnitSystem,
+    modifier: Modifier = Modifier
+) {
+    val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    val trendColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val pointFillColor = MaterialTheme.colorScheme.surface
+    val minValue = points.minOf { minOf(it.rawWeight, it.trailingAverage) }
+    val maxValue = points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
+    val paddedMin = floor((minValue - WEIGHT_CHART_PADDING).coerceAtLeast(0.0))
+    val paddedMax = ceil(maxValue + WEIGHT_CHART_PADDING).coerceAtLeast(paddedMin + 1.0)
+    val valueRange = (paddedMax - paddedMin).coerceAtLeast(1.0)
+    val startTime = points.first().time.toEpochMilli()
+    val endTime = points.last().time.toEpochMilli()
+    val timeRange = (endTime - startTime).coerceAtLeast(1L)
+
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val leftPadding = 4.dp.toPx()
+                val rightPadding = 36.dp.toPx()
+                val topPadding = 8.dp.toPx()
+                val bottomPadding = 10.dp.toPx()
+                val chartWidth = size.width - leftPadding - rightPadding
+                val usableHeight = size.height - topPadding - bottomPadding
+
+                fun xFor(timeMillis: Long): Float =
+                    leftPadding + ((timeMillis - startTime).toFloat() / timeRange) * chartWidth
+
+                fun yFor(value: Double): Float =
+                    topPadding + ((paddedMax - value).toFloat() / valueRange.toFloat()) * usableHeight
+
+                val labels = weightAxisLabels(paddedMin, paddedMax)
+                labels.forEach { label ->
+                    val y = yFor(label)
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(leftPadding, y),
+                        end = Offset(size.width - rightPadding, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+
+                points.zipWithNext().forEach { (a, b) ->
+                    drawLine(
+                        color = rawColor,
+                        start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
+                        end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = trendColor,
+                        start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
+                        end = Offset(xFor(b.time.toEpochMilli()), yFor(b.trailingAverage)),
+                        strokeWidth = 2.5.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+
+                points.forEach { point ->
+                    drawCircle(
+                        color = pointFillColor,
+                        radius = 4.dp.toPx(),
+                        center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+                    )
+                    drawCircle(
+                        color = trendColor,
+                        radius = 2.5.dp.toPx(),
+                        center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                weightAxisLabels(paddedMin, paddedMax).forEach { label ->
+                    Text(
+                        text = label.toInt().toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = labelColor
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(points.first().dateLabel(), style = MaterialTheme.typography.labelSmall)
+            Text(weightUnitLabel(unitSystem), style = MaterialTheme.typography.labelSmall, color = labelColor)
+            Text(points.last().dateLabel(), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun WeightChartLegend() {
+    val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    val trendColor = MaterialTheme.colorScheme.primary
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LegendItem(color = rawColor, label = "Raw weight")
+        LegendItem(color = trendColor, label = "7-day avg")
     }
 }
 
@@ -449,6 +725,68 @@ private fun barFraction(steps: Long, maxSteps: Long): Float =
         (steps.toFloat() / maxSteps).coerceIn(0.16f, 1f)
     }
 
+private data class WeightChartPoint(
+    val time: Instant,
+    val rawWeight: Double,
+    val trailingAverage: Double
+)
+
+private fun List<WeightHistoryRecord>.toWeightChartPoints(unitSystem: UnitSystem): List<WeightChartPoint> {
+    val chronological = sortedBy { it.time }
+    return chronological.mapIndexed { index, record ->
+        val windowStart = record.time.minus(Duration.ofDays(6))
+        val currentWindow = chronological
+            .take(index + 1)
+            .filter { !it.time.isBefore(windowStart) && !it.time.isAfter(record.time) }
+        WeightChartPoint(
+            time = record.time,
+            rawWeight = displayWeight(record.weightKg, unitSystem),
+            trailingAverage = currentWindow
+                .map { displayWeight(it.weightKg, unitSystem) }
+                .average()
+        )
+    }
+}
+
+private fun displayWeight(weightKg: Double, unitSystem: UnitSystem): Double =
+    if (unitSystem == UnitSystem.Imperial) {
+        weightKg * KG_TO_LBS
+    } else {
+        weightKg
+    }
+
+private fun formatWeight(weight: Double, unitSystem: UnitSystem): String =
+    String.format(Locale.US, "%.1f %s", weight, weightUnitLabel(unitSystem))
+
+private fun formatSignedWeight(weight: Double, unitSystem: UnitSystem): String =
+    String.format(Locale.US, "%+.1f %s", weight, weightUnitLabel(unitSystem))
+
+private fun weightUnitLabel(unitSystem: UnitSystem): String =
+    if (unitSystem == UnitSystem.Imperial) "lbs" else "kg"
+
+private fun List<WeightChartPoint>.dateRangeLabel(): String {
+    if (isEmpty()) return ""
+    val formatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+    val startDate = first().time.atZone(ZoneId.systemDefault()).toLocalDate()
+    val endDate = last().time.atZone(ZoneId.systemDefault()).toLocalDate()
+    return if (startDate.year == endDate.year) {
+        "${startDate.format(formatter)} - ${endDate.format(formatter)}, ${endDate.year}"
+    } else {
+        "${startDate.format(formatter)}, ${startDate.year} - ${endDate.format(formatter)}, ${endDate.year}"
+    }
+}
+
+private fun WeightChartPoint.dateLabel(): String =
+    time.atZone(ZoneId.systemDefault())
+        .toLocalDate()
+        .format(DateTimeFormatter.ofPattern("M/d", Locale.US))
+
+private fun weightAxisLabels(minValue: Double, maxValue: Double): List<Double> {
+    val range = (maxValue - minValue).coerceAtLeast(1.0)
+    val step = (range / 4.0).coerceAtLeast(1.0)
+    return (4 downTo 0).map { minValue + (step * it) }
+}
+
 @Composable
 fun SessionItem(session: SessionEntity, unitSystem: UnitSystem, onClick: () -> Unit) {
     val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm", Locale.US)
@@ -558,4 +896,6 @@ private fun heartRateSummary(storedValue: Int, fallbackValue: Double?): String {
 private fun List<Int>.averageOrNull(): Double? =
     if (isEmpty()) null else average()
 
+private const val KG_TO_LBS = 2.2046226218
+private const val WEIGHT_CHART_PADDING = 1.0
 private const val DEFAULT_VISIBLE_CHART_BARS = 9

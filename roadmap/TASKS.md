@@ -55,7 +55,7 @@
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
 - [x] **Session Modes**: Show Manual and Zone 2 on the session page, keeping native WalkingPad automatic mode hidden from the user-facing controls.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
-- [x] **Health Connect Weight Removed**: Removed Health Connect weight permission/readback and keep calories sourced from the WalkingPad counter.
+- [x] **Health Connect Weight Trend**: Read Health Connect weight history for a raw weight and 7-day trailing average chart while keeping calories sourced from the WalkingPad counter.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
 - [x] **Health Connect Permissions**: Scoped runtime checks by operation, refreshed permission state on profile resume, and opened Health Connect settings when the user wants to revoke access.
 - [x] **Cloud Sync**: Configured Android Auto Backup rules for Google Drive, including Room DB files and DataStore preferences.

@@ -7,6 +7,7 @@ import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.AggregateRequest
@@ -35,6 +36,10 @@ class HealthConnectManager @Inject constructor(
 
     override suspend fun hasStepHistoryPermission(): Boolean {
         return hasPermissions(STEP_HISTORY_PERMISSIONS)
+    }
+
+    suspend fun hasWeightHistoryPermission(): Boolean {
+        return hasPermissions(WEIGHT_HISTORY_PERMISSIONS)
     }
 
     private suspend fun hasPermissions(requiredPermissions: Set<String>): Boolean {
@@ -96,6 +101,39 @@ class HealthConnectManager @Inject constructor(
         }
     }
 
+    suspend fun readWeightHistory(startTime: Instant, endTime: Instant): List<WeightHistoryRecord> {
+        if (!hasPermissions(WEIGHT_HISTORY_PERMISSIONS)) return emptyList()
+
+        return try {
+            val records = mutableListOf<WeightRecord>()
+            var pageToken: String? = null
+            do {
+                val response = healthConnectClient.readRecords(
+                    ReadRecordsRequest(
+                        recordType = WeightRecord::class,
+                        timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
+                        pageSize = WEIGHT_READ_PAGE_SIZE,
+                        pageToken = pageToken
+                    )
+                )
+                records += response.records
+                pageToken = response.pageToken
+            } while (!pageToken.isNullOrBlank())
+
+            records
+                .map { record ->
+                    WeightHistoryRecord(
+                        time = record.time,
+                        weightKg = record.weight.inKilograms
+                    )
+                }
+                .sortedBy { it.time }
+        } catch (e: Exception) {
+            Timber.e(e, "Error reading weight from Health Connect")
+            emptyList()
+        }
+    }
+
     suspend fun writeSession(startTime: Instant, endTime: Instant, steps: Int, distanceMeters: Double) {
         if (!hasPermissions(WRITE_SESSION_PERMISSIONS)) return
         if (!endTime.isAfter(startTime)) return
@@ -148,8 +186,13 @@ class HealthConnectManager @Inject constructor(
 
     companion object {
         private const val STEP_READ_PAGE_SIZE = 1000
+        private const val WEIGHT_READ_PAGE_SIZE = 1000
         val STEP_HISTORY_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(StepsRecord::class),
+            READ_HEALTH_DATA_HISTORY_PERMISSION
+        )
+        val WEIGHT_HISTORY_PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getReadPermission(WeightRecord::class),
             READ_HEALTH_DATA_HISTORY_PERMISSION
         )
         private val WRITE_SESSION_PERMISSIONS: Set<String> = setOf(
@@ -159,6 +202,11 @@ class HealthConnectManager @Inject constructor(
         )
         val PERMISSIONS: Set<String> = STEP_HISTORY_PERMISSIONS + WRITE_SESSION_PERMISSIONS
         private const val READ_HEALTH_DATA_HISTORY_PERMISSION =
-            "android.permission.health.READ_HEALTH_DATA_HISTORY"
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY
     }
 }
+
+data class WeightHistoryRecord(
+    val time: Instant,
+    val weightKg: Double
+)
