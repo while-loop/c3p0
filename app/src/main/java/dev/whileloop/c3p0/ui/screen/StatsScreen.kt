@@ -760,6 +760,11 @@ private fun WeightChartControls(
 ) {
     var isGroupingMenuOpen by remember { mutableStateOf(false) }
     val matchingPeriod = remember(visibleDays) { matchingWeightXAxisPeriod(visibleDays) }
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        selectedLabelColor = MaterialTheme.colorScheme.primary,
+        selectedTrailingIconColor = MaterialTheme.colorScheme.primary
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -771,14 +776,16 @@ private fun WeightChartControls(
             FilterChip(
                 selected = matchingPeriod == period,
                 onClick = { onXAxisPeriodSelected(period) },
-                label = { Text(period.label) }
+                label = { Text(period.label) },
+                colors = chipColors
             )
         }
         if (matchingPeriod == null) {
             FilterChip(
                 selected = true,
                 onClick = {},
-                label = { Text(formatVisibleWeightRange(visibleDays)) }
+                label = { Text(formatVisibleWeightRange(visibleDays)) },
+                colors = chipColors
             )
         }
         Box {
@@ -786,6 +793,7 @@ private fun WeightChartControls(
                 selected = true,
                 onClick = { isGroupingMenuOpen = true },
                 label = { Text(selectedGrouping.shortLabel) },
+                colors = chipColors,
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
@@ -955,6 +963,7 @@ private fun WeightTrendChart(
                         awaitPointerEventScope {
                             var previousDistance: Float? = null
                             var gestureVisibleDays = latestVisibleDays
+                            var activePinchAnchor: WeightPinchScrollAnchor? = null
                             val stationaryMovementThresholdPx = 0.75.dp.toPx()
                             val sameMovementThresholdPx = 1.dp.toPx()
                             while (true) {
@@ -995,30 +1004,32 @@ private fun WeightTrendChart(
                                                 else -> secondPointer.position.x to firstPointer.position.x
                                             }
                                             val midpointX = (firstPointer.position.x + secondPointer.position.x) / 2f
-                                            val anchor = stationaryAnchor?.let { (heldX, movingX) ->
-                                                if (heldX >= movingX) {
-                                                    WeightPinchScrollAnchor(
-                                                        timestampMillis = latestVisibleEndTime,
-                                                        viewportX = latestViewportWidthPx
-                                                    )
-                                                } else {
-                                                    WeightPinchScrollAnchor(
-                                                        timestampMillis = latestVisibleStartTime,
-                                                        viewportX = 0f
-                                                    )
-                                                }
-                                            } ?: WeightPinchScrollAnchor(
-                                                timestampMillis = timestampAtViewportX(
-                                                    viewportX = midpointX,
-                                                    scrollOffsetPx = scrollState.value.toFloat(),
-                                                    startTime = latestStartTime,
-                                                    timeRange = latestTimeRange,
-                                                    contentWidthPx = latestContentWidthPx,
-                                                    leftPaddingPx = latestLeftPaddingPx,
-                                                    rightPaddingPx = latestRightPaddingPx
-                                                ),
-                                                viewportX = midpointX.coerceIn(0f, latestViewportWidthPx)
-                                            )
+                                            val anchor = activePinchAnchor ?: (
+                                                stationaryAnchor?.let { (heldX, movingX) ->
+                                                    if (heldX >= movingX) {
+                                                        WeightPinchScrollAnchor(
+                                                            timestampMillis = latestVisibleEndTime,
+                                                            viewportX = latestViewportWidthPx
+                                                        )
+                                                    } else {
+                                                        WeightPinchScrollAnchor(
+                                                            timestampMillis = latestVisibleStartTime,
+                                                            viewportX = 0f
+                                                        )
+                                                    }
+                                                } ?: WeightPinchScrollAnchor(
+                                                    timestampMillis = timestampAtViewportX(
+                                                        viewportX = midpointX,
+                                                        scrollOffsetPx = scrollState.value.toFloat(),
+                                                        startTime = latestStartTime,
+                                                        timeRange = latestTimeRange,
+                                                        contentWidthPx = latestContentWidthPx,
+                                                        leftPaddingPx = latestLeftPaddingPx,
+                                                        rightPaddingPx = latestRightPaddingPx
+                                                    ),
+                                                    viewportX = midpointX.coerceIn(0f, latestViewportWidthPx)
+                                                )
+                                            ).also { activePinchAnchor = it }
                                             gestureVisibleDays = (gestureVisibleDays / zoom)
                                                 .coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
                                             pinchScrollAnchor = anchor
@@ -1030,6 +1041,7 @@ private fun WeightTrendChart(
                                     pressed.forEach { pointer -> pointer.consume() }
                                 } else {
                                     previousDistance = null
+                                    activePinchAnchor = null
                                 }
                             }
                         }
