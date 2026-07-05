@@ -1135,7 +1135,7 @@ private fun HealthConnectStepChart(
                     )
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.72f)
+                            .fillMaxWidth()
                             .fillMaxHeight(normalizedFraction)
                             .clip(RoundedCornerShape(6.dp))
                             .background(normalizedBarColor)
