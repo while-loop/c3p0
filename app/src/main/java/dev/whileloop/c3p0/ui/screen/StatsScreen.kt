@@ -5,11 +5,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -48,6 +52,7 @@ import java.time.temporal.ChronoField
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +75,8 @@ fun StatsScreen(
     var showWeightPermissionSheet by remember { mutableStateOf(false) }
     var openChartSheet by remember { mutableStateOf<StatsChartSheet?>(null) }
     var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
+    var weightVisibleDays by remember { mutableStateOf(WeightXAxisPeriod.Month.days.toFloat()) }
+    var weightGrouping by remember { mutableStateOf(WeightChartGrouping.Day) }
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
     val weightHistoryPermissions = remember { healthConnectWeightHistoryPermissions() }
     val chartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -156,6 +163,13 @@ fun StatsScreen(
                             canReadWeight = canReadHealthConnectWeight,
                             isLoading = isWeightHistoryLoading,
                             unitSystem = unitSystem,
+                            visibleDays = weightVisibleDays,
+                            selectedGrouping = weightGrouping,
+                            onVisibleDaysChange = { weightVisibleDays = it },
+                            onXAxisPeriodSelected = { period ->
+                                weightVisibleDays = period.days.toFloat()
+                            },
+                            onGroupingSelected = { weightGrouping = it },
                             onEnable = { showWeightPermissionSheet = true },
                             onRefresh = { viewModel.refreshWeightHistory() },
                             modifier = Modifier
@@ -279,7 +293,9 @@ private fun WeightHistoryPreviewCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val chartPoints = remember(records, unitSystem) { records.toWeightChartPoints(unitSystem) }
+    val chartPoints = remember(records, unitSystem) {
+        records.toWeightChartPoints(unitSystem, WeightChartGrouping.Day)
+    }
     val previewPoints = remember(chartPoints) { chartPoints.takeLast(PREVIEW_DAY_COUNT) }
     val latestWeight = previewPoints.lastOrNull()?.rawWeight
 
@@ -569,12 +585,17 @@ private fun HealthConnectWeightHistoryCard(
     canReadWeight: Boolean,
     isLoading: Boolean,
     unitSystem: UnitSystem,
+    visibleDays: Float,
+    selectedGrouping: WeightChartGrouping,
+    onVisibleDaysChange: (Float) -> Unit,
+    onXAxisPeriodSelected: (WeightXAxisPeriod) -> Unit,
+    onGroupingSelected: (WeightChartGrouping) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val chartPoints = remember(records, unitSystem) {
-        records.toWeightChartPoints(unitSystem)
+    val chartPoints = remember(records, unitSystem, selectedGrouping) {
+        records.toWeightChartPoints(unitSystem, selectedGrouping)
     }
     val latestRange = remember(chartPoints) {
         chartPoints.dateRangeLabel()
@@ -609,6 +630,13 @@ private fun HealthConnectWeightHistoryCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+            WeightChartControls(
+                visibleDays = visibleDays,
+                selectedGrouping = selectedGrouping,
+                onXAxisPeriodSelected = onXAxisPeriodSelected,
+                onGroupingSelected = onGroupingSelected
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             when {
                 isLoading && records.isEmpty() -> Text("Loading weight history...")
                 !canReadWeight && records.isEmpty() -> Text("Enable Health Connect weight access to view raw weight and 7-day trend.")
@@ -620,9 +648,11 @@ private fun HealthConnectWeightHistoryCard(
                     WeightTrendChart(
                         points = chartPoints,
                         unitSystem = unitSystem,
+                        visibleDays = visibleDays,
+                        onVisibleDaysChange = onVisibleDaysChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(190.dp)
+                            .height(220.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     WeightChartLegend()
@@ -666,11 +696,70 @@ private fun WeightSummaryRow(
 }
 
 @Composable
+private fun WeightChartControls(
+    visibleDays: Float,
+    selectedGrouping: WeightChartGrouping,
+    onXAxisPeriodSelected: (WeightXAxisPeriod) -> Unit,
+    onGroupingSelected: (WeightChartGrouping) -> Unit
+) {
+    Text(
+        text = "Range",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        WeightXAxisPeriod.entries.forEachIndexed { index, period ->
+            SegmentedButton(
+                selected = visibleDays.roundToInt() == period.days,
+                onClick = { onXAxisPeriodSelected(period) },
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = WeightXAxisPeriod.entries.size
+                )
+            ) {
+                Text(period.label)
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Visible: ${formatVisibleWeightRange(visibleDays)}",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Group by",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        WeightChartGrouping.entries.forEachIndexed { index, grouping ->
+            SegmentedButton(
+                selected = selectedGrouping == grouping,
+                onClick = { onGroupingSelected(grouping) },
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = WeightChartGrouping.entries.size
+                )
+            ) {
+                Text(grouping.label)
+            }
+        }
+    }
+}
+
+@Composable
 private fun WeightTrendChart(
     points: List<WeightChartPoint>,
     unitSystem: UnitSystem,
+    visibleDays: Float,
+    onVisibleDaysChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
     val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val trendColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
@@ -684,66 +773,92 @@ private fun WeightTrendChart(
     val startTime = points.first().time.toEpochMilli()
     val endTime = points.last().time.toEpochMilli()
     val timeRange = (endTime - startTime).coerceAtLeast(1L)
+    val timeRangeDays = (timeRange.toDouble() / MILLIS_PER_DAY).coerceAtLeast(1.0)
+    val clampedVisibleDays = visibleDays.coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
+    val widthMultiplier = (timeRangeDays / clampedVisibleDays).coerceAtLeast(1.0)
+
+    LaunchedEffect(points.size, points.last().time, clampedVisibleDays) {
+        withFrameNanos { }
+        scrollState.scrollTo(scrollState.maxValue)
+    }
 
     Column(modifier = modifier) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        val nextVisibleDays = (clampedVisibleDays / zoom)
+                            .coerceIn(MIN_WEIGHT_VISIBLE_DAYS, MAX_WEIGHT_VISIBLE_DAYS)
+                        onVisibleDaysChange(nextVisibleDays)
+                    }
+                }
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val leftPadding = 4.dp.toPx()
-                val rightPadding = 36.dp.toPx()
-                val topPadding = 8.dp.toPx()
-                val bottomPadding = 10.dp.toPx()
-                val chartWidth = size.width - leftPadding - rightPadding
-                val usableHeight = size.height - topPadding - bottomPadding
+            val contentWidth = maxWidth * widthMultiplier.toFloat()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(scrollState)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .width(contentWidth)
+                        .fillMaxHeight()
+                ) {
+                    val leftPadding = 4.dp.toPx()
+                    val rightPadding = 36.dp.toPx()
+                    val topPadding = 8.dp.toPx()
+                    val bottomPadding = 10.dp.toPx()
+                    val chartWidth = size.width - leftPadding - rightPadding
+                    val usableHeight = size.height - topPadding - bottomPadding
 
-                fun xFor(timeMillis: Long): Float =
-                    leftPadding + ((timeMillis - startTime).toFloat() / timeRange) * chartWidth
+                    fun xFor(timeMillis: Long): Float =
+                        leftPadding + ((timeMillis - startTime).toFloat() / timeRange) * chartWidth
 
-                fun yFor(value: Double): Float =
-                    topPadding + ((paddedMax - value).toFloat() / valueRange.toFloat()) * usableHeight
+                    fun yFor(value: Double): Float =
+                        topPadding + ((paddedMax - value).toFloat() / valueRange.toFloat()) * usableHeight
 
-                val labels = weightAxisLabels(paddedMin, paddedMax)
-                labels.forEach { label ->
-                    val y = yFor(label)
-                    drawLine(
-                        color = gridColor,
-                        start = Offset(leftPadding, y),
-                        end = Offset(size.width - rightPadding, y),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                }
+                    val labels = weightAxisLabels(paddedMin, paddedMax)
+                    labels.forEach { label ->
+                        val y = yFor(label)
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(leftPadding, y),
+                            end = Offset(size.width - rightPadding, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
 
-                points.zipWithNext().forEach { (a, b) ->
-                    drawLine(
-                        color = rawColor,
-                        start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
-                        end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    drawLine(
-                        color = trendColor,
-                        start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
-                        end = Offset(xFor(b.time.toEpochMilli()), yFor(b.trailingAverage)),
-                        strokeWidth = 2.5.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
+                    points.zipWithNext().forEach { (a, b) ->
+                        drawLine(
+                            color = rawColor,
+                            start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
+                            end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
+                            strokeWidth = 2.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                        drawLine(
+                            color = trendColor,
+                            start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
+                            end = Offset(xFor(b.time.toEpochMilli()), yFor(b.trailingAverage)),
+                            strokeWidth = 2.5.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
 
-                points.forEach { point ->
-                    drawCircle(
-                        color = pointFillColor,
-                        radius = 4.dp.toPx(),
-                        center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
-                    )
-                    drawCircle(
-                        color = trendColor,
-                        radius = 2.5.dp.toPx(),
-                        center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
-                    )
+                    points.forEach { point ->
+                        drawCircle(
+                            color = pointFillColor,
+                            radius = 4.dp.toPx(),
+                            center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+                        )
+                        drawCircle(
+                            color = trendColor,
+                            radius = 2.5.dp.toPx(),
+                            center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+                        )
+                    }
                 }
             }
             Column(
@@ -1014,6 +1129,8 @@ private fun barFraction(steps: Long, maxSteps: Long): Float =
 
 private data class WeightChartPoint(
     val time: Instant,
+    val date: LocalDate,
+    val endDate: LocalDate,
     val rawWeight: Double,
     val trailingAverage: Double
 )
@@ -1023,7 +1140,28 @@ private data class DailyWeightPoint(
     val weightKg: Double
 )
 
-private fun List<WeightHistoryRecord>.toWeightChartPoints(unitSystem: UnitSystem): List<WeightChartPoint> {
+private data class GroupedWeightPoint(
+    val startDate: LocalDate,
+    val endDate: LocalDate,
+    val weightKg: Double
+)
+
+private enum class WeightXAxisPeriod(val label: String, val days: Int) {
+    Week("Week", 7),
+    Month("Month", 30),
+    Year("Year", 365)
+}
+
+private enum class WeightChartGrouping(val label: String) {
+    Day("Day"),
+    Week("Week"),
+    Month("Month")
+}
+
+private fun List<WeightHistoryRecord>.toWeightChartPoints(
+    unitSystem: UnitSystem,
+    grouping: WeightChartGrouping
+): List<WeightChartPoint> {
     val zone = ZoneId.systemDefault()
     val dailyWeights = groupBy { it.time.atZone(zone).toLocalDate() }
         .toSortedMap()
@@ -1034,20 +1172,60 @@ private fun List<WeightHistoryRecord>.toWeightChartPoints(unitSystem: UnitSystem
             )
         }
 
-    return dailyWeights.mapIndexed { index, dailyWeight ->
-        val windowStart = dailyWeight.date.minusDays(6)
+    val groupedWeights = dailyWeights.groupByWeightPeriod(grouping)
+    return groupedWeights.map { groupedWeight ->
+        val windowStart = groupedWeight.endDate.minusDays(6)
         val currentWindow = dailyWeights
-            .take(index + 1)
-            .filter { !it.date.isBefore(windowStart) && !it.date.isAfter(dailyWeight.date) }
+            .filter { !it.date.isBefore(windowStart) && !it.date.isAfter(groupedWeight.endDate) }
+        val trailingAverageKg = currentWindow
+            .map { it.weightKg }
+            .average()
+            .takeUnless { it.isNaN() }
+            ?: groupedWeight.weightKg
         WeightChartPoint(
-            time = dailyWeight.date.atStartOfDay(zone).toInstant(),
-            rawWeight = displayWeight(dailyWeight.weightKg, unitSystem),
-            trailingAverage = currentWindow
-                .map { displayWeight(it.weightKg, unitSystem) }
-                .average()
+            time = groupedWeight.startDate.atStartOfDay(zone).toInstant(),
+            date = groupedWeight.startDate,
+            endDate = groupedWeight.endDate,
+            rawWeight = displayWeight(groupedWeight.weightKg, unitSystem),
+            trailingAverage = displayWeight(trailingAverageKg, unitSystem)
         )
     }
 }
+
+private fun List<DailyWeightPoint>.groupByWeightPeriod(grouping: WeightChartGrouping): List<GroupedWeightPoint> =
+    when (grouping) {
+        WeightChartGrouping.Day -> map { dailyWeight ->
+            GroupedWeightPoint(
+                startDate = dailyWeight.date,
+                endDate = dailyWeight.date,
+                weightKg = dailyWeight.weightKg
+            )
+        }
+
+        WeightChartGrouping.Week -> groupBy { dailyWeight ->
+            dailyWeight.date.with(ChronoField.DAY_OF_WEEK, 1)
+        }
+            .toSortedMap()
+            .map { (weekStart, weights) ->
+                GroupedWeightPoint(
+                    startDate = weekStart,
+                    endDate = weights.maxOf { it.date },
+                    weightKg = weights.map { it.weightKg }.average()
+                )
+            }
+
+        WeightChartGrouping.Month -> groupBy { dailyWeight ->
+            dailyWeight.date.withDayOfMonth(1)
+        }
+            .toSortedMap()
+            .map { (monthStart, weights) ->
+                GroupedWeightPoint(
+                    startDate = monthStart,
+                    endDate = weights.maxOf { it.date },
+                    weightKg = weights.map { it.weightKg }.average()
+                )
+            }
+    }
 
 private fun displayWeight(weightKg: Double, unitSystem: UnitSystem): Double =
     if (unitSystem == UnitSystem.Imperial) {
@@ -1068,8 +1246,8 @@ private fun weightUnitLabel(unitSystem: UnitSystem): String =
 private fun List<WeightChartPoint>.dateRangeLabel(): String {
     if (isEmpty()) return ""
     val formatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
-    val startDate = first().time.atZone(ZoneId.systemDefault()).toLocalDate()
-    val endDate = last().time.atZone(ZoneId.systemDefault()).toLocalDate()
+    val startDate = first().date
+    val endDate = last().endDate
     return if (startDate.year == endDate.year) {
         "${startDate.format(formatter)} - ${endDate.format(formatter)}, ${endDate.year}"
     } else {
@@ -1078,14 +1256,22 @@ private fun List<WeightChartPoint>.dateRangeLabel(): String {
 }
 
 private fun WeightChartPoint.dateLabel(): String =
-    time.atZone(ZoneId.systemDefault())
-        .toLocalDate()
-        .format(DateTimeFormatter.ofPattern("M/d", Locale.US))
+    date.format(DateTimeFormatter.ofPattern("M/d", Locale.US))
 
 private fun weightAxisLabels(minValue: Double, maxValue: Double): List<Double> {
     val range = (maxValue - minValue).coerceAtLeast(1.0)
     val step = (range / 4.0).coerceAtLeast(1.0)
     return (4 downTo 0).map { minValue + (step * it) }
+}
+
+private fun formatVisibleWeightRange(visibleDays: Float): String {
+    val roundedDays = visibleDays.roundToInt()
+    return when {
+        roundedDays >= 365 -> String.format(Locale.US, "%.1f yr", roundedDays / 365f)
+        roundedDays >= 60 -> "${roundedDays / 30} mo"
+        roundedDays >= 14 -> "${roundedDays} days"
+        else -> "${roundedDays.coerceAtLeast(1)} days"
+    }
 }
 
 @Composable
@@ -1199,5 +1385,8 @@ private fun List<Int>.averageOrNull(): Double? =
 
 private const val KG_TO_LBS = 2.2046226218
 private const val WEIGHT_CHART_PADDING = 1.0
+private const val MILLIS_PER_DAY = 86_400_000.0
+private const val MIN_WEIGHT_VISIBLE_DAYS = 3f
+private const val MAX_WEIGHT_VISIBLE_DAYS = 365f
 private const val DEFAULT_VISIBLE_CHART_BARS = 9
 private const val PREVIEW_DAY_COUNT = 7
