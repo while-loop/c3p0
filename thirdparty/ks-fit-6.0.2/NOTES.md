@@ -20,7 +20,7 @@ These are the WalkingPad-relevant findings from the KS Fit 6.0.2 APK.
   - `24e2521c-f63b-48ed-85be-c5330d00fdf7`
   - `24e2521c-f63b-48ed-85be-c5330e00fdf7`
   - `24e2521c-f63b-48ed-85be-c5330f00fdf70`
-- A real C2 service dump also exposed the `24e2521c` family as service `...d00fdf7` with `...e00fdf7` update properties and `...f00fdf7` write properties, plus a `5833ff01` service family with `5833ff02`/`5833ff03` read/write-style characteristics. C3P0 treats those as encrypted KS characteristic candidates alongside the `FED7/FED8` pairs.
+- A real C2 service dump also exposed the `24e2521c` family as service `...d00fdf7` with `...e00fdf7` update properties and `...f00fdf7` write properties, plus a `5833ff01` service family. Live Android properties showed `5833ff02` is write-only (`8`), so C3P0 treats `5833ff03` as the read/update characteristic and `5833ff02` as the write characteristic alongside the `FED7/FED8` pairs.
 - Dart strings include action names such as:
   - `WilinkDeviceActionExt|setStart`
   - `WilinkDeviceActionExt|setPause`

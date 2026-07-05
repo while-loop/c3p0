@@ -710,7 +710,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun availableKsEncryptedWriteChars(): List<String> =
         KingsmithEncryptedProtocol.characteristicPairs.map { it.writeCharSubstring }.filter { writeChar ->
-            connection?.hasCharacteristicUuidSubstring(writeChar) == true
+            connection?.hasWriteCharacteristicUuidSubstring(writeChar) == true
         }
 
     private suspend fun setPreferenceInt(key: Int, value: Int, type: Int = 0): Boolean {
@@ -788,8 +788,8 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun availableKsEncryptedCharacteristicPair(): KingsmithEncryptedProtocol.CharacteristicPair? =
         KingsmithEncryptedProtocol.characteristicPairs.firstOrNull { candidate ->
-            connection?.hasCharacteristicUuidSubstring(candidate.readCharSubstring) == true &&
-                connection?.hasCharacteristicUuidSubstring(candidate.writeCharSubstring) == true
+            connection?.hasUpdateCharacteristicUuidSubstring(candidate.readCharSubstring) == true &&
+                connection?.hasWriteCharacteristicUuidSubstring(candidate.writeCharSubstring) == true
         }
 
     private fun markAnyProtocolReady() {

@@ -248,6 +248,12 @@ class BleConnection(
     fun hasCharacteristicUuidSubstring(charUuidSubstring: String): Boolean =
         findCharacteristicBySubstring(charUuidSubstring) != null
 
+    fun hasUpdateCharacteristicUuidSubstring(charUuidSubstring: String): Boolean =
+        findCharacteristicBySubstring(charUuidSubstring)?.supportsUpdates == true
+
+    fun hasWriteCharacteristicUuidSubstring(charUuidSubstring: String): Boolean =
+        findCharacteristicBySubstring(charUuidSubstring)?.supportsWrites == true
+
     private fun findCharacteristicBySubstring(charUuidSubstring: String): CharacteristicMatch? {
         val needle = charUuidSubstring.lowercase(Locale.US)
         val services = bluetoothGatt?.services ?: return null
@@ -463,5 +469,13 @@ class BleConnection(
         val serviceUuid: UUID,
         val charUuid: UUID,
         val properties: Int
-    )
+    ) {
+        val supportsUpdates: Boolean
+            get() = properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0 ||
+                properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
+
+        val supportsWrites: Boolean
+            get() = properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
+                properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+    }
 }

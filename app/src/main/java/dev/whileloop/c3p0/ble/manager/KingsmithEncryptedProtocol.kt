@@ -22,7 +22,7 @@ internal object KingsmithEncryptedProtocol {
         CharacteristicPair(readCharSubstring = "0001fed7", writeCharSubstring = "0001fed8"),
         CharacteristicPair(readCharSubstring = "0002fed8", writeCharSubstring = "0002fed7"),
         CharacteristicPair(readCharSubstring = "c5330e00fdf7", writeCharSubstring = "c5330f00fdf7"),
-        CharacteristicPair(readCharSubstring = "5833ff02", writeCharSubstring = "5833ff03")
+        CharacteristicPair(readCharSubstring = "5833ff03", writeCharSubstring = "5833ff02")
     )
 
     val encryptionTables = listOf(
