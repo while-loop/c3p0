@@ -17,6 +17,7 @@
 - [x] **BLE GATT Operation Queue**: Serialized descriptor writes and characteristic writes in `BleConnection`, waiting for Android callbacks where available so notification setup and command writes cannot race each other.
 - [x] **Legacy Main-Thread GATT Writes**: Matched KS Fit's BLE stack by starting descriptor and characteristic writes on the Android main thread with the legacy GATT write APIs instead of the newer Android 13 overloads.
 - [x] **AIS Bus Prefix First**: Start the `5833ff02` AIS handshake with KS Fit's BLE sub-version 18 bus payload prefix, then toggle to unprefixed AIS only if the prefixed handshake does not answer.
+- [x] **KingSmith FTMS Supplement Route**: Prefer KS FTMS Control Point plus the ODM/supplement property-list preamble over `5833ff02` when `0x1826` and `24e2521c`/`d18d2c10` are present, and parse the KingSmith FTMS step extension.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
