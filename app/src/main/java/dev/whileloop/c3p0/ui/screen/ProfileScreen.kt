@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -46,6 +47,8 @@ fun ProfileScreen(
     val zone2MaxSpeedKmh by viewModel.zone2MaxSpeedKmh.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
+    val noLoadStopEnabled by viewModel.noLoadStopEnabled.collectAsState()
+    val noLoadStopTimeoutSeconds by viewModel.noLoadStopTimeoutSeconds.collectAsState()
     val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
     val isRefreshingWeight by viewModel.isRefreshingWeight.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
@@ -161,7 +164,42 @@ fun ProfileScreen(
                 Text(viewModel.connectionLabel(watchConnectionState))
             }
         )
-        // TODO: Re-enable no-load stop controls after capturing the KS Fit BLE packet/key.
+        ListItem(
+            headlineContent = { Text("No-load stop") },
+            supportingContent = {
+                Text(
+                    if (noLoadStopEnabled) {
+                        "Stop after ${noLoadStopTimeoutSeconds}s without load"
+                    } else {
+                        "Idle shutdown is off"
+                    }
+                )
+            },
+            trailingContent = {
+                Switch(
+                    checked = noLoadStopEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.updateNoLoadStop(enabled, noLoadStopTimeoutSeconds)
+                    }
+                )
+            }
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            NoLoadStopTimeoutOptions.forEach { timeoutSeconds ->
+                FilterChip(
+                    selected = noLoadStopTimeoutSeconds == timeoutSeconds,
+                    onClick = { viewModel.updateNoLoadStop(noLoadStopEnabled, timeoutSeconds) },
+                    enabled = noLoadStopEnabled,
+                    label = { Text("${timeoutSeconds}s") }
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -452,3 +490,4 @@ private const val KM_PER_MILE = 1.60934f
 private const val MIN_ZONE2_MAX_SPEED_KMH = 1.60934f
 private const val MAX_ZONE2_MAX_SPEED_KMH = 6.0f
 private const val SPEED_DISPLAY_STEP = 0.1f
+private val NoLoadStopTimeoutOptions = listOf(5, 15, 30, 45, 60)

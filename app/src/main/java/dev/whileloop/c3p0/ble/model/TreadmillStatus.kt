@@ -11,7 +11,9 @@ data class TreadmillStatus(
     val steps: Int = 0,
     val hasStepCount: Boolean = false,
     val calories: Int = 0,
-    val unitSystem: UnitSystem? = null
+    val unitSystem: UnitSystem? = null,
+    val noLoadStopEnabled: Boolean? = null,
+    val noLoadStopTimeoutSeconds: Int? = null
 )
 
 enum class TreadmillState {

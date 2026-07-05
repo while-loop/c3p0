@@ -65,6 +65,14 @@ class MockTreadmillManager @Inject constructor() : TreadmillManager {
         _status.value = _status.value.copy(unitSystem = unitSystem)
         return true
     }
+
+    override suspend fun setNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean {
+        _status.value = _status.value.copy(
+            noLoadStopEnabled = enabled,
+            noLoadStopTimeoutSeconds = timeoutSeconds
+        )
+        return true
+    }
     
     // Helper to simulate walking
     suspend fun simulateWalking() {

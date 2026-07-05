@@ -217,7 +217,9 @@ class ProfileViewModel @Inject constructor(
 
     fun updateNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
         viewModelScope.launch {
-            settingsRepository.saveNoLoadStop(enabled, timeoutSeconds)
+            if (treadmillManager.setNoLoadStop(enabled, timeoutSeconds)) {
+                settingsRepository.saveNoLoadStop(enabled, timeoutSeconds)
+            }
         }
     }
 

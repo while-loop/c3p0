@@ -28,6 +28,10 @@ These are the WalkingPad-relevant findings from the KS Fit 6.0.2 APK.
   - `WilinkDeviceActionExt|setMode`
   - `WilinkDeviceActionExt|setAutoStop`
   - `setNoloadStop`
+- KS Fit 6.0.2's Flutter AOT strings expose the no-load stop setting keys:
+  - `AuToStop` for the enable/disable switch
+  - `NoloadStop` for the idle timeout value
+  - `idleTimeout` as the UI/controller-side timeout field
 
 ## WalkingPad Properties
 
@@ -65,5 +69,5 @@ The bundled `assets/flutter_assets/assets/mine/allProducts.json` identifies C2-l
 ## C3P0 Impact
 
 - Encrypted KS polling should request the motion/state properties above and parse `BurnCalories`, `RunningSteps`, `RunningTotalTime`, `RunningDistance`, `ControlMode`, and `runState`.
-- KS Fit exposes no-load stop UI and strings, but the exact BLE payload/key was not recovered from strings alone. Keep no-load stop hidden until packet captures identify the command.
+- KS Fit exposes no-load stop UI and the likely encrypted KS property keys. C3P0 sends them over the same text-property path as speed/mode: `props AuToStop 0/1` and `props NoloadStop <seconds>`. The numeric `servers getProp` IDs for proactive polling were not recovered, so C3P0 reads these values only if the pad echoes named props in encrypted notifications.
 - KS Fit behavior matches the pause-then-stop flow: pause while the belt is moving, then stop only after the belt has coasted to zero.

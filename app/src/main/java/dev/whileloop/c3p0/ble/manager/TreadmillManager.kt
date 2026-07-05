@@ -18,6 +18,7 @@ interface TreadmillManager {
     suspend fun setSpeed(speed: Float): Boolean // speed in km/h (e.g., 3.0)
     suspend fun setMode(mode: TreadmillMode): Boolean
     suspend fun setUnitSystem(unitSystem: UnitSystem): Boolean
+    suspend fun setNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean
 }
 
 enum class ConnectionState {

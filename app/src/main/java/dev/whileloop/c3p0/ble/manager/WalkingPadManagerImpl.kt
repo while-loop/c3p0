@@ -347,6 +347,44 @@ class WalkingPadManagerImpl @Inject constructor(
         return applyUnitSystem(unitSystem)
     }
 
+    override suspend fun setNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean {
+        if (!ksEncryptedProtocolReady.value) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "No-load stop requires encrypted KS WalkingPad protocol",
+                "enabled=$enabled timeoutSeconds=$timeoutSeconds connection=${connectionState.value} services=${connection?.serviceSummary() ?: "none"}"
+            )
+            return false
+        }
+
+        val timeout = timeoutSeconds.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
+            ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
+        val switchCommand = KingsmithEncryptedProtocol.noLoadStopSwitchCommand(enabled)
+        val timeoutCommand = KingsmithEncryptedProtocol.noLoadStopTimeoutCommand(timeout)
+        val commands = if (enabled) {
+            listOf(timeoutCommand, switchCommand)
+        } else {
+            listOf(switchCommand, timeoutCommand)
+        }
+
+        for (command in commands) {
+            if (!sendKsEncryptedTextCommand(command)) {
+                errorReporter.report(
+                    "WalkingPad Bluetooth",
+                    "WalkingPad did not accept no-load stop command",
+                    "command=$command enabled=$enabled timeoutSeconds=$timeout"
+                )
+                return false
+            }
+        }
+
+        _status.value = status.value.copy(
+            noLoadStopEnabled = enabled,
+            noLoadStopTimeoutSeconds = timeout
+        )
+        return true
+    }
+
     private suspend fun applyUnitSystem(unitSystem: UnitSystem): Boolean {
         if (!legacyProtocolReady.value) {
             _status.value = _status.value.copy(unitSystem = unitSystem)
@@ -984,6 +1022,8 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
         private const val KS_ENCRYPTED_HANDSHAKE_SPACING_MS = 25L
         private const val KS_ENCRYPTED_LAST_HANDSHAKE_INDEX = 7
+        private const val DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS = 30
+        private val NO_LOAD_STOP_TIMEOUT_OPTIONS = setOf(5, 15, 30, 45, 60)
     }
 
     private enum class WalkingPadProtocol {

@@ -20,6 +20,7 @@
 - [x] **Zone 2 Controller Tests**: Added unit coverage for in-zone no-op behavior, learned speed bias, and trend-gated edge guard adjustments.
 - [x] **Default Session Mode Setting**: Added a Profile setting for Manual, Automatic, or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
 - [x] **Active Session Keep Awake**: Added a profile setting to keep the phone awake only while a session is active and unpaused.
+- [x] **No-Load Stop Setting**: Recovered KS Fit's `AuToStop`/`NoloadStop` encrypted-property keys and added Profile controls that send and save the no-load stop setting after the pad accepts it.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 3-second circular long press with a progress ring.
@@ -57,4 +58,4 @@
 - [ ] **Elapsed vs Active Time**: Decide whether to display both wall-clock elapsed time and active/moving time. Current session timers pause with the session; many fitness apps keep elapsed wall-clock time separate from active time.
 - [ ] **Backup Restore Verification**: Manually verify Android Auto Backup restore behavior on a real signed install path; restore timing is controlled by Android and Google backup services.
 - [ ] **Unit Tests**: Add comprehensive test suite for `AutoSpeedController`.
-- [ ] **No-Load Stop Setting**: Sniff KS Fit BLE packets for the no-load stop command/key, then re-enable the Profile setting and send the actual WalkingPad preference.
+- [ ] **No-Load Stop Readback Polling**: Sniff KS Fit BLE packets or decode the remaining property map to identify the numeric `servers getProp` IDs for proactive no-load stop readback.
