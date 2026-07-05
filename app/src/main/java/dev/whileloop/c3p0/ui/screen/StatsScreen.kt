@@ -12,11 +12,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +49,7 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
     viewModel: StatsViewModel = hiltViewModel()
@@ -69,10 +68,11 @@ fun StatsScreen(
     val unitSystem by viewModel.unitSystem.collectAsState()
     var showStepPermissionSheet by remember { mutableStateOf(false) }
     var showWeightPermissionSheet by remember { mutableStateOf(false) }
+    var openChartSheet by remember { mutableStateOf<StatsChartSheet?>(null) }
     var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
-    var isStepHistoryExpanded by rememberSaveable { mutableStateOf(true) }
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
     val weightHistoryPermissions = remember { healthConnectWeightHistoryPermissions() }
+    val chartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) {
@@ -121,6 +121,52 @@ fun StatsScreen(
             onDismiss = { showWeightPermissionSheet = false }
         )
     }
+
+    openChartSheet?.let { sheet ->
+        ModalBottomSheet(
+            onDismissRequest = { openChartSheet = null },
+            sheetState = chartSheetState
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.85f),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
+            ) {
+                item {
+                    when (sheet) {
+                        StatsChartSheet.Steps -> HealthConnectStepHistoryCard(
+                            rows = dailyStepHistory,
+                            canReadSteps = canReadHealthConnectSteps,
+                            isLoading = isStepHistoryLoading,
+                            selectedPeriod = stepChartPeriod,
+                            isExpanded = true,
+                            showCollapseControl = false,
+                            onPeriodSelected = { stepChartPeriod = it },
+                            onExpandedChange = {},
+                            onEnable = { showStepPermissionSheet = true },
+                            onRefresh = { viewModel.refreshStepHistory() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(420.dp)
+                        )
+
+                        StatsChartSheet.Weight -> HealthConnectWeightHistoryCard(
+                            records = weightHistory,
+                            canReadWeight = canReadHealthConnectWeight,
+                            isLoading = isWeightHistoryLoading,
+                            unitSystem = unitSystem,
+                            onEnable = { showWeightPermissionSheet = true },
+                            onRefresh = { viewModel.refreshWeightHistory() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 360.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
     
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
@@ -139,38 +185,24 @@ fun StatsScreen(
 
         LazyColumn(modifier = Modifier.weight(1f)) {
             item {
-                HealthConnectStepHistoryCard(
+                StepHistoryPreviewCard(
                     rows = dailyStepHistory,
                     canReadSteps = canReadHealthConnectSteps,
                     isLoading = isStepHistoryLoading,
-                    selectedPeriod = stepChartPeriod,
-                    isExpanded = isStepHistoryExpanded,
-                    onPeriodSelected = { stepChartPeriod = it },
-                    onExpandedChange = { isStepHistoryExpanded = it },
-                    onEnable = { showStepPermissionSheet = true },
-                    onRefresh = { viewModel.refreshStepHistory() },
-                    modifier = if (isStepHistoryExpanded) {
-                        Modifier
-                            .fillParentMaxHeight(0.42f)
-                            .heightIn(min = 320.dp)
-                    } else {
-                        Modifier.fillMaxWidth()
-                    }
+                    onClick = { openChartSheet = StatsChartSheet.Steps },
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             item {
-                HealthConnectWeightHistoryCard(
+                WeightHistoryPreviewCard(
                     records = weightHistory,
                     canReadWeight = canReadHealthConnectWeight,
                     isLoading = isWeightHistoryLoading,
                     unitSystem = unitSystem,
-                    onEnable = { showWeightPermissionSheet = true },
-                    onRefresh = { viewModel.refreshWeightHistory() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 300.dp)
+                    onClick = { openChartSheet = StatsChartSheet.Weight },
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -193,12 +225,254 @@ fun StatsScreen(
 }
 
 @Composable
+private fun StepHistoryPreviewCard(
+    rows: List<DailyStepHistory>,
+    canReadSteps: Boolean,
+    isLoading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val previewRows = remember(rows) { rows.toStepPreviewRows() }
+    val latestSteps = previewRows.lastOrNull()?.rawSteps
+
+    Card(
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            ChartPreviewHeader(
+                title = "Steps",
+                isLoading = isLoading,
+                trailingContentDescription = "Open steps chart"
+            )
+            Text(
+                "Last 7 Days",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            when {
+                isLoading && previewRows.isEmpty() -> PreviewLoadingText("Loading step history...")
+                !canReadSteps && previewRows.isEmpty() -> PreviewLoadingText("Enable Health Connect steps")
+                previewRows.isEmpty() -> PreviewLoadingText("No step data found")
+                else -> StepPreviewChart(
+                    rows = previewRows,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(top = 12.dp, bottom = 10.dp))
+            ChartPreviewValueRow(
+                value = latestSteps?.let { compactSteps(it) } ?: "--",
+                unit = "steps"
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeightHistoryPreviewCard(
+    records: List<WeightHistoryRecord>,
+    canReadWeight: Boolean,
+    isLoading: Boolean,
+    unitSystem: UnitSystem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val chartPoints = remember(records, unitSystem) { records.toWeightChartPoints(unitSystem) }
+    val previewPoints = remember(chartPoints) { chartPoints.takeLast(PREVIEW_DAY_COUNT) }
+    val latestWeight = previewPoints.lastOrNull()?.rawWeight
+
+    Card(
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            ChartPreviewHeader(
+                title = "Weight Trend",
+                isLoading = isLoading,
+                trailingContentDescription = "Open weight trend chart"
+            )
+            Text(
+                "Last 7 Days",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            when {
+                isLoading && previewPoints.isEmpty() -> PreviewLoadingText("Loading weight history...")
+                !canReadWeight && previewPoints.isEmpty() -> PreviewLoadingText("Enable Health Connect weight")
+                previewPoints.size < 2 -> PreviewLoadingText("No weight trend yet")
+                else -> WeightPreviewChart(
+                    points = previewPoints,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(top = 12.dp, bottom = 10.dp))
+            ChartPreviewValueRow(
+                value = latestWeight?.let { String.format(Locale.US, "%.1f", it) } ?: "--",
+                unit = weightUnitLabel(unitSystem)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChartPreviewHeader(
+    title: String,
+    isLoading: Boolean,
+    trailingContentDescription: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = trailingContentDescription,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreviewLoadingText(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(92.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ChartPreviewValueRow(value: String, unit: String) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(value, style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            unit,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun StepPreviewChart(
+    rows: List<StepChartRow>,
+    modifier: Modifier = Modifier
+) {
+    val previewRows = rows.takeLast(PREVIEW_DAY_COUNT)
+    val emptyLeadingSlots = PREVIEW_DAY_COUNT - previewRows.size
+    val maxSteps = previewRows.maxOfOrNull { it.rawSteps }?.coerceAtLeast(1L) ?: 1L
+    val rawBarColor = MaterialTheme.colorScheme.primaryContainer
+    val normalizedBarColor = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier = modifier) {
+        val slotWidth = size.width / PREVIEW_DAY_COUNT
+        val barWidth = (slotWidth * 0.58f).coerceAtMost(34.dp.toPx())
+        previewRows.forEachIndexed { index, row ->
+            val slotIndex = emptyLeadingSlots + index
+            val left = (slotIndex * slotWidth) + ((slotWidth - barWidth) / 2f)
+            val rawHeight = size.height * barFraction(row.rawSteps, maxSteps)
+            val normalizedHeight = size.height *
+                barFraction(row.normalizedSteps, maxSteps).coerceAtMost(barFraction(row.rawSteps, maxSteps))
+            drawRoundRect(
+                color = rawBarColor,
+                topLeft = Offset(left, size.height - rawHeight),
+                size = androidx.compose.ui.geometry.Size(barWidth, rawHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+            )
+            drawRoundRect(
+                color = normalizedBarColor,
+                topLeft = Offset(left + (barWidth * 0.16f), size.height - normalizedHeight),
+                size = androidx.compose.ui.geometry.Size(barWidth * 0.68f, normalizedHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeightPreviewChart(
+    points: List<WeightChartPoint>,
+    modifier: Modifier = Modifier
+) {
+    val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+    val trendColor = MaterialTheme.colorScheme.primary
+    val pointFillColor = MaterialTheme.colorScheme.surface
+    val minValue = points.minOf { minOf(it.rawWeight, it.trailingAverage) }
+    val maxValue = points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
+    val valueRange = (maxValue - minValue).coerceAtLeast(0.5)
+    val startTime = points.first().time.toEpochMilli()
+    val endTime = points.last().time.toEpochMilli()
+    val timeRange = (endTime - startTime).coerceAtLeast(1L)
+
+    Canvas(modifier = modifier) {
+        val horizontalPadding = 4.dp.toPx()
+        val verticalPadding = 8.dp.toPx()
+        val chartWidth = size.width - (horizontalPadding * 2f)
+        val chartHeight = size.height - (verticalPadding * 2f)
+
+        fun xFor(timeMillis: Long): Float =
+            horizontalPadding + ((timeMillis - startTime).toFloat() / timeRange) * chartWidth
+
+        fun yFor(value: Double): Float =
+            verticalPadding + ((maxValue - value).toFloat() / valueRange.toFloat()) * chartHeight
+
+        points.zipWithNext().forEach { (a, b) ->
+            drawLine(
+                color = rawColor,
+                start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
+                end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = trendColor,
+                start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
+                end = Offset(xFor(b.time.toEpochMilli()), yFor(b.trailingAverage)),
+                strokeWidth = 3.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+        points.forEach { point ->
+            drawCircle(
+                color = pointFillColor,
+                radius = 4.5.dp.toPx(),
+                center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+            )
+            drawCircle(
+                color = trendColor,
+                radius = 2.8.dp.toPx(),
+                center = Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+            )
+        }
+    }
+}
+
+@Composable
 private fun HealthConnectStepHistoryCard(
     rows: List<DailyStepHistory>,
     canReadSteps: Boolean,
     isLoading: Boolean,
     selectedPeriod: StepChartPeriod,
     isExpanded: Boolean,
+    showCollapseControl: Boolean = true,
     onPeriodSelected: (StepChartPeriod) -> Unit,
     onExpandedChange: (Boolean) -> Unit,
     onEnable: () -> Unit,
@@ -218,25 +492,21 @@ private fun HealthConnectStepHistoryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onExpandedChange(!isExpanded) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isExpanded) {
-                            Icons.Default.KeyboardArrowUp
-                        } else {
-                            Icons.Default.KeyboardArrowDown
-                        },
-                        contentDescription = if (isExpanded) {
-                            "Collapse Health Connect steps"
-                        } else {
-                            "Expand Health Connect steps"
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                if (showCollapseControl) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onExpandedChange(!isExpanded) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Toggle Health Connect steps"
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
+                    }
+                } else {
                     Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
                 }
                 TextButton(
@@ -662,6 +932,11 @@ private enum class StepChartPeriod(val label: String) {
     Month("Month")
 }
 
+private enum class StatsChartSheet {
+    Steps,
+    Weight
+}
+
 private data class StepChartRow(
     val startDate: LocalDate,
     val label: String,
@@ -706,6 +981,18 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
             }
     }.dropLeadingEmptyRows()
 }
+
+private fun List<DailyStepHistory>.toStepPreviewRows(): List<StepChartRow> =
+    sortedBy { it.date }
+        .takeLast(PREVIEW_DAY_COUNT)
+        .map { row ->
+            StepChartRow(
+                startDate = row.date,
+                label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
+                rawSteps = row.rawSteps,
+                normalizedSteps = row.normalizedSteps
+            )
+        }
 
 private fun List<StepChartRow>.dropLeadingEmptyRows(): List<StepChartRow> =
     dropWhile { it.rawSteps == 0L && it.normalizedSteps == 0L }
@@ -913,3 +1200,4 @@ private fun List<Int>.averageOrNull(): Double? =
 private const val KG_TO_LBS = 2.2046226218
 private const val WEIGHT_CHART_PADDING = 1.0
 private const val DEFAULT_VISIBLE_CHART_BARS = 9
+private const val PREVIEW_DAY_COUNT = 7
