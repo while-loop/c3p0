@@ -24,7 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -460,22 +465,20 @@ private fun WeightPreviewChart(
         fun yFor(value: Double): Float =
             verticalPadding + ((maxValue - value).toFloat() / valueRange.toFloat()) * chartHeight
 
-        points.zipWithNext().forEach { (a, b) ->
-            drawLine(
-                color = rawColor,
-                start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
-                end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-            drawLine(
-                color = trendColor,
-                start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
-                end = Offset(xFor(b.time.toEpochMilli()), yFor(b.trailingAverage)),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-        }
+        drawSmoothWeightLine(
+            points = points.map { point ->
+                Offset(xFor(point.time.toEpochMilli()), yFor(point.rawWeight))
+            },
+            color = rawColor,
+            strokeWidth = 2.dp.toPx()
+        )
+        drawSmoothWeightLine(
+            points = points.map { point ->
+                Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+            },
+            color = trendColor,
+            strokeWidth = 3.dp.toPx()
+        )
         points.forEach { point ->
             drawCircle(
                 color = pointFillColor,
@@ -912,22 +915,20 @@ private fun WeightTrendChart(
                         )
                     }
 
-                    points.zipWithNext().forEach { (a, b) ->
-                        drawLine(
-                            color = rawColor,
-                            start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
-                            end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
-                            strokeWidth = 2.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                        drawLine(
-                            color = trendColor,
-                            start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
-                            end = Offset(xFor(b.time.toEpochMilli()), yFor(b.trailingAverage)),
-                            strokeWidth = 2.5.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                    }
+                    drawSmoothWeightLine(
+                        points = points.map { point ->
+                            Offset(xFor(point.time.toEpochMilli()), yFor(point.rawWeight))
+                        },
+                        color = rawColor,
+                        strokeWidth = 2.dp.toPx()
+                    )
+                    drawSmoothWeightLine(
+                        points = points.map { point ->
+                            Offset(xFor(point.time.toEpochMilli()), yFor(point.trailingAverage))
+                        },
+                        color = trendColor,
+                        strokeWidth = 2.5.dp.toPx()
+                    )
 
                     points.forEach { point ->
                         drawCircle(
@@ -1415,6 +1416,49 @@ private fun List<WeightChartPoint>.dateRangeLabel(): String {
 private fun WeightChartPoint.dateLabel(): String =
     date.format(DateTimeFormatter.ofPattern("M/d", Locale.US))
 
+private fun DrawScope.drawSmoothWeightLine(
+    points: List<Offset>,
+    color: Color,
+    strokeWidth: Float
+) {
+    when {
+        points.size < 2 -> return
+        points.size == 2 -> drawLine(
+            color = color,
+            start = points.first(),
+            end = points.last(),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+
+        else -> {
+            val path = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                for (index in 0 until points.lastIndex) {
+                    val p0 = points[(index - 1).coerceAtLeast(0)]
+                    val p1 = points[index]
+                    val p2 = points[index + 1]
+                    val p3 = points[(index + 2).coerceAtMost(points.lastIndex)]
+                    val control1X = p1.x + ((p2.x - p0.x) * WEIGHT_LINE_SMOOTHING)
+                    val control1Y = p1.y + ((p2.y - p0.y) * WEIGHT_LINE_SMOOTHING)
+                    val control2X = p2.x - ((p3.x - p1.x) * WEIGHT_LINE_SMOOTHING)
+                    val control2Y = p2.y - ((p3.y - p1.y) * WEIGHT_LINE_SMOOTHING)
+                    cubicTo(control1X, control1Y, control2X, control2Y, p2.x, p2.y)
+                }
+            }
+            drawPath(
+                path = path,
+                color = color,
+                style = Stroke(
+                    width = strokeWidth,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
+        }
+    }
+}
+
 private fun formatWeightAxisDate(epochMillis: Long): String =
     Instant.ofEpochMilli(epochMillis)
         .atZone(ZoneId.systemDefault())
@@ -1619,6 +1663,7 @@ private fun List<Int>.averageOrNull(): Double? =
 
 private const val KG_TO_LBS = 2.2046226218
 private const val WEIGHT_CHART_PADDING = 1.0
+private const val WEIGHT_LINE_SMOOTHING = 0.16f
 private const val MILLIS_PER_DAY = 86_400_000.0
 private const val MIN_WEIGHT_VISIBLE_DAYS = 3f
 private const val MAX_WEIGHT_VISIBLE_DAYS = 365f
