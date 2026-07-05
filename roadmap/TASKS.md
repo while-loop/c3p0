@@ -8,6 +8,7 @@
 - [x] **WalkingPad KS Counters**: Read steps from legacy KS status packets and steps/calories from encrypted KS `RunningSteps`/`BurnCalories` props when present.
 - [x] **KS-Only Protocol Direction**: Removed the generic treadmill protocol path so C3P0 can focus on fully integrating with this specific WalkingPad's legacy and encrypted KS protocols.
 - [x] **Encrypted KS Stop Fallback**: Reverse-engineered the Mi WalkingPad APK stop path and added a guarded `props runState 0` fallback for `FED7`/`FED8`-style KS encrypted control characteristics.
+- [x] **Encrypted KS Characteristic Families**: Added live C2 service-dump support for the `24e252...` and `5833ff...` encrypted KS read/write characteristic families.
 - [x] **Encrypted KS Native Automatic Mode**: Enabled Automatic mode when encrypted KS control characteristics are present by sending `props ControlMode 0/1/2` mode commands with the known model encryption tables.
 - [x] **Encrypted KS Status Telemetry**: Added the Mi WalkingPad APK encrypted-text handshake, subscribed to KS read characteristics, polled `servers getProp`, and parsed `RunningSteps`/distance/time/speed/mode so newer pads can use real WalkingPad counters.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.

@@ -23,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
@@ -55,6 +56,7 @@ fun ProfileScreen(
     val watchAddress by viewModel.watchAddress.collectAsState()
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
+    val isTreadmillConnected = treadmillConnectionState == ConnectionState.CONNECTED
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     var launchHealthConnectPermissions by remember { mutableStateOf(false) }
@@ -178,6 +180,7 @@ fun ProfileScreen(
             trailingContent = {
                 Switch(
                     checked = noLoadStopEnabled,
+                    enabled = isTreadmillConnected,
                     onCheckedChange = { enabled ->
                         viewModel.updateNoLoadStop(enabled, noLoadStopTimeoutSeconds)
                     }
@@ -195,7 +198,7 @@ fun ProfileScreen(
                 FilterChip(
                     selected = noLoadStopTimeoutSeconds == timeoutSeconds,
                     onClick = { viewModel.updateNoLoadStop(noLoadStopEnabled, timeoutSeconds) },
-                    enabled = noLoadStopEnabled,
+                    enabled = isTreadmillConnected && noLoadStopEnabled,
                     label = { Text("${timeoutSeconds}s") }
                 )
             }
