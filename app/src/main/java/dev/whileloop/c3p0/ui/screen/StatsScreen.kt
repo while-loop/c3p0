@@ -1308,8 +1308,7 @@ private enum class WeightXAxisPeriod(val label: String, val days: Int) {
     Month("1M", 30),
     ThreeMonths("3M", 90),
     SixMonths("6M", 180),
-    Year("1Y", 365),
-    All("All", 10_000)
+    Year("1Y", 365)
 }
 
 private enum class WeightChartGrouping(val label: String, val shortLabel: String) {
