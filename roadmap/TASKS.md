@@ -41,6 +41,7 @@
 - [x] **Permissions UX**: Added bottom sheets to explain permission requests before invoking system permission prompts.
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
+- [x] **WalkingPad Profile Reconnect Controls**: Added inline Profile-row controls to connect saved WalkingPad Bluetooth and refresh the KS protocol handshake.
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
 - [x] **Protocol-Aware Session Modes**: Always show Manual, Automatic, and Zone 2 while enabling native Automatic only when the connected KS protocol exposes the WalkingPad mode command.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.

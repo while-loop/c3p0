@@ -215,6 +215,24 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun connectWalkingPad() {
+        viewModelScope.launch {
+            treadmillAddress.value?.let { address ->
+                if (treadmillManager.connectionState.value == ConnectionState.DISCONNECTED) {
+                    treadmillManager.connect(address)
+                }
+            }
+        }
+    }
+
+    fun refreshWalkingPadProtocol() {
+        viewModelScope.launch {
+            treadmillAddress.value?.let { address ->
+                treadmillManager.connect(address)
+            }
+        }
+    }
+
     fun updateNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
         viewModelScope.launch {
             if (treadmillManager.setNoLoadStop(enabled, timeoutSeconds)) {

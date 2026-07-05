@@ -57,6 +57,9 @@ fun ProfileScreen(
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isTreadmillConnected = treadmillConnectionState == ConnectionState.CONNECTED
+    val hasTreadmillAddress = treadmillAddress != null
+    val canConnectTreadmillBluetooth = hasTreadmillAddress && treadmillConnectionState == ConnectionState.DISCONNECTED
+    val canRefreshTreadmillProtocol = hasTreadmillAddress && treadmillConnectionState != ConnectionState.DISCONNECTING
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     var launchHealthConnectPermissions by remember { mutableStateOf(false) }
@@ -151,10 +154,30 @@ fun ProfileScreen(
         ListItem(
             headlineContent = { Text("WalkingPad") },
             supportingContent = {
-                Text(treadmillAddress ?: "No device selected")
+                Column {
+                    Text(treadmillAddress ?: "No device selected")
+                    Text(viewModel.connectionLabel(treadmillConnectionState))
+                }
             },
             trailingContent = {
-                Text(viewModel.connectionLabel(treadmillConnectionState))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { viewModel.connectWalkingPad() },
+                        enabled = canConnectTreadmillBluetooth,
+                        contentPadding = PaddingValues(horizontal = 10.dp)
+                    ) {
+                        Text("BT")
+                    }
+                    IconButton(
+                        onClick = { viewModel.refreshWalkingPadProtocol() },
+                        enabled = canRefreshTreadmillProtocol
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh WalkingPad protocol")
+                    }
+                }
             }
         )
         ListItem(
