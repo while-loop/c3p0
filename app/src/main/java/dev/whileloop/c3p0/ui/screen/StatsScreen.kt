@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
@@ -105,8 +106,8 @@ fun StatsScreen(
                     onEnable = { showStepPermissionSheet = true },
                     onRefresh = { viewModel.refreshStepHistory() },
                     modifier = Modifier
-                        .fillParentMaxHeight(0.32f)
-                        .heightIn(min = 240.dp)
+                        .fillParentMaxHeight(0.42f)
+                        .heightIn(min = 320.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -145,21 +146,24 @@ private fun HealthConnectStepHistoryCard(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
                 TextButton(
                     onClick = if (canReadSteps) onRefresh else onEnable,
-                    enabled = !isLoading
+                    enabled = !isLoading,
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
                     Text(if (canReadSteps) "Refresh" else "Enable")
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 StepChartPeriod.entries.forEachIndexed { index, period ->
                     SegmentedButton(
@@ -174,10 +178,10 @@ private fun HealthConnectStepHistoryCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             if (canReadSteps && rows.isNotEmpty()) {
                 StepChartLegend()
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
             when {
                 isLoading -> Text("Loading step history...")
@@ -222,26 +226,14 @@ private fun HealthConnectStepChart(
             val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
             Column(
                 modifier = Modifier
-                    .width(60.dp)
+                    .width(62.dp)
                     .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = compactSteps(row.rawSteps),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = compactSteps(row.normalizedSteps),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = normalizedBarColor,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.height(6.dp))
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .width(30.dp)
+                        .width(48.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(trackColor),
                     contentAlignment = Alignment.BottomCenter
@@ -252,14 +244,28 @@ private fun HealthConnectStepChart(
                             .fillMaxHeight(rawFraction)
                             .clip(RoundedCornerShape(6.dp))
                             .background(rawBarColor)
-                    )
+                            .align(Alignment.BottomCenter),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        StepBarValueLabel(
+                            text = compactSteps(row.rawSteps),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.58f)
+                            .fillMaxWidth(0.72f)
                             .fillMaxHeight(normalizedFraction)
                             .clip(RoundedCornerShape(6.dp))
                             .background(normalizedBarColor)
-                    )
+                            .align(Alignment.BottomCenter),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        StepBarValueLabel(
+                            text = compactSteps(row.normalizedSteps),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -270,6 +276,24 @@ private fun HealthConnectStepChart(
             }
         }
     }
+}
+
+@Composable
+private fun StepBarValueLabel(
+    text: String,
+    color: androidx.compose.ui.graphics.Color
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+    )
 }
 
 @Composable
@@ -364,7 +388,7 @@ private fun barFraction(steps: Long, maxSteps: Long): Float =
     if (steps <= 0L) {
         0f
     } else {
-        (steps.toFloat() / maxSteps).coerceIn(0.02f, 1f)
+        (steps.toFloat() / maxSteps).coerceIn(0.16f, 1f)
     }
 
 @Composable
