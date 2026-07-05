@@ -260,7 +260,7 @@ private fun HealthConnectStepChart(
     LazyRow(
         state = listState,
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
         contentPadding = PaddingValues(horizontal = 0.dp)
     ) {
         items(rows) { row ->
@@ -268,7 +268,7 @@ private fun HealthConnectStepChart(
             val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
             Column(
                 modifier = Modifier
-                    .width(46.dp)
+                    .width(42.dp)
                     .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
