@@ -149,7 +149,8 @@ class HealthConnectManager @Inject constructor(
     companion object {
         private const val STEP_READ_PAGE_SIZE = 1000
         val STEP_HISTORY_PERMISSIONS: Set<String> = setOf(
-            HealthPermission.getReadPermission(StepsRecord::class)
+            HealthPermission.getReadPermission(StepsRecord::class),
+            READ_HEALTH_DATA_HISTORY_PERMISSION
         )
         private val WRITE_SESSION_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getWritePermission(StepsRecord::class),
@@ -157,5 +158,7 @@ class HealthConnectManager @Inject constructor(
             HealthPermission.getWritePermission(ExerciseSessionRecord::class)
         )
         val PERMISSIONS: Set<String> = STEP_HISTORY_PERMISSIONS + WRITE_SESSION_PERMISSIONS
+        private const val READ_HEALTH_DATA_HISTORY_PERMISSION =
+            "android.permission.health.READ_HEALTH_DATA_HISTORY"
     }
 }

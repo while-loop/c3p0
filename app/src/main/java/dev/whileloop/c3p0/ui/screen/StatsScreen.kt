@@ -193,7 +193,14 @@ private fun HealthConnectStepHistoryCard(
                     modifier = Modifier.height(36.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Text(if (canReadSteps) "Refresh" else "Enable")
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(if (canReadSteps) "Refresh" else "Enable")
+                    }
                 }
             }
             if (isExpanded) {
@@ -213,13 +220,13 @@ private fun HealthConnectStepHistoryCard(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                if (canReadSteps && rows.isNotEmpty()) {
+                if (rows.isNotEmpty()) {
                     StepChartLegend()
                     Spacer(modifier = Modifier.height(6.dp))
                 }
                 when {
-                    isLoading -> Text("Loading step history...")
-                    !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
+                    isLoading && rows.isEmpty() -> Text("Loading step history...")
+                    !canReadSteps && rows.isEmpty() -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
                     rows.isEmpty() -> Text("No Health Connect step data found.")
                     chartRows.isEmpty() -> Text("No grouped step data found.")
                     else -> HealthConnectStepChart(

@@ -2,12 +2,14 @@ package dev.whileloop.c3p0.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.whileloop.c3p0.data.model.CachedDailyStepHistory
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.repository.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.whileloop.c3p0.data.repository.SettingsRepository
+import dev.whileloop.c3p0.data.repository.StepHistoryCacheRepository
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
 import dev.whileloop.c3p0.domain.usecase.StepNormalizationUseCase
@@ -24,7 +26,8 @@ import javax.inject.Inject
 class StatsViewModel @Inject constructor(
     private val repository: SessionRepository,
     settingsRepository: SettingsRepository,
-    private val stepNormalizationUseCase: StepNormalizationUseCase
+    private val stepNormalizationUseCase: StepNormalizationUseCase,
+    private val stepHistoryCacheRepository: StepHistoryCacheRepository
 ) : ViewModel() {
     private var selectedMetricsJob: Job? = null
     private var normalizedStepsJob: Job? = null
@@ -60,7 +63,7 @@ class StatsViewModel @Inject constructor(
     val isStepHistoryLoading = _isStepHistoryLoading.asStateFlow()
 
     init {
-        refreshStepHistory()
+        loadCachedThenRefreshStepHistory()
     }
 
     fun selectSession(session: SessionEntity) {
@@ -89,20 +92,52 @@ class StatsViewModel @Inject constructor(
         _normalizedSteps.value = null
     }
 
+    private fun loadCachedThenRefreshStepHistory() {
+        viewModelScope.launch {
+            val cachedHistory = stepHistoryCacheRepository.readDailyStepHistory()
+            if (cachedHistory.isNotEmpty()) {
+                _dailyStepHistory.value = cachedHistory.map { it.toDailyStepHistory() }
+            }
+            refreshStepHistory()
+        }
+    }
+
     fun refreshStepHistory() {
         viewModelScope.launch {
             _isStepHistoryLoading.value = true
             try {
                 val canReadSteps = stepNormalizationUseCase.canReadStepHistory()
                 _canReadHealthConnectSteps.value = canReadSteps
-                _dailyStepHistory.value = if (canReadSteps) {
+                if (canReadSteps) {
                     stepNormalizationUseCase.getDailyStepHistory()
-                } else {
-                    emptyList()
+                        .also { freshHistory ->
+                            _dailyStepHistory.value = freshHistory
+                            stepHistoryCacheRepository.saveDailyStepHistory(
+                                freshHistory.map { it.toCachedDailyStepHistory() }
+                            )
+                        }
                 }
             } finally {
                 _isStepHistoryLoading.value = false
             }
         }
     }
+
+    private fun CachedDailyStepHistory.toDailyStepHistory(): DailyStepHistory =
+        DailyStepHistory(
+            date = date,
+            rawSteps = rawSteps,
+            normalizedSteps = normalizedSteps,
+            c3p0Steps = c3p0Steps,
+            excludedOtherSessionSteps = excludedOtherSessionSteps
+        )
+
+    private fun DailyStepHistory.toCachedDailyStepHistory(): CachedDailyStepHistory =
+        CachedDailyStepHistory(
+            date = date,
+            rawSteps = rawSteps,
+            normalizedSteps = normalizedSteps,
+            c3p0Steps = c3p0Steps,
+            excludedOtherSessionSteps = excludedOtherSessionSteps
+        )
 }
