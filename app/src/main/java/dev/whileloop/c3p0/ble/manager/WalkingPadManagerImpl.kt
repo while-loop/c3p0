@@ -50,6 +50,7 @@ class WalkingPadManagerImpl @Inject constructor(
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
     private var lastRawNotificationHex: String? = null
+    private var connectionGeneration = 0
     private val protocolReady = MutableStateFlow(false)
     private val legacyProtocolReady = MutableStateFlow(false)
     private val ksEncryptedProtocolReady = MutableStateFlow(false)
@@ -74,6 +75,7 @@ class WalkingPadManagerImpl @Inject constructor(
         connection?.close()
         stopStatusPolling()
         protocolReadyWatchdogJob?.cancel()
+        connectionGeneration += 1
         protocolReady.value = false
         legacyProtocolReady.value = false
         ksEncryptedProtocolReady.value = false
@@ -134,6 +136,7 @@ class WalkingPadManagerImpl @Inject constructor(
                                 }
                             }
                             ConnectionState.DISCONNECTED -> {
+                                connectionGeneration += 1
                                 resetProtocolState()
                                 _supportsNativeAutoMode.value = false
                                 _connectionState.value = ConnectionState.DISCONNECTED
@@ -157,6 +160,7 @@ class WalkingPadManagerImpl @Inject constructor(
         connectionStateJob = null
         stopStatusPolling()
         protocolReadyWatchdogJob?.cancel()
+        connectionGeneration += 1
         resetProtocolState()
         _supportsNativeAutoMode.value = false
         connection?.disconnect()
@@ -519,6 +523,15 @@ class WalkingPadManagerImpl @Inject constructor(
         minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
         requireReady: Boolean = true
     ): Boolean = commandMutex.withLock {
+        if (!isBleTransportActive()) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "WalkingPad Bluetooth transport is not connected",
+                "protocol=${WalkingPadProtocol.KingsmithEncrypted} command=${cmd.toHexString()} connection=${connectionState.value}"
+            )
+            return@withLock false
+        }
+
         if (requireReady && !awaitProtocolReady(WalkingPadProtocol.KingsmithEncrypted)) {
             errorReporter.report(
                 "WalkingPad Bluetooth",
@@ -532,6 +545,9 @@ class WalkingPadManagerImpl @Inject constructor(
         val elapsedSinceLastCommand = now - lastCommandElapsedMillis
         if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < minCommandSpacingMs) {
             delay(minCommandSpacingMs - elapsedSinceLastCommand)
+        }
+        if (!isBleTransportActive()) {
+            return@withLock false
         }
 
         Timber.d("Sending WalkingPad encrypted KS command: ${cmd.toHexString()} char~=$writeCharSubstring")
@@ -560,6 +576,9 @@ class WalkingPadManagerImpl @Inject constructor(
             offset = end
             if (sent && offset < cmd.size) {
                 delay(KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS)
+                if (!isBleTransportActive()) {
+                    return false
+                }
             }
         }
         return sent
@@ -582,6 +601,9 @@ class WalkingPadManagerImpl @Inject constructor(
             ) ?: false
             if (!sent) break
             delay(KS_ENCRYPTED_AIS_FRAME_DELAY_MS)
+            if (!isBleTransportActive()) {
+                return false
+            }
         }
         return sent
     }
@@ -603,11 +625,12 @@ class WalkingPadManagerImpl @Inject constructor(
         val table = activeKsEncryptedTable
         if (table == null) {
             var anySent = false
+            val candidateSpacingMs = minCommandSpacingMs.coerceAtLeast(KS_ENCRYPTED_CANDIDATE_WRITE_SPACING_MS)
             KingsmithEncryptedProtocol.commandPayloads(command).forEach { payload ->
                 if (sendKsEncryptedCommand(
                         writeCharSubstring = writeChar,
                         cmd = payload,
-                        minCommandSpacingMs = minCommandSpacingMs,
+                        minCommandSpacingMs = candidateSpacingMs,
                         requireReady = requireReady
                     )
                 ) {
@@ -640,6 +663,9 @@ class WalkingPadManagerImpl @Inject constructor(
         }
         return anySent
     }
+
+    private fun isBleTransportActive(): Boolean =
+        connection?.isActive() == true
 
     private suspend fun awaitProtocolReady(protocol: WalkingPadProtocol): Boolean {
         val readyFlow = when (protocol) {
@@ -816,12 +842,15 @@ class WalkingPadManagerImpl @Inject constructor(
             return
         }
 
+        val generation = connectionGeneration
         scope.launch {
             delay(GATT_DESCRIPTOR_WRITE_DELAY_MS)
+            if (!isCurrentConnection(generation)) return@launch
             ksEncryptedHandshakeIndex = 0
             sendKsEncryptedHandshakeCommand()
             if (pair.transport == KingsmithEncryptedProtocol.Transport.Ais) {
                 delay(KS_ENCRYPTED_AIS_BUS_FALLBACK_DELAY_MS)
+                if (!isCurrentConnection(generation)) return@launch
                 if (!ksEncryptedProtocolReady.value && ksEncryptedHandshakeIndex == 0) {
                     useAisBusPayloadPrefix = true
                     aisPayloadBuffers.clear()
@@ -833,6 +862,9 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun hasAnyKsEncryptedCharacteristicPair(): Boolean =
         availableKsEncryptedCharacteristicPair() != null
+
+    private fun isCurrentConnection(generation: Int): Boolean =
+        generation == connectionGeneration && isBleTransportActive()
 
     private fun availableKsEncryptedCharacteristicPair(): KingsmithEncryptedProtocol.CharacteristicPair? =
         KingsmithEncryptedProtocol.characteristicPairs.firstOrNull { candidate ->
@@ -1120,9 +1152,10 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
         private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
-        private const val KS_ENCRYPTED_AIS_FRAME_DELAY_MS = 25L
+        private const val KS_ENCRYPTED_AIS_FRAME_DELAY_MS = 80L
         private const val KS_ENCRYPTED_AIS_BUS_FALLBACK_DELAY_MS = 1_200L
-        private const val KS_ENCRYPTED_HANDSHAKE_SPACING_MS = 25L
+        private const val KS_ENCRYPTED_HANDSHAKE_SPACING_MS = 150L
+        private const val KS_ENCRYPTED_CANDIDATE_WRITE_SPACING_MS = 150L
         private const val KS_ENCRYPTED_LAST_HANDSHAKE_INDEX = 7
         private const val DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS = 30
         private val NO_LOAD_STOP_TIMEOUT_OPTIONS = setOf(5, 15, 30, 45, 60)

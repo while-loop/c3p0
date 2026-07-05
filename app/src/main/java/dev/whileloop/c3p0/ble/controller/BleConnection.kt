@@ -142,6 +142,10 @@ class BleConnection(
 
     fun serviceSummary(): String = discoveredServiceSummary
 
+    fun isActive(): Boolean =
+        bluetoothGatt != null &&
+            _connectionState.value == ConnectionState.CONNECTED
+
     @SuppressLint("MissingPermission")
     fun writeCharacteristic(
         serviceUuid: UUID,
@@ -151,6 +155,13 @@ class BleConnection(
     ): Boolean {
         if (!hasConnectPermission()) {
             reportError("Missing Bluetooth connect permission", "write characteristic $charUuid")
+            return false
+        }
+        if (!isActive()) {
+            reportError(
+                "BLE characteristic write requested while disconnected",
+                "address=$address characteristic=$charUuid state=${_connectionState.value}"
+            )
             return false
         }
         val service = bluetoothGatt?.getService(serviceUuid) ?: run {
