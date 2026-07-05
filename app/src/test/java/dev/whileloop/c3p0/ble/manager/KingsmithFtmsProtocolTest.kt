@@ -25,7 +25,7 @@ class KingsmithFtmsProtocolTest {
     @Test
     fun noLoadStopUsesAutoStopSupplementProperty() {
         assertArrayEquals(
-            byteArrayOf(0x01, 0x00, 0x04, 0x00, 0x21, 0x02, 0x1e, 0x41),
+            byteArrayOf(0x01, 0x00, 0x04, 0x00, 0x21, 0x02, 0x01, 0x24),
             KingsmithFtmsProtocol.noLoadStopCommands(enabled = true, timeoutSeconds = 30).single()
         )
         assertArrayEquals(

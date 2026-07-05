@@ -52,7 +52,7 @@ internal object KingsmithFtmsProtocol {
     }
 
     fun noLoadStopCommands(enabled: Boolean, timeoutSeconds: Int): List<ByteArray> {
-        val value = if (enabled) timeoutSeconds.coerceIn(0, 255) else 0
+        val value = if (enabled) 1 else 0
         return listOf(
             supplementPropertyCommand(
                 propertyId = SUPPLEMENT_PROPERTY_AUTO_STOP,

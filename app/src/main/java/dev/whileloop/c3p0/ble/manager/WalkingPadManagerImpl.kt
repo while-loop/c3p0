@@ -533,8 +533,7 @@ class WalkingPadManagerImpl @Inject constructor(
         enabled: Boolean,
         timeoutSeconds: Int
     ): Boolean =
-        response.enabled == enabled &&
-            (!enabled || response.timeoutSeconds == timeoutSeconds)
+        response.enabled == enabled
 
     private suspend fun applyUnitSystem(unitSystem: UnitSystem): Boolean {
         if (!legacyProtocolReady.value) {
