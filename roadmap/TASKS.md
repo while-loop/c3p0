@@ -60,6 +60,7 @@
 - [x] **Steps Chart Bar Layering**: Match preview and full steps charts by drawing raw and normalized bars at the same width with normalized layered on top.
 - [x] **Steps Goal Chart State**: Draw the daily step-goal threshold on preview and full steps charts, and tint goal-met normalized days green.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
+- [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
 - [x] **Health Connect Permissions**: Scoped runtime checks by operation, refreshed permission state on profile resume, and opened Health Connect settings when the user wants to revoke access.
 - [x] **Cloud Sync**: Configured Android Auto Backup rules for Google Drive, including Room DB files and DataStore preferences.

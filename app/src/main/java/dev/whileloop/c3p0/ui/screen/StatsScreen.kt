@@ -94,6 +94,9 @@ fun StatsScreen(
     var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
     var weightVisibleDays by remember { mutableStateOf(WeightXAxisPeriod.Month.days.toFloat()) }
     var weightGrouping by remember { mutableStateOf(WeightChartGrouping.Day) }
+    var weightRightAnchorMillis by remember { mutableStateOf<Long?>(null) }
+    var requestedWeightRightAnchorMillis by remember { mutableStateOf<Long?>(null) }
+    var weightAnchorRequestId by remember { mutableIntStateOf(0) }
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
     val weightHistoryPermissions = remember { healthConnectWeightHistoryPermissions() }
     val chartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -185,9 +188,14 @@ fun StatsScreen(
                         selectedGrouping = weightGrouping,
                         onVisibleDaysChange = { weightVisibleDays = it },
                         onXAxisPeriodSelected = { period ->
+                            requestedWeightRightAnchorMillis = weightRightAnchorMillis
                             weightVisibleDays = period.days.toFloat()
+                            weightAnchorRequestId += 1
                         },
                         onGroupingSelected = { weightGrouping = it },
+                        scrollAnchorEndTimeMillis = requestedWeightRightAnchorMillis,
+                        scrollAnchorRequestId = weightAnchorRequestId,
+                        onVisibleEndTimeChange = { weightRightAnchorMillis = it },
                         onEnable = { showWeightPermissionSheet = true },
                         onRefresh = { viewModel.refreshWeightHistory() },
                         modifier = Modifier
@@ -624,6 +632,9 @@ private fun HealthConnectWeightHistoryCard(
     onVisibleDaysChange: (Float) -> Unit,
     onXAxisPeriodSelected: (WeightXAxisPeriod) -> Unit,
     onGroupingSelected: (WeightChartGrouping) -> Unit,
+    scrollAnchorEndTimeMillis: Long?,
+    scrollAnchorRequestId: Int,
+    onVisibleEndTimeChange: (Long) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
@@ -685,6 +696,9 @@ private fun HealthConnectWeightHistoryCard(
                         visibleDays = visibleDays,
                         onVisibleDaysChange = onVisibleDaysChange,
                         onVisiblePointsChange = { visibleSummaryPoints = it },
+                        scrollAnchorEndTimeMillis = scrollAnchorEndTimeMillis,
+                        scrollAnchorRequestId = scrollAnchorRequestId,
+                        onVisibleEndTimeChange = onVisibleEndTimeChange,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(220.dp)
@@ -797,6 +811,9 @@ private fun WeightTrendChart(
     visibleDays: Float,
     onVisibleDaysChange: (Float) -> Unit,
     onVisiblePointsChange: (List<WeightChartPoint>) -> Unit,
+    scrollAnchorEndTimeMillis: Long?,
+    scrollAnchorRequestId: Int,
+    onVisibleEndTimeChange: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -835,6 +852,28 @@ private fun WeightTrendChart(
             val contentWidthPx = with(density) { contentWidth.toPx() }
             val leftPaddingPx = with(density) { 4.dp.toPx() }
             val rightPaddingPx = with(density) { 36.dp.toPx() }
+            LaunchedEffect(
+                scrollAnchorRequestId,
+                scrollAnchorEndTimeMillis,
+                contentWidthPx,
+                viewportWidthPx,
+                startTime,
+                timeRange
+            ) {
+                val anchorEndTime = scrollAnchorEndTimeMillis ?: return@LaunchedEffect
+                withFrameNanos { }
+                scrollState.scrollTo(
+                    scrollOffsetForVisibleEndTime(
+                        endTimeMillis = anchorEndTime,
+                        startTime = startTime,
+                        timeRange = timeRange,
+                        viewportWidthPx = viewportWidthPx,
+                        contentWidthPx = contentWidthPx,
+                        leftPaddingPx = leftPaddingPx,
+                        rightPaddingPx = rightPaddingPx
+                    )
+                )
+            }
             val visibleWindow = remember(
                 points,
                 scrollState.value,
@@ -860,6 +899,7 @@ private fun WeightTrendChart(
                 visibleDateLabels = formatWeightAxisDate(visibleWindow.startTime) to
                     formatWeightAxisDate(visibleWindow.endTime)
                 onVisiblePointsChange(visibleWindow.points)
+                onVisibleEndTimeChange(visibleWindow.endTime)
             }
             val visibleMinValue = visibleWindow.points.minOf { minOf(it.rawWeight, it.trailingAverage) }
             val visibleMaxValue = visibleWindow.points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
@@ -1588,6 +1628,23 @@ private fun selectedWeightPointIndexForX(
     return points.indices.minByOrNull { index ->
         kotlin.math.abs(points[index].time.toEpochMilli() - selectedTime)
     }
+}
+
+private fun scrollOffsetForVisibleEndTime(
+    endTimeMillis: Long,
+    startTime: Long,
+    timeRange: Long,
+    viewportWidthPx: Float,
+    contentWidthPx: Float,
+    leftPaddingPx: Float,
+    rightPaddingPx: Float
+): Int {
+    val chartWidth = (contentWidthPx - leftPaddingPx - rightPaddingPx).coerceAtLeast(1f)
+    val maxScroll = (contentWidthPx - viewportWidthPx).coerceAtLeast(0f)
+    val endFraction = ((endTimeMillis - startTime).toFloat() / timeRange.toFloat()).coerceIn(0f, 1f)
+    return ((endFraction * chartWidth) - viewportWidthPx + leftPaddingPx)
+        .coerceIn(0f, maxScroll)
+        .roundToInt()
 }
 
 private data class VisibleWeightWindow(

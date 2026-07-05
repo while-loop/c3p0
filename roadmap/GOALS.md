@@ -44,6 +44,7 @@
 - [x] Add heart-rate history chart with y-axis labels and zone-colored line segments.
 - [x] Support direct two-finger pinch adjustment of the weight chart's visible x-axis period.
 - [x] Surface the saved daily step goal in historical steps charts.
+- [x] Preserve chart context when changing weight trend time periods.
 
 ## Phase 5: Cloud Sync & Final Polish [COMPLETED]
 - [x] Integrate Google Drive via Android Auto Backup.
