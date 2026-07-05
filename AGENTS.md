@@ -71,9 +71,10 @@ Run all local unit test variants:
 .\gradlew.bat :app:test
 ```
 
-Instrumentation tests require a running emulator or connected Android device:
+Instrumentation tests should only run on the `Pixel_9_Pro_XL` emulator. Do not run instrumentation tests on the user's physical phone, even if it is connected over ADB.
 
 ```powershell
+$env:ANDROID_SERIAL = 'emulator-5554'
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
@@ -97,9 +98,10 @@ To confirm tests, run local unit tests first:
 .\gradlew.bat :app:testDebugUnitTest
 ```
 
-If a virtual device or Android device is available, also run instrumentation tests:
+If the `Pixel_9_Pro_XL` emulator is available, also run instrumentation tests against that emulator only. If only a physical device is connected, skip instrumentation tests and report that they were skipped because the emulator was unavailable.
 
 ```powershell
+$env:ANDROID_SERIAL = 'emulator-5554'
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
@@ -129,6 +131,7 @@ Wait for the device to boot:
 When `sys.boot_completed` returns `1`, install or test against the emulator:
 
 ```powershell
+$env:ANDROID_SERIAL = 'emulator-5554'
 .\gradlew.bat :app:installDebug
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
@@ -169,4 +172,5 @@ The application id is `dev.whileloop.c3p0`.
 - Always use WSL Git for status, diff, commit, fetch, pull, and push.
 - If `java` is missing or `JAVA_HOME` is malformed, use the Android Studio JBR path above for the current shell.
 - If emulator commands fail because no device is running, start `Pixel_9_Pro_XL` first and wait for boot completion before running connected tests.
+- Never run instrumentation tests on a physical Android device. Pin `ANDROID_SERIAL` to the `Pixel_9_Pro_XL` emulator serial before `:app:connectedDebugAndroidTest`, and skip connected tests if that emulator is not available.
 - Keep build/test fixes scoped to the Android Gradle project unless the user explicitly asks for wider cleanup.
