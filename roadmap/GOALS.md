@@ -28,7 +28,7 @@
 - [x] Require a 3-second circular long press with a progress ring to stop an active session.
 - [x] Warn before starting/resuming when the watch, live HR broadcast, or WalkingPad is inactive, with options to pair, continue, or never ask again.
 - [x] Keep live and persisted session distance/step totals aligned to session-start deltas.
-- [x] Implement and wire Auto-Speed algorithm for Zone 2 HR training from the session Automatic mode.
+- [x] Implement and wire Auto-Speed algorithm for Zone 2 HR training from the session Zone 2 mode.
 - [x] Implement Ongoing Notification via Foreground Service.
 - [x] Send WalkingPad start/stop commands when sessions start/stop.
 - [x] Keep WalkingPad units synchronized with the stored app unit setting at settings changes and session boundaries.

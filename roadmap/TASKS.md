@@ -28,7 +28,7 @@
 - [x] **Zone 2 Step Bands**: Reduced out-of-zone speed changes to HR-error-based 0.1/0.2/0.3/0.4/0.5 mph bands so moderate misses do not always jump by 0.5 mph.
 - [x] **Dynamic HR Chart Scale**: Scaled the live heart-rate chart to observed HR plus Zone 2 bounds with 5% padding and aligned y-axis labels to the dynamic grid.
 - [x] **Zone 2 Controller Tests**: Added unit coverage for in-zone no-op behavior, learned speed bias, and trend-gated edge guard adjustments.
-- [x] **Default Session Mode Setting**: Added a Profile setting for Manual, Automatic, or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
+- [x] **Default Session Mode Setting**: Added a Profile setting for Manual or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
 - [x] **Active Session Keep Awake**: Added a profile setting to keep the phone awake only while a session is active and unpaused.
 - [x] **No-Load Stop Setting**: Recovered KS Fit's `AuToStop`/`NoloadStop` encrypted-property keys and added Profile controls that send and save the no-load stop setting after the pad accepts it.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
@@ -36,7 +36,7 @@
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 3-second circular long press with a progress ring.
 - [x] **Session Control Commands**: Start, pause/resume, and stop now send WalkingPad control commands, not just app-local state changes.
 - [x] **Inactive Device Warning**: Added a bottom sheet before start/resume when the watch, live HR broadcast, or WalkingPad is inactive, including pair, continue, and never-ask-again controls.
-- [x] **Auto-Speed**: Implemented smooth Zone 2 adjustment algorithm with moving average smoothing and wired Automatic mode to enable it.
+- [x] **Auto-Speed**: Implemented smooth Zone 2 adjustment algorithm with moving average smoothing and wired Zone 2 mode to enable it.
 - [x] **Data Persistence**: Room DB schema for sessions and time-series metrics.
 - [x] **Session Aggregates**: Persist session distance/steps as session deltas, plus calories, average HR, max HR, and real cadence.
 - [x] **Live Session Deltas**: Session-screen distance and steps use current-session deltas instead of lifetime WalkingPad counters.
@@ -53,7 +53,7 @@
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
 - [x] **WalkingPad Profile Reconnect Controls**: Added inline Profile-row controls to connect saved WalkingPad Bluetooth and refresh the KS protocol handshake.
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
-- [x] **Protocol-Aware Session Modes**: Always show Manual, Automatic, and Zone 2 while enabling native Automatic only when the connected KS protocol exposes the WalkingPad mode command.
+- [x] **Session Modes**: Show Manual and Zone 2 on the session page, keeping native WalkingPad automatic mode hidden from the user-facing controls.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
 - [x] **Health Connect Weight Removed**: Removed Health Connect weight permission/readback and keep calories sourced from the WalkingPad counter.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.

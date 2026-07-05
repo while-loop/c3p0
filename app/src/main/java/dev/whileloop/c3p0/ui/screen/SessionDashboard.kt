@@ -46,7 +46,6 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.model.TreadmillMode
-import dev.whileloop.c3p0.ble.model.TreadmillState
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
@@ -68,7 +67,6 @@ fun SessionDashboard(
     val context = LocalContext.current
     val status by viewModel.treadmillStatus.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
-    val supportsNativeAutoMode by viewModel.supportsNativeAutoMode.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
@@ -328,12 +326,7 @@ fun SessionDashboard(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            val sessionModeCount = 3
-            val canChangeNativeAutoMode =
-                isPadReady &&
-                    supportsNativeAutoMode &&
-                    status.state != TreadmillState.ACTIVE &&
-                    (!isSessionActive || isSessionPaused)
+            val sessionModeCount = 2
             SingleChoiceSegmentedButtonRow {
                 SegmentedButton(
                     selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
@@ -344,18 +337,10 @@ fun SessionDashboard(
                     Text("Manual")
                 }
                 SegmentedButton(
-                    selected = supportsNativeAutoMode && status.mode == TreadmillMode.AUTO && !isAutoSpeedEnabled,
-                    onClick = { viewModel.setMode(TreadmillMode.AUTO) },
-                    enabled = canChangeNativeAutoMode,
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
-                ) {
-                    Text("Automatic")
-                }
-                SegmentedButton(
                     selected = isAutoSpeedEnabled,
                     onClick = { viewModel.enableZone2Mode() },
                     enabled = isPadReady && heartRateActive,
-                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = sessionModeCount)
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
                 ) {
                     Text("Zone 2")
                 }

@@ -7,7 +7,6 @@ import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.manager.HeartRateManager
 import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.ble.model.TreadmillMode
-import dev.whileloop.c3p0.ble.model.TreadmillState
 import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
@@ -84,12 +83,6 @@ class SessionViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         treadmillManager.connectionState.value
-    )
-
-    val supportsNativeAutoMode = treadmillManager.supportsNativeAutoMode.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        treadmillManager.supportsNativeAutoMode.value
     )
 
     val watchConnectionState = heartRateManager.connectionState.stateIn(
@@ -388,16 +381,6 @@ class SessionViewModel @Inject constructor(
             SessionStartMode.Manual -> {
                 sessionManager.disableAutoSpeed()
                 treadmillManager.setMode(TreadmillMode.MANUAL)
-            }
-            SessionStartMode.Automatic -> {
-                sessionManager.disableAutoSpeed()
-                val canUseNativeAutomatic =
-                    supportsNativeAutoMode.value &&
-                        treadmillStatus.value.state != TreadmillState.ACTIVE &&
-                        treadmillManager.setMode(TreadmillMode.AUTO)
-                if (!canUseNativeAutomatic) {
-                    treadmillManager.setMode(TreadmillMode.MANUAL)
-                }
             }
             SessionStartMode.Zone2 -> {
                 if (hasFreshHeartRateData()) {

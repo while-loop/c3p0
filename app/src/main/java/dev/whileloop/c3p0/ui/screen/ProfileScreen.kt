@@ -454,7 +454,6 @@ private fun healthConnectSettingsAction(): String =
 private fun startModeLabel(mode: SessionStartMode): String =
     when (mode) {
         SessionStartMode.Manual -> "Manual"
-        SessionStartMode.Automatic -> "Auto"
         SessionStartMode.Zone2 -> "Zone 2"
     }
 
