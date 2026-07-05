@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -203,25 +204,30 @@ fun StatsScreen(
 
         LazyColumn(modifier = Modifier.weight(1f)) {
             item {
-                StepHistoryPreviewCard(
-                    rows = dailyStepHistory,
-                    canReadSteps = canReadHealthConnectSteps,
-                    isLoading = isStepHistoryLoading,
-                    onClick = { openChartSheet = StatsChartSheet.Steps },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            item {
-                WeightHistoryPreviewCard(
-                    records = weightHistory,
-                    canReadWeight = canReadHealthConnectWeight,
-                    isLoading = isWeightHistoryLoading,
-                    unitSystem = unitSystem,
-                    onClick = { openChartSheet = StatsChartSheet.Weight },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    StepHistoryPreviewCard(
+                        rows = dailyStepHistory,
+                        canReadSteps = canReadHealthConnectSteps,
+                        isLoading = isStepHistoryLoading,
+                        onClick = { openChartSheet = StatsChartSheet.Steps },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(176.dp)
+                    )
+                    WeightHistoryPreviewCard(
+                        records = weightHistory,
+                        canReadWeight = canReadHealthConnectWeight,
+                        isLoading = isWeightHistoryLoading,
+                        unitSystem = unitSystem,
+                        onClick = { openChartSheet = StatsChartSheet.Weight },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(176.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
@@ -256,7 +262,7 @@ private fun StepHistoryPreviewCard(
     Card(
         modifier = modifier.clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             ChartPreviewHeader(
                 title = "Steps",
                 isLoading = isLoading,
@@ -264,10 +270,10 @@ private fun StepHistoryPreviewCard(
             )
             Text(
                 "Last 7 Days",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             when {
                 isLoading && previewRows.isEmpty() -> PreviewLoadingText("Loading step history...")
                 !canReadSteps && previewRows.isEmpty() -> PreviewLoadingText("Enable Health Connect steps")
@@ -276,10 +282,10 @@ private fun StepHistoryPreviewCard(
                     rows = previewRows,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(92.dp)
+                        .height(52.dp)
                 )
             }
-            HorizontalDivider(modifier = Modifier.padding(top = 12.dp, bottom = 10.dp))
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
             ChartPreviewValueRow(
                 value = latestSteps?.let { compactSteps(it) } ?: "--",
                 unit = "steps"
@@ -306,18 +312,18 @@ private fun WeightHistoryPreviewCard(
     Card(
         modifier = modifier.clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             ChartPreviewHeader(
-                title = "Weight Trend",
+                title = "Weight",
                 isLoading = isLoading,
                 trailingContentDescription = "Open weight trend chart"
             )
             Text(
                 "Last 7 Days",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             when {
                 isLoading && previewPoints.isEmpty() -> PreviewLoadingText("Loading weight history...")
                 !canReadWeight && previewPoints.isEmpty() -> PreviewLoadingText("Enable Health Connect weight")
@@ -326,10 +332,10 @@ private fun WeightHistoryPreviewCard(
                     points = previewPoints,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(92.dp)
+                        .height(52.dp)
                 )
             }
-            HorizontalDivider(modifier = Modifier.padding(top = 12.dp, bottom = 10.dp))
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
             ChartPreviewValueRow(
                 value = latestWeight?.let { String.format(Locale.US, "%.1f", it) } ?: "--",
                 unit = weightUnitLabel(unitSystem)
@@ -349,10 +355,10 @@ private fun ChartPreviewHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top
     ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall)
+        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
         if (isLoading) {
             CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
                 strokeWidth = 2.dp
             )
         } else {
@@ -370,23 +376,23 @@ private fun PreviewLoadingText(text: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(92.dp),
+            .height(52.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun ChartPreviewValueRow(value: String, unit: String) {
     Row(verticalAlignment = Alignment.Bottom) {
-        Text(value, style = MaterialTheme.typography.headlineLarge)
-        Spacer(modifier = Modifier.width(8.dp))
+        Text(value, style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             unit,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
+            modifier = Modifier.padding(bottom = 2.dp)
         )
     }
 }
@@ -432,7 +438,7 @@ private fun WeightPreviewChart(
     points: List<WeightChartPoint>,
     modifier: Modifier = Modifier
 ) {
-    val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+    val rawColor = MaterialTheme.colorScheme.outline
     val trendColor = MaterialTheme.colorScheme.primary
     val pointFillColor = MaterialTheme.colorScheme.surface
     val minValue = points.minOf { minOf(it.rawWeight, it.trailingAverage) }
@@ -706,50 +712,54 @@ private fun WeightChartControls(
     onXAxisPeriodSelected: (WeightXAxisPeriod) -> Unit,
     onGroupingSelected: (WeightChartGrouping) -> Unit
 ) {
-    Text(
-        text = "Range",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(modifier = Modifier.height(4.dp))
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        WeightXAxisPeriod.entries.forEachIndexed { index, period ->
-            SegmentedButton(
-                selected = visibleDays.roundToInt() == period.days,
+    var isGroupingMenuOpen by remember { mutableStateOf(false) }
+    val matchingPeriod = remember(visibleDays) { matchingWeightXAxisPeriod(visibleDays) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        WeightXAxisPeriod.entries.forEach { period ->
+            FilterChip(
+                selected = matchingPeriod == period,
                 onClick = { onXAxisPeriodSelected(period) },
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = WeightXAxisPeriod.entries.size
-                )
-            ) {
-                Text(period.label)
-            }
+                label = { Text(period.label) }
+            )
         }
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = "Visible: ${formatVisibleWeightRange(visibleDays)}",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = "Group by",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(modifier = Modifier.height(4.dp))
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        WeightChartGrouping.entries.forEachIndexed { index, grouping ->
-            SegmentedButton(
-                selected = selectedGrouping == grouping,
-                onClick = { onGroupingSelected(grouping) },
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = WeightChartGrouping.entries.size
-                )
+        if (matchingPeriod == null) {
+            FilterChip(
+                selected = true,
+                onClick = {},
+                label = { Text(formatVisibleWeightRange(visibleDays)) }
+            )
+        }
+        Box {
+            FilterChip(
+                selected = true,
+                onClick = { isGroupingMenuOpen = true },
+                label = { Text(selectedGrouping.shortLabel) },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Choose weight grouping"
+                    )
+                }
+            )
+            DropdownMenu(
+                expanded = isGroupingMenuOpen,
+                onDismissRequest = { isGroupingMenuOpen = false }
             ) {
-                Text(grouping.label)
+                WeightChartGrouping.entries.forEach { grouping ->
+                    DropdownMenuItem(
+                        text = { Text(grouping.label) },
+                        onClick = {
+                            isGroupingMenuOpen = false
+                            onGroupingSelected(grouping)
+                        }
+                    )
+                }
             }
         }
     }
@@ -767,7 +777,8 @@ private fun WeightTrendChart(
     val hapticFeedback = LocalHapticFeedback.current
     val density = LocalDensity.current
     var selectedPointIndex by remember(points) { mutableStateOf<Int?>(null) }
-    val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    var visibleDateLabels by remember(points) { mutableStateOf(points.first().dateLabel() to points.last().dateLabel()) }
+    val rawColor = MaterialTheme.colorScheme.outline
     val trendColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -824,6 +835,10 @@ private fun WeightTrendChart(
                     rightPaddingPx = rightPaddingPx
                 )
             }
+            LaunchedEffect(visibleWindow.startTime, visibleWindow.endTime) {
+                visibleDateLabels = formatWeightAxisDate(visibleWindow.startTime) to
+                    formatWeightAxisDate(visibleWindow.endTime)
+            }
             val visibleMinValue = visibleWindow.points.minOf { minOf(it.rawWeight, it.trailingAverage) }
             val visibleMaxValue = visibleWindow.points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
             val paddedMin = floor((visibleMinValue - WEIGHT_CHART_PADDING).coerceAtLeast(0.0))
@@ -855,7 +870,7 @@ private fun WeightTrendChart(
                                 )
                                 selectedPointIndex = nextIndex
                                 if (nextIndex != null && nextIndex != lastHapticIndex) {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     lastHapticIndex = nextIndex
                                 }
                             }
@@ -955,6 +970,8 @@ private fun WeightTrendChart(
                 WeightChartHoverCard(
                     point = points[index],
                     unitSystem = unitSystem,
+                    rawColor = rawColor,
+                    trendColor = trendColor,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = 8.dp, top = 8.dp)
@@ -981,9 +998,9 @@ private fun WeightTrendChart(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(points.first().dateLabel(), style = MaterialTheme.typography.labelSmall)
+            Text(visibleDateLabels.first, style = MaterialTheme.typography.labelSmall)
             Text(weightUnitLabel(unitSystem), style = MaterialTheme.typography.labelSmall, color = labelColor)
-            Text(points.last().dateLabel(), style = MaterialTheme.typography.labelSmall)
+            Text(visibleDateLabels.second, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -992,6 +1009,8 @@ private fun WeightTrendChart(
 private fun WeightChartHoverCard(
     point: WeightChartPoint,
     unitSystem: UnitSystem,
+    rawColor: androidx.compose.ui.graphics.Color,
+    trendColor: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -1009,12 +1028,13 @@ private fun WeightChartHoverCard(
             )
             Text(
                 text = "Raw ${formatWeight(point.rawWeight, unitSystem)}",
-                style = MaterialTheme.typography.labelSmall
+                style = MaterialTheme.typography.labelSmall,
+                color = rawColor
             )
             Text(
                 text = "7-day ${formatWeight(point.trailingAverage, unitSystem)}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = trendColor
             )
         }
     }
@@ -1022,7 +1042,7 @@ private fun WeightChartHoverCard(
 
 @Composable
 private fun WeightChartLegend() {
-    val rawColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    val rawColor = MaterialTheme.colorScheme.outline
     val trendColor = MaterialTheme.colorScheme.primary
     Row(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -1278,15 +1298,18 @@ private data class GroupedWeightPoint(
 )
 
 private enum class WeightXAxisPeriod(val label: String, val days: Int) {
-    Week("Week", 7),
-    Month("Month", 30),
-    Year("Year", 365)
+    Week("1W", 7),
+    Month("1M", 30),
+    ThreeMonths("3M", 90),
+    SixMonths("6M", 180),
+    Year("1Y", 365),
+    All("All", 10_000)
 }
 
-private enum class WeightChartGrouping(val label: String) {
-    Day("Day"),
-    Week("Week"),
-    Month("Month")
+private enum class WeightChartGrouping(val label: String, val shortLabel: String) {
+    Day("Day", "D"),
+    Week("Week", "W"),
+    Month("Month", "M")
 }
 
 private fun List<WeightHistoryRecord>.toWeightChartPoints(
@@ -1389,6 +1412,12 @@ private fun List<WeightChartPoint>.dateRangeLabel(): String {
 private fun WeightChartPoint.dateLabel(): String =
     date.format(DateTimeFormatter.ofPattern("M/d", Locale.US))
 
+private fun formatWeightAxisDate(epochMillis: Long): String =
+    Instant.ofEpochMilli(epochMillis)
+        .atZone(ZoneId.systemDefault())
+        .toLocalDate()
+        .format(DateTimeFormatter.ofPattern("M/d", Locale.US))
+
 private fun WeightChartPoint.displayDateLabel(): String {
     val formatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
     return if (date == endDate) {
@@ -1465,12 +1494,16 @@ private fun visibleWeightWindow(
 private fun formatVisibleWeightRange(visibleDays: Float): String {
     val roundedDays = visibleDays.roundToInt()
     return when {
-        roundedDays >= 365 -> String.format(Locale.US, "%.1f yr", roundedDays / 365f)
-        roundedDays >= 60 -> "${roundedDays / 30} mo"
-        roundedDays >= 14 -> "${roundedDays} days"
-        else -> "${roundedDays.coerceAtLeast(1)} days"
+        roundedDays >= 365 -> "1Y"
+        roundedDays >= 60 -> "${roundedDays}D"
+        else -> "${roundedDays.coerceAtLeast(1)}D"
     }
 }
+
+private fun matchingWeightXAxisPeriod(visibleDays: Float): WeightXAxisPeriod? =
+    WeightXAxisPeriod.entries.firstOrNull { period ->
+        kotlin.math.abs(visibleDays - period.days) < 0.5f
+    }
 
 @Composable
 fun SessionItem(session: SessionEntity, unitSystem: UnitSystem, onClick: () -> Unit) {
