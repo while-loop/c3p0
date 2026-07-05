@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.whileloop.c3p0.data.model.CachedDailyStepHistory
+import dev.whileloop.c3p0.data.model.CachedWeightHistoryRecord
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
@@ -10,6 +11,7 @@ import dev.whileloop.c3p0.data.repository.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.data.repository.StepHistoryCacheRepository
+import dev.whileloop.c3p0.data.repository.WeightHistoryCacheRepository
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
 import dev.whileloop.c3p0.domain.usecase.StepNormalizationUseCase
@@ -32,6 +34,7 @@ class StatsViewModel @Inject constructor(
     settingsRepository: SettingsRepository,
     private val stepNormalizationUseCase: StepNormalizationUseCase,
     private val stepHistoryCacheRepository: StepHistoryCacheRepository,
+    private val weightHistoryCacheRepository: WeightHistoryCacheRepository,
     private val healthConnectManager: HealthConnectManager
 ) : ViewModel() {
     private var selectedMetricsJob: Job? = null
@@ -78,7 +81,7 @@ class StatsViewModel @Inject constructor(
 
     init {
         loadCachedThenRefreshStepHistory()
-        refreshWeightHistory()
+        loadCachedThenRefreshWeightHistory()
     }
 
     fun selectSession(session: SessionEntity) {
@@ -117,6 +120,16 @@ class StatsViewModel @Inject constructor(
         }
     }
 
+    private fun loadCachedThenRefreshWeightHistory() {
+        viewModelScope.launch {
+            val cachedHistory = weightHistoryCacheRepository.readWeightHistory()
+            if (cachedHistory.isNotEmpty()) {
+                _weightHistory.value = cachedHistory.map { it.toWeightHistoryRecord() }
+            }
+            refreshWeightHistory()
+        }
+    }
+
     fun refreshStepHistory() {
         viewModelScope.launch {
             _isStepHistoryLoading.value = true
@@ -152,7 +165,13 @@ class StatsViewModel @Inject constructor(
                         .atStartOfDay(zone)
                         .toInstant()
                     val endTime = today.plusDays(1).atStartOfDay(zone).toInstant()
-                    _weightHistory.value = healthConnectManager.readWeightHistory(startTime, endTime)
+                    healthConnectManager.readWeightHistory(startTime, endTime)
+                        .also { freshHistory ->
+                            _weightHistory.value = freshHistory
+                            weightHistoryCacheRepository.saveWeightHistory(
+                                freshHistory.map { it.toCachedWeightHistoryRecord() }
+                            )
+                        }
                 }
             } finally {
                 _isWeightHistoryLoading.value = false
@@ -176,6 +195,18 @@ class StatsViewModel @Inject constructor(
             normalizedSteps = normalizedSteps,
             c3p0Steps = c3p0Steps,
             excludedOtherSessionSteps = excludedOtherSessionSteps
+        )
+
+    private fun CachedWeightHistoryRecord.toWeightHistoryRecord(): WeightHistoryRecord =
+        WeightHistoryRecord(
+            time = time,
+            weightKg = weightKg
+        )
+
+    private fun WeightHistoryRecord.toCachedWeightHistoryRecord(): CachedWeightHistoryRecord =
+        CachedWeightHistoryRecord(
+            time = time,
+            weightKg = weightKg
         )
 
     private companion object {
