@@ -253,7 +253,7 @@ private fun HealthConnectStepChart(
     LazyRow(
         state = listState,
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 2.dp)
     ) {
         items(rows) { row ->
@@ -261,14 +261,14 @@ private fun HealthConnectStepChart(
             val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
             Column(
                 modifier = Modifier
-                    .width(62.dp)
+                    .width(50.dp)
                     .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .width(48.dp)
+                        .width(36.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(trackColor),
                     contentAlignment = Alignment.BottomCenter
@@ -537,4 +537,4 @@ private fun heartRateSummary(storedValue: Int, fallbackValue: Double?): String {
 private fun List<Int>.averageOrNull(): Double? =
     if (isEmpty()) null else average()
 
-private const val DEFAULT_VISIBLE_CHART_BARS = 7
+private const val DEFAULT_VISIBLE_CHART_BARS = 9
