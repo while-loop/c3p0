@@ -53,7 +53,7 @@ This plan outlines the development of C3P0, an Android companion app for Walking
 ### Automated Tests
 - `WalkingPadProtocolTest`: Validate CRC and status packet parsing.
 - `Zone2AlgorithmTest`: Simulate HR drifting and verify speed adjustment curve over a 5-minute window.
-- `StepNormalizationTest`: Mock overlapping Health Connect records and verify the exclusion logic.
+- `StepNormalizationUseCaseTest`: Mock overlapping Health Connect records and verify selected-session normalization, day-boundary prorating, and multiple C3P0 sessions in one day.
 
 ### Manual Verification
 - **Health Connect Toolbox**: Use to simulate external step counts.

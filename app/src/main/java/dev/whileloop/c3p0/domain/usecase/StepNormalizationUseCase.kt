@@ -1,31 +1,42 @@
 package dev.whileloop.c3p0.domain.usecase
 
-import androidx.health.connect.client.records.StepsRecord
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.repository.SessionRepository
-import dev.whileloop.c3p0.health.HealthConnectManager
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 
+interface StepHistoryDataSource {
+    suspend fun hasStepHistoryPermission(): Boolean
+    suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepCountRecord>
+    suspend fun readAggregatedSteps(startTime: Instant, endTime: Instant): Long
+}
+
+data class StepCountRecord(
+    val startTime: Instant,
+    val endTime: Instant,
+    val count: Long,
+    val packageName: String
+)
+
 class StepNormalizationUseCase @Inject constructor(
-    private val healthConnectManager: HealthConnectManager,
+    private val stepHistoryDataSource: StepHistoryDataSource,
     private val sessionRepository: SessionRepository
 ) {
     suspend fun canReadStepHistory(): Boolean =
-        healthConnectManager.hasStepHistoryPermission()
+        stepHistoryDataSource.hasStepHistoryPermission()
 
     suspend fun getNormalizedSteps(startTime: Instant, endTime: Instant): NormalizedStepsResult {
-        val records = healthConnectManager.readRawSteps(startTime, endTime)
-        val totalRaw = healthConnectManager.readAggregatedSteps(startTime, endTime)
+        val records = stepHistoryDataSource.readRawSteps(startTime, endTime)
+        val totalRaw = stepHistoryDataSource.readAggregatedSteps(startTime, endTime)
         
         var c3p0Steps = 0L
         var overlappingOtherSteps = 0L
         
         for (record in records) {
             val windowCount = proratedCount(record, startTime, endTime)
-            if (record.metadata.dataOrigin.packageName == C3P0_PACKAGE_NAME) {
+            if (record.packageName == C3P0_PACKAGE_NAME) {
                 c3p0Steps += windowCount
             } else {
                 overlappingOtherSteps += windowCount
@@ -46,7 +57,7 @@ class StepNormalizationUseCase @Inject constructor(
         val startDate = today.minusDays((days - 1).coerceAtLeast(0).toLong())
         val startTime = startDate.atStartOfDay(zone).toInstant()
         val endTime = today.plusDays(1).atStartOfDay(zone).toInstant()
-        val records = healthConnectManager.readRawSteps(startTime, endTime)
+        val records = stepHistoryDataSource.readRawSteps(startTime, endTime)
         val sessions = sessionRepository.getSessionsBetween(startTime, endTime)
 
         return (0 until days).map { offset ->
@@ -57,7 +68,7 @@ class StepNormalizationUseCase @Inject constructor(
                 date = date,
                 dayStart = dayStart,
                 dayEnd = dayEnd,
-                rawSteps = healthConnectManager.readAggregatedSteps(dayStart, dayEnd),
+                rawSteps = stepHistoryDataSource.readAggregatedSteps(dayStart, dayEnd),
                 records = records,
                 sessions = sessions
             )
@@ -72,7 +83,7 @@ class StepNormalizationUseCase @Inject constructor(
         dayStart: Instant,
         dayEnd: Instant,
         rawSteps: Long,
-        records: List<StepsRecord>,
+        records: List<StepCountRecord>,
         sessions: List<SessionEntity>
     ): DailyStepHistory {
         val daySessions = sessions.filter { session ->
@@ -85,7 +96,7 @@ class StepNormalizationUseCase @Inject constructor(
         records.forEach { record ->
             val dayCount = proratedCount(record, dayStart, dayEnd)
 
-            if (record.metadata.dataOrigin.packageName == C3P0_PACKAGE_NAME) {
+            if (record.packageName == C3P0_PACKAGE_NAME) {
                 c3p0Steps += dayCount
             } else {
                 excludedOtherSessionSteps += daySessions.sumOf { session ->
@@ -104,7 +115,7 @@ class StepNormalizationUseCase @Inject constructor(
         )
     }
 
-    private fun proratedCount(record: StepsRecord, windowStart: Instant, windowEnd: Instant): Long {
+    private fun proratedCount(record: StepCountRecord, windowStart: Instant, windowEnd: Instant): Long {
         val overlapStart = maxOf(record.startTime, windowStart)
         val overlapEnd = minOf(record.endTime, windowEnd)
         if (!overlapEnd.isAfter(overlapStart)) return 0L

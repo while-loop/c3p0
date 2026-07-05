@@ -47,6 +47,7 @@
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
 - [x] **Stats Details**: Added selected-session history details and normalized Health Connect step breakdown.
 - [x] **Historical Step History**: Added Health Connect daily step history with aggregate raw totals, C3P0 steps, excluded other-source session steps, and normalized totals.
+- [x] **Step Normalization Tests**: Added JVM coverage for selected-session normalization, day-boundary prorating, and multiple C3P0 sessions on the same day.
 - [x] **Permissions UX**: Added bottom sheets to explain permission requests before invoking system permission prompts.
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
@@ -66,9 +67,9 @@
 - [ ] **Polynomial Smoothing**: Refine the Auto-Speed algorithm from proportional to a polynomial curve for even smoother transitions.
 - [ ] **Cooldown Mode**: Implement N-minute gradual speed reduction when step goal is reached.
 - [ ] **Visualization**: Re-integrate Vico charts for historical session analysis.
-- [ ] **Energy Calculation**: Replace the current MET estimate with a more precise Kcal calculation based on weight, speed, HR, and active time.
+- [ ] **Energy Calculation**: Validate whether the WalkingPad calorie counter needs any unit conversion or model-specific correction.
 - [ ] **Elapsed vs Active Time**: Decide whether to display both wall-clock elapsed time and active/moving time. Current session timers pause with the session; many fitness apps keep elapsed wall-clock time separate from active time.
 - [ ] **Backup Restore Verification**: Manually verify Android Auto Backup restore behavior on a real signed install path; restore timing is controlled by Android and Google backup services.
-- [ ] **Unit Tests**: Add comprehensive test suite for `AutoSpeedController`.
+- [ ] **Unit Tests**: Continue expanding focused JVM coverage for session lifecycle, permissions, and BLE edge cases.
 - [ ] **FTMS No-Load Timeout Setter**: Sniff KS Fit BLE packets or decode the remaining supplement command map to identify the exact FTMS+supplement no-load timeout setter and readback.
 - [ ] **No-Load Stop Readback Polling**: Sniff KS Fit BLE packets or decode the remaining property map to identify the numeric `servers getProp` IDs for proactive no-load stop readback.

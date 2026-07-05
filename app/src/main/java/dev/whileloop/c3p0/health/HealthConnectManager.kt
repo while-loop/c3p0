@@ -13,6 +13,8 @@ import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Length
+import dev.whileloop.c3p0.domain.usecase.StepCountRecord
+import dev.whileloop.c3p0.domain.usecase.StepHistoryDataSource
 import timber.log.Timber
 import java.time.Instant
 import java.time.ZoneId
@@ -22,7 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class HealthConnectManager @Inject constructor(
     private val context: Context
-) {
+) : StepHistoryDataSource {
     private val healthConnectClient by lazy {
         HealthConnectClient.getOrCreate(context)
     }
@@ -31,7 +33,7 @@ class HealthConnectManager @Inject constructor(
         return hasPermissions(PERMISSIONS)
     }
 
-    suspend fun hasStepHistoryPermission(): Boolean {
+    override suspend fun hasStepHistoryPermission(): Boolean {
         return hasPermissions(STEP_HISTORY_PERMISSIONS)
     }
 
@@ -44,7 +46,7 @@ class HealthConnectManager @Inject constructor(
         }
     }
 
-    suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepsRecord> {
+    override suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepCountRecord> {
         if (!hasPermissions(STEP_HISTORY_PERMISSIONS)) return emptyList()
 
         return try {
@@ -63,14 +65,21 @@ class HealthConnectManager @Inject constructor(
                 pageToken = response.pageToken
             } while (!pageToken.isNullOrBlank())
 
-            records
+            records.map { record ->
+                StepCountRecord(
+                    startTime = record.startTime,
+                    endTime = record.endTime,
+                    count = record.count,
+                    packageName = record.metadata.dataOrigin.packageName
+                )
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error reading steps from Health Connect")
             emptyList()
         }
     }
 
-    suspend fun readAggregatedSteps(startTime: Instant, endTime: Instant): Long {
+    override suspend fun readAggregatedSteps(startTime: Instant, endTime: Instant): Long {
         if (!hasPermissions(STEP_HISTORY_PERMISSIONS)) return 0L
 
         return try {
