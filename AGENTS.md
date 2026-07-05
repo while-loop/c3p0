@@ -71,7 +71,7 @@ Run all local unit test variants:
 .\gradlew.bat :app:test
 ```
 
-Instrumentation tests should only run on the `Pixel_9_Pro_XL` emulator. Do not run instrumentation tests on the user's physical phone, even if it is connected over ADB.
+Instrumentation tests are not part of the default verification loop. Run them only when the change touches device/emulator-specific behavior, when a failure cannot be covered by unit tests, or when the user explicitly asks for them. When instrumentation is needed, run it only on the `Pixel_9_Pro_XL` emulator. Do not run instrumentation tests on the user's physical phone, even if it is connected over ADB.
 
 ```powershell
 $env:ANDROID_SERIAL = 'emulator-5554'
@@ -80,32 +80,32 @@ $env:ANDROID_SERIAL = 'emulator-5554'
 
 ## Confirm Build And Test Status
 
-To confirm the app compiles, run the debug assemble task:
-
-```powershell
-.\gradlew.bat :app:assembleDebug
-```
-
-To confirm the full app build is healthy, run:
-
-```powershell
-.\gradlew.bat build
-```
-
-To confirm tests, run local unit tests first:
+Default verification for routine code changes is the debug unit test task:
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest
 ```
 
-If the `Pixel_9_Pro_XL` emulator is available, also run instrumentation tests against that emulator only. If only a physical device is connected, skip instrumentation tests and report that they were skipped because the emulator was unavailable.
+Run the debug assemble task when a compile/package check is specifically useful, such as after Gradle, manifest, resource, generated-code, or wiring changes:
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+```
+
+Run the full build only for broad/risky changes, release/CI validation, or when the user explicitly asks for it:
+
+```powershell
+.\gradlew.bat build
+```
+
+Run instrumentation tests only for device/emulator-specific behavior or when the user explicitly asks. If instrumentation is needed and the `Pixel_9_Pro_XL` emulator is unavailable, skip instrumentation tests and report that they were skipped because the emulator was unavailable.
 
 ```powershell
 $env:ANDROID_SERIAL = 'emulator-5554'
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-When reporting verification back to the user, explicitly say which commands passed, which commands were skipped, and why. A successful `:app:assembleDebug` confirms the debug app compiles. A successful `build` confirms assemble, local tests, lint/check tasks, and release packaging for this Gradle project.
+When reporting verification back to the user, explicitly say which commands passed, which commands were skipped, and why. A successful `:app:testDebugUnitTest` confirms the default unit-test verification. A successful `:app:assembleDebug` confirms the debug app compiles. A successful `build` confirms assemble, local tests, lint/check tasks, and release packaging for this Gradle project.
 
 ## Start A Virtual Device
 
@@ -171,6 +171,7 @@ The application id is `dev.whileloop.c3p0`.
 - Do not edit `local.properties`; Android Studio generates it and it is machine-specific.
 - Always use WSL Git for status, diff, commit, fetch, pull, and push.
 - If `java` is missing or `JAVA_HOME` is malformed, use the Android Studio JBR path above for the current shell.
-- If emulator commands fail because no device is running, start `Pixel_9_Pro_XL` first and wait for boot completion before running connected tests.
+- Do not start the emulator or run connected tests by default. Unit tests are usually enough for routine cycles.
+- If emulator commands are explicitly needed and fail because no device is running, start `Pixel_9_Pro_XL` first and wait for boot completion before running connected tests.
 - Never run instrumentation tests on a physical Android device. Pin `ANDROID_SERIAL` to the `Pixel_9_Pro_XL` emulator serial before `:app:connectedDebugAndroidTest`, and skip connected tests if that emulator is not available.
 - Keep build/test fixes scoped to the Android Gradle project unless the user explicitly asks for wider cleanup.
