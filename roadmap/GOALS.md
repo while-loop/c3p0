@@ -15,7 +15,7 @@
 - [x] Set up Room database for sessions, history, and settings.
     - [x] Store time-series metrics: Heart Rate, Speed, and real step-delta Cadence.
 - [x] Integrate Health Connect for writing completed walking sessions with steps and distance.
-- [x] Read latest body weight from Health Connect for calories estimates.
+- [x] Keep calories sourced from the WalkingPad counter and avoid requesting Health Connect weight.
 - [x] Remove app-side heart-rate read/write permissions from Health Connect; watches remain the source of HR records.
 - [x] Scope Health Connect permission checks by operation and surface Health Connect settings for revocation.
 - [x] Implement and surface "Normalized Steps" using Health Connect data in session history.

@@ -158,12 +158,6 @@ class SessionViewModel @Inject constructor(
         false
     )
 
-    val bodyWeightKg = settingsRepository.bodyWeightKg.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        null
-    )
-
     val stepGoal = settingsRepository.stepGoal.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -219,7 +213,7 @@ class SessionViewModel @Inject constructor(
                     _sessionElapsedSeconds.value = counterDelta(sessionStartPadTime, status.time)
                     _sessionDistance.value = distanceDelta
                     _sessionSteps.value = sessionStepDelta(status.hasStepCount, status.steps, distanceDelta)
-                    _sessionCalories.value = sessionCalorieDelta(status.calories, distanceDelta, status.speed)
+                    _sessionCalories.value = sessionCalorieDelta(status.calories)
                     updateNormalizedStepsToGoal()
                 }
             }
@@ -518,9 +512,7 @@ class SessionViewModel @Inject constructor(
         private const val MIN_STEP_RATE_SAMPLE_SECONDS = 30
         private const val MIN_STEP_RATE_SAMPLE_STEPS = 10
         private const val MIN_STEPS_PER_MINUTE_FOR_GOAL_ETA = 1f
-        private const val DEFAULT_BODY_WEIGHT_KG = 70.0
         private const val ESTIMATED_STRIDE_LENGTH_METERS = 0.75
-        private const val WALKING_KCAL_PER_KG_KM = 0.7
     }
 
     private fun counterDelta(start: Int, end: Int): Int =
@@ -533,40 +525,11 @@ class SessionViewModel @Inject constructor(
             estimateStepsFromDistance(distanceDelta)
         }
 
-    private fun sessionCalorieDelta(calories: Int, distanceDelta: Int, speedKmh: Float): Int {
-        val reportedCalories = counterDelta(sessionStartCalories, calories)
-        return if (calories > 0 || sessionStartCalories > 0) {
-            reportedCalories
-        } else {
-            estimateCalories(speedKmh, _sessionElapsedSeconds.value, bodyWeightKg.value)
-                .coerceAtLeast(estimateCaloriesFromDistance(distanceDelta, bodyWeightKg.value))
-        }
-    }
+    private fun sessionCalorieDelta(calories: Int): Int =
+        counterDelta(sessionStartCalories, calories)
 
     private fun estimateStepsFromDistance(distanceDelta: Int): Int =
         ((distanceDelta * 10.0) / ESTIMATED_STRIDE_LENGTH_METERS).roundToInt().coerceAtLeast(0)
-
-    private fun estimateCalories(speedKmh: Float, elapsedSeconds: Int, bodyWeightKg: Double?): Int {
-        if (elapsedSeconds <= 0) return 0
-
-        val met = when {
-            speedKmh < 1f -> 1.8f
-            speedKmh < 3.2f -> 2.8f
-            speedKmh < 4.8f -> 3.5f
-            speedKmh < 5.6f -> 4.3f
-            speedKmh < 6.4f -> 5.0f
-            else -> 6.3f
-        }
-        val hours = elapsedSeconds / 3600f
-        return (met * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG).toFloat() * hours).roundToInt().coerceAtLeast(0)
-    }
-
-    private fun estimateCaloriesFromDistance(distanceDelta: Int, bodyWeightKg: Double?): Int {
-        val distanceKm = distanceDelta * 0.01
-        return (distanceKm * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG) * WALKING_KCAL_PER_KG_KM)
-            .roundToInt()
-            .coerceAtLeast(0)
-    }
 
     private data class HeartRateRange(
         val min: Int,

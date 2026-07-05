@@ -200,9 +200,6 @@ class SessionManager @Inject constructor(
             val end = Instant.now()
             accumulateActiveDuration(end)
             val finalStatus = treadmillManager.status.value
-            val padActiveDuration = Duration.ofSeconds(counterDelta(startPadTime, finalStatus.time).toLong())
-            val activeDuration = padActiveDuration.takeIf { !it.isZero && !it.isNegative }
-                ?: accumulatedActiveDuration
             val totalDistance = counterDelta(startDistance, finalStatus.distance)
             val totalSteps = if (finalStatus.hasStepCount) {
                 counterDelta(startSteps, finalStatus.steps)
@@ -228,11 +225,7 @@ class SessionManager @Inject constructor(
                 endTime = end,
                 totalDistance = totalDistance,
                 totalSteps = totalSteps,
-                totalEnergy = if (finalStatus.calories > 0 || startCalories > 0) {
-                    reportedCalories
-                } else {
-                    estimateCalories(distanceMeters, activeDuration, settingsRepository.bodyWeightKg.first())
-                },
+                totalEnergy = reportedCalories,
                 averageHeartRate = averageHeartRate,
                 maxHeartRate = sessionMaxHeartRate
             )
@@ -331,22 +324,6 @@ class SessionManager @Inject constructor(
     private fun estimateStepsFromDistance(distanceDelta: Int): Int =
         ((distanceDelta * 10.0) / ESTIMATED_STRIDE_LENGTH_METERS).roundToInt().coerceAtLeast(0)
 
-    private fun estimateCalories(distanceMeters: Double, activeDuration: Duration, bodyWeightKg: Double?): Int {
-        val activeHours = activeDuration.toMillis() / 3_600_000.0
-        if (activeHours <= 0.0) return 0
-
-        val averageSpeedKmh = (distanceMeters / 1000.0) / activeHours
-        val met = when {
-            averageSpeedKmh < 1.0 -> 1.8
-            averageSpeedKmh < 3.2 -> 2.8
-            averageSpeedKmh < 4.8 -> 3.5
-            averageSpeedKmh < 5.6 -> 4.3
-            averageSpeedKmh < 6.4 -> 5.0
-            else -> 6.3
-        }
-        return (met * (bodyWeightKg ?: DEFAULT_BODY_WEIGHT_KG) * activeHours).roundToInt()
-    }
-
     private fun calculateCadence(previousSteps: Int, currentSteps: Int, previousTime: Instant, currentTime: Instant): Int {
         val elapsedMinutes = Duration.between(previousTime, currentTime).toMillis() / 60_000.0
         if (elapsedMinutes <= 0.0) return 0
@@ -357,7 +334,6 @@ class SessionManager @Inject constructor(
 
     companion object {
         private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
-        private const val DEFAULT_BODY_WEIGHT_KG = 70.0
         private const val ESTIMATED_STRIDE_LENGTH_METERS = 0.75
         private const val AUTO_SPEED_MIN_KMH = 1.60934f
         private const val AUTO_SPEED_MAX_KMH = 6.0f

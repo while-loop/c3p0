@@ -54,7 +54,7 @@
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
 - [x] **Protocol-Aware Session Modes**: Always show Manual, Automatic, and Zone 2 while enabling native Automatic only when the connected KS protocol exposes the WalkingPad mode command.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
-- [x] **Health Connect Weight**: Added weight refresh from Health Connect on cold start/resume and from the profile refresh button.
+- [x] **Health Connect Weight Removed**: Removed Health Connect weight permission/readback and keep calories sourced from the WalkingPad counter.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
 - [x] **Health Connect Permissions**: Scoped runtime checks by operation, refreshed permission state on profile resume, and opened Health Connect settings when the user wants to revoke access.
 - [x] **Cloud Sync**: Configured Android Auto Backup rules for Google Drive, including Room DB files and DataStore preferences.

@@ -31,7 +31,6 @@ class SettingsRepository @Inject constructor(
         val WATCH_ADDRESS = stringPreferencesKey("watch_address")
         val UNIT_SYSTEM = stringPreferencesKey("unit_system")
         val SKIP_INACTIVE_DEVICE_WARNING = booleanPreferencesKey("skip_inactive_device_warning")
-        val BODY_WEIGHT_KG = doublePreferencesKey("body_weight_kg")
         val GOOGLE_DRIVE_SYNC_ENABLED = booleanPreferencesKey("google_drive_sync_enabled")
         val STEP_GOAL = intPreferencesKey("step_goal")
         val AGE = intPreferencesKey("age")
@@ -50,9 +49,6 @@ class SettingsRepository @Inject constructor(
     }
     val skipInactiveDeviceWarning: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.SKIP_INACTIVE_DEVICE_WARNING] ?: false
-    }
-    val bodyWeightKg: Flow<Double?> = context.dataStore.data.map {
-        it[Keys.BODY_WEIGHT_KG]
     }
     val googleDriveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.GOOGLE_DRIVE_SYNC_ENABLED] ?: false
@@ -107,11 +103,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun saveSkipInactiveDeviceWarning(skip: Boolean) {
         context.dataStore.edit { it[Keys.SKIP_INACTIVE_DEVICE_WARNING] = skip }
-        requestBackupIfEnabled()
-    }
-
-    suspend fun saveBodyWeightKg(weightKg: Double) {
-        context.dataStore.edit { it[Keys.BODY_WEIGHT_KG] = weightKg }
         requestBackupIfEnabled()
     }
 

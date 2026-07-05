@@ -50,8 +50,6 @@ fun ProfileScreen(
     val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
     val noLoadStopEnabled by viewModel.noLoadStopEnabled.collectAsState()
     val noLoadStopTimeoutSeconds by viewModel.noLoadStopTimeoutSeconds.collectAsState()
-    val bodyWeightKg by viewModel.bodyWeightKg.collectAsState()
-    val isRefreshingWeight by viewModel.isRefreshingWeight.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
     val watchAddress by viewModel.watchAddress.collectAsState()
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
@@ -74,9 +72,6 @@ fun ProfileScreen(
     ) { granted ->
         val enabled = granted.containsAll(healthConnectPermissions)
         viewModel.toggleHealthConnect(enabled)
-        if (enabled) {
-            viewModel.refreshWeightFromHealthConnect()
-        }
     }
 
     LaunchedEffect(Unit) {
@@ -242,29 +237,10 @@ fun ProfileScreen(
         ListItem(
             headlineContent = { Text("Health Connect") },
             supportingContent = {
-                Text(
-                    bodyWeightKg?.let { "Sync training sessions. Weight: ${formatWeight(it, unitSystem)}" }
-                        ?: "Sync training sessions. Weight not synced"
-                )
+                Text("Sync training sessions and step history")
             },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = {
-                            if (isHealthConnectEnabled) {
-                                viewModel.refreshWeightFromHealthConnect()
-                            } else {
-                                showHealthConnectPermissionSheet = true
-                            }
-                        },
-                        enabled = !isRefreshingWeight
-                    ) {
-                        if (isRefreshingWeight) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh Health Connect weight")
-                        }
-                    }
                     Switch(
                         checked = isHealthConnectEnabled,
                         onCheckedChange = { enabled ->
@@ -473,13 +449,6 @@ private fun healthConnectSettingsAction(): String =
         "android.health.connect.action.HEALTH_HOME_SETTINGS"
     } else {
         "androidx.health.ACTION_HEALTH_CONNECT_SETTINGS"
-    }
-
-private fun formatWeight(weightKg: Double, unitSystem: UnitSystem): String =
-    if (unitSystem == UnitSystem.Imperial) {
-        String.format(java.util.Locale.US, "%.0f lb", weightKg * 2.2046226218)
-    } else {
-        String.format(java.util.Locale.US, "%.1f kg", weightKg)
     }
 
 private fun startModeLabel(mode: SessionStartMode): String =

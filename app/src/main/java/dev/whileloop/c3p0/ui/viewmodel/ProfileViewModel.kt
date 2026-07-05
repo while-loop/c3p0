@@ -29,9 +29,6 @@ class ProfileViewModel @Inject constructor(
     private val _isHealthConnectEnabled = MutableStateFlow(false)
     val isHealthConnectEnabled = _isHealthConnectEnabled.asStateFlow()
 
-    private val _isRefreshingWeight = MutableStateFlow(false)
-    val isRefreshingWeight = _isRefreshingWeight.asStateFlow()
-
     val unitSystem = settingsRepository.unitSystem.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -90,12 +87,6 @@ class ProfileViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         false
-    )
-
-    val bodyWeightKg = settingsRepository.bodyWeightKg.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        null
     )
 
     val treadmillAddress = settingsRepository.treadmillAddress.stateIn(
@@ -248,16 +239,6 @@ class ProfileViewModel @Inject constructor(
                     timeoutSeconds = confirmedStatus.noLoadStopTimeoutSeconds ?: noLoadStopTimeoutSeconds.value
                 )
             }
-        }
-    }
-
-    fun refreshWeightFromHealthConnect() {
-        viewModelScope.launch {
-            _isRefreshingWeight.value = true
-            healthConnectManager.readLatestWeightKg()?.let { weightKg ->
-                settingsRepository.saveBodyWeightKg(weightKg)
-            }
-            _isRefreshingWeight.value = false
         }
     }
 

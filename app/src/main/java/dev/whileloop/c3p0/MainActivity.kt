@@ -12,15 +12,12 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -41,16 +38,6 @@ class MainActivity : ComponentActivity() {
             C3P0Theme {
                 val mainViewModel: MainViewModel = hiltViewModel()
                 val bluetoothErrors by mainViewModel.bluetoothErrors.collectAsState()
-                DisposableEffect(mainViewModel) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) {
-                            mainViewModel.refreshWeightFromHealthConnect()
-                        }
-                    }
-                    lifecycle.addObserver(observer)
-                    mainViewModel.refreshWeightFromHealthConnect()
-                    onDispose { lifecycle.removeObserver(observer) }
-                }
 
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()

@@ -105,8 +105,8 @@ fun StatsScreen(
                     onEnable = { showStepPermissionSheet = true },
                     onRefresh = { viewModel.refreshStepHistory() },
                     modifier = Modifier
-                        .fillParentMaxHeight(0.25f)
-                        .heightIn(min = 180.dp)
+                        .fillParentMaxHeight(0.32f)
+                        .heightIn(min = 240.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -175,6 +175,10 @@ private fun HealthConnectStepHistoryCard(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
+            if (canReadSteps && rows.isNotEmpty()) {
+                StepChartLegend()
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             when {
                 isLoading -> Text("Loading step history...")
                 !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
@@ -196,14 +200,15 @@ private fun HealthConnectStepChart(
     rows: List<StepChartRow>,
     modifier: Modifier = Modifier
 ) {
-    val maxSteps = rows.maxOfOrNull { it.steps }?.coerceAtLeast(1L) ?: 1L
+    val maxSteps = rows.maxOfOrNull { it.rawSteps }?.coerceAtLeast(1L) ?: 1L
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = (rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0)
     )
     LaunchedEffect(rows.size) {
         listState.scrollToItem((rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0))
     }
-    val barColor = MaterialTheme.colorScheme.primary
+    val rawBarColor = MaterialTheme.colorScheme.primaryContainer
+    val normalizedBarColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
     LazyRow(
@@ -213,22 +218,30 @@ private fun HealthConnectStepChart(
         contentPadding = PaddingValues(horizontal = 2.dp)
     ) {
         items(rows) { row ->
+            val rawFraction = barFraction(row.rawSteps, maxSteps)
+            val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
             Column(
                 modifier = Modifier
-                    .width(54.dp)
+                    .width(60.dp)
                     .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = compactSteps(row.steps),
+                    text = compactSteps(row.rawSteps),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = compactSteps(row.normalizedSteps),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = normalizedBarColor,
+                    maxLines = 1
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .width(22.dp)
+                        .width(30.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(trackColor),
                     contentAlignment = Alignment.BottomCenter
@@ -236,9 +249,16 @@ private fun HealthConnectStepChart(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight((row.steps.toFloat() / maxSteps).coerceIn(0.02f, 1f))
+                            .fillMaxHeight(rawFraction)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(barColor)
+                            .background(rawBarColor)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.58f)
+                            .fillMaxHeight(normalizedFraction)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(normalizedBarColor)
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -252,6 +272,35 @@ private fun HealthConnectStepChart(
     }
 }
 
+@Composable
+private fun StepChartLegend() {
+    val rawBarColor = MaterialTheme.colorScheme.primaryContainer
+    val normalizedBarColor = MaterialTheme.colorScheme.primary
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LegendItem(color = rawBarColor, label = "Raw")
+        LegendItem(color = normalizedBarColor, label = "Normalized")
+    }
+}
+
+@Composable
+private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color)
+        )
+        Text(label, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
 private enum class StepChartPeriod(val label: String) {
     Day("Day"),
     Week("Week"),
@@ -261,7 +310,8 @@ private enum class StepChartPeriod(val label: String) {
 private data class StepChartRow(
     val startDate: LocalDate,
     val label: String,
-    val steps: Long
+    val rawSteps: Long,
+    val normalizedSteps: Long
 )
 
 private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): List<StepChartRow> {
@@ -271,7 +321,8 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
             StepChartRow(
                 startDate = row.date,
                 label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                steps = row.normalizedSteps
+                rawSteps = row.rawSteps,
+                normalizedSteps = row.normalizedSteps
             )
         }
         StepChartPeriod.Week -> chronological
@@ -283,7 +334,8 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                 StepChartRow(
                     startDate = weekStart,
                     label = weekStart.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                    steps = weekRows.sumOf { it.normalizedSteps }
+                    rawSteps = weekRows.sumOf { it.rawSteps },
+                    normalizedSteps = weekRows.sumOf { it.normalizedSteps }
                 )
             }
         StepChartPeriod.Month -> chronological
@@ -293,7 +345,8 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                 StepChartRow(
                     startDate = monthStart,
                     label = monthStart.format(DateTimeFormatter.ofPattern("MMM", Locale.US)),
-                    steps = monthRows.sumOf { it.normalizedSteps }
+                    rawSteps = monthRows.sumOf { it.rawSteps },
+                    normalizedSteps = monthRows.sumOf { it.normalizedSteps }
                 )
             }
     }
@@ -305,6 +358,13 @@ private fun compactSteps(steps: Long): String =
         steps >= 10_000 -> "${steps / 1_000}k"
         steps >= 1_000 -> String.format(Locale.US, "%.1fk", steps / 1_000f)
         else -> steps.toString()
+    }
+
+private fun barFraction(steps: Long, maxSteps: Long): Float =
+    if (steps <= 0L) {
+        0f
+    } else {
+        (steps.toFloat() / maxSteps).coerceIn(0.02f, 1f)
     }
 
 @Composable
