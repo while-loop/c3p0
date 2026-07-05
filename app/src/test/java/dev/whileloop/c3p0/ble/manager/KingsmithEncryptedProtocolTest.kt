@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.ble.manager
 import dev.whileloop.c3p0.ble.model.TreadmillMode
 import dev.whileloop.c3p0.ble.model.TreadmillState
 import dev.whileloop.c3p0.ble.model.TreadmillStatus
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -59,5 +60,45 @@ class KingsmithEncryptedProtocolTest {
         assertEquals(345, status.steps)
         assertEquals(17, status.calories)
         assertTrue(status.hasStepCount)
+    }
+
+    @Test
+    fun aisFramesWrapPayloadWithCommandHeader() {
+        val payload = "props runState 1".toByteArray()
+
+        val frames = KingsmithEncryptedProtocol.aisCommandFrames(
+            payload = payload,
+            startMessageId = 14,
+            maxPayloadBytes = 8
+        )
+
+        assertEquals(2, frames.size)
+        assertEquals(14, frames[0][0].toInt() and 0x0F)
+        assertEquals(2, frames[0][1].toInt())
+        assertEquals(0x10, frames[0][2].toInt() and 0xFF)
+        assertEquals(8, frames[0][3].toInt())
+        assertEquals(15, frames[1][0].toInt() and 0x0F)
+        assertEquals(2, frames[1][1].toInt())
+        assertEquals(0x11, frames[1][2].toInt() and 0xFF)
+        assertArrayEquals(payload.copyOfRange(8, payload.size), frames[1].copyOfRange(4, frames[1].size))
+    }
+
+    @Test
+    fun aisParserReadsConcatenatedPackets() {
+        val first = KingsmithEncryptedProtocol.aisCommandFrames(
+            payload = byteArrayOf(1, 2, 3),
+            startMessageId = 1
+        ).single()
+        val second = KingsmithEncryptedProtocol.aisCommandFrames(
+            payload = byteArrayOf(4, 5),
+            startMessageId = 2
+        ).single()
+
+        val packets = KingsmithEncryptedProtocol.parseAisPackets(first + second)
+
+        assertEquals(2, packets.size)
+        assertEquals(2, packets[0].commandType.toInt())
+        assertArrayEquals(byteArrayOf(1, 2, 3), packets[0].payload)
+        assertArrayEquals(byteArrayOf(4, 5), packets[1].payload)
     }
 }

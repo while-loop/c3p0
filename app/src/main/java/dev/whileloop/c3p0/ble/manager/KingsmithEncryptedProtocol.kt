@@ -16,13 +16,18 @@ internal object KingsmithEncryptedProtocol {
     const val POLL_PROPS_COMMAND = "servers getProp 1 2 3 4 5 7 9 12 13 16 17 23 24 31"
     const val NO_LOAD_STOP_SWITCH_KEY = "AuToStop"
     const val NO_LOAD_STOP_TIMEOUT_KEY = "NoloadStop"
+    const val AIS_BUS_PREFIX: Byte = 1
 
     val characteristicPairs = listOf(
         CharacteristicPair(readCharSubstring = "0000fed8", writeCharSubstring = "0000fed7"),
         CharacteristicPair(readCharSubstring = "0001fed7", writeCharSubstring = "0001fed8"),
         CharacteristicPair(readCharSubstring = "0002fed8", writeCharSubstring = "0002fed7"),
         CharacteristicPair(readCharSubstring = "c5330e00fdf7", writeCharSubstring = "c5330f00fdf7"),
-        CharacteristicPair(readCharSubstring = "5833ff03", writeCharSubstring = "5833ff02")
+        CharacteristicPair(
+            readCharSubstring = "5833ff03",
+            writeCharSubstring = "5833ff02",
+            transport = Transport.Ais
+        )
     )
 
     val encryptionTables = listOf(
@@ -84,6 +89,48 @@ internal object KingsmithEncryptedProtocol {
         encryptionTables
             .map { table -> encode(command, table) }
             .distinctBy { payload -> payload.contentToString() }
+
+    fun aisCommandFrames(
+        payload: ByteArray,
+        startMessageId: Int,
+        commandType: Byte = AIS_COMMAND_TYPE_GENERAL_COMMAND,
+        maxPayloadBytes: Int = AIS_DEFAULT_FRAME_PAYLOAD_BYTES
+    ): List<ByteArray> {
+        require(maxPayloadBytes in 1..255)
+        val chunks = if (payload.isEmpty()) {
+            listOf(ByteArray(0))
+        } else {
+            payload.asList().chunked(maxPayloadBytes).map { it.toByteArray() }
+        }
+        val totalFrame = chunks.lastIndex.coerceAtMost(15)
+        return chunks.mapIndexed { index, chunk ->
+            byteArrayOf(
+                ((startMessageId + index) and 0x0F).toByte(),
+                commandType,
+                (((totalFrame and 0x0F) shl 4) or (index and 0x0F)).toByte(),
+                chunk.size.toByte()
+            ) + chunk
+        }
+    }
+
+    fun parseAisPackets(data: ByteArray): List<AisPacket> {
+        val packets = mutableListOf<AisPacket>()
+        var offset = 0
+        while (offset + AIS_HEADER_LENGTH <= data.size) {
+            val length = data[offset + 3].toInt() and 0xFF
+            val end = offset + AIS_HEADER_LENGTH + length
+            if (end > data.size) break
+            val frameByte = data[offset + 2].toInt() and 0xFF
+            packets += AisPacket(
+                commandType = data[offset + 1],
+                totalFrame = (frameByte and 0xF0) shr 4,
+                frameSeq = frameByte and 0x0F,
+                payload = data.copyOfRange(offset + AIS_HEADER_LENGTH, end)
+            )
+            offset = end
+        }
+        return packets
+    }
 
     fun decodeAny(data: ByteArray, preferredTable: String? = null): DecodedText? {
         val tables = buildList {
@@ -196,11 +243,28 @@ internal object KingsmithEncryptedProtocol {
 
     data class CharacteristicPair(
         val readCharSubstring: String,
-        val writeCharSubstring: String
+        val writeCharSubstring: String,
+        val transport: Transport = Transport.EncryptedText
     )
 
     data class DecodedText(
         val table: String,
         val text: String
     )
+
+    data class AisPacket(
+        val commandType: Byte,
+        val totalFrame: Int,
+        val frameSeq: Int,
+        val payload: ByteArray
+    )
+
+    enum class Transport {
+        EncryptedText,
+        Ais
+    }
+
+    private const val AIS_HEADER_LENGTH = 4
+    private const val AIS_DEFAULT_FRAME_PAYLOAD_BYTES = 16
+    private const val AIS_COMMAND_TYPE_GENERAL_COMMAND: Byte = 2
 }

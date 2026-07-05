@@ -20,7 +20,7 @@ These are the WalkingPad-relevant findings from the KS Fit 6.0.2 APK.
   - `24e2521c-f63b-48ed-85be-c5330d00fdf7`
   - `24e2521c-f63b-48ed-85be-c5330e00fdf7`
   - `24e2521c-f63b-48ed-85be-c5330f00fdf70`
-- A real C2 service dump also exposed the `24e2521c` family as service `...d00fdf7` with `...e00fdf7` update properties and `...f00fdf7` write properties, plus a `5833ff01` service family. Live Android properties showed `5833ff02` is write-only (`8`), so C3P0 treats `5833ff03` as the read/update characteristic and `5833ff02` as the write characteristic alongside the `FED7/FED8` pairs.
+- A real C2 service dump also exposed the `24e2521c` family as service `...d00fdf7` with `...e00fdf7` update properties and `...f00fdf7` write properties, plus a `5833ff01` service family. Live Android properties showed `5833ff02` is write-only (`8`), so C3P0 treats `5833ff03` as the read/update characteristic and `5833ff02` as the write characteristic alongside the `FED7/FED8` pairs. KS Fit's decompiled `GattCommandPlugin` and BLE infrastructure plugin identify this family as Alibaba AIS transport: command-out writes are AIS command type `2`, responses arrive as command types such as `3` or `1`, and BLE sub-version `18` prepends a one-byte bus prefix to the command payload.
 - Dart strings include action names such as:
   - `WilinkDeviceActionExt|setStart`
   - `WilinkDeviceActionExt|setPause`
@@ -69,6 +69,6 @@ The bundled `assets/flutter_assets/assets/mine/allProducts.json` identifies C2-l
 
 ## C3P0 Impact
 
-- Encrypted KS polling should request the motion/state properties above and parse `BurnCalories`, `RunningSteps`, `RunningTotalTime`, `RunningDistance`, `ControlMode`, and `runState`.
+- Encrypted KS polling should request the motion/state properties above and parse `BurnCalories`, `RunningSteps`, `RunningTotalTime`, `RunningDistance`, `ControlMode`, and `runState`. On `5833ff01` AIS transport, encrypted KS text payloads must be AIS-framed before writing and AIS-unwrapped before decoding.
 - KS Fit exposes no-load stop UI and the likely encrypted KS property keys. C3P0 sends them over the same text-property path as speed/mode: `props AuToStop 0/1` and `props NoloadStop <seconds>`. The numeric `servers getProp` IDs for proactive polling were not recovered, so C3P0 reads these values only if the pad echoes named props in encrypted notifications.
 - KS Fit behavior matches the pause-then-stop flow: pause while the belt is moving, then stop only after the belt has coasted to zero.

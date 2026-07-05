@@ -41,6 +41,11 @@ class WalkingPadManagerImpl @Inject constructor(
     private var candidateKsEncryptedTables = KingsmithEncryptedProtocol.encryptionTables.toSet()
     private var activeKsEncryptedReadCharSubstring: String? = null
     private var activeKsEncryptedWriteCharSubstring: String? = null
+    private var activeKsEncryptedTransport: KingsmithEncryptedProtocol.Transport =
+        KingsmithEncryptedProtocol.Transport.EncryptedText
+    private var useAisBusPayloadPrefix = false
+    private var nextAisMessageId = 0
+    private val aisPayloadBuffers = mutableMapOf<Int, ByteArray>()
     private val commandMutex = Mutex()
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
@@ -526,6 +531,18 @@ class WalkingPadManagerImpl @Inject constructor(
         }
 
         Timber.d("Sending WalkingPad encrypted KS command: ${cmd.toHexString()} char~=$writeCharSubstring")
+        val sent = if (activeKsEncryptedTransport == KingsmithEncryptedProtocol.Transport.Ais) {
+            sendKsEncryptedAisCommand(writeCharSubstring, cmd)
+        } else {
+            sendKsEncryptedRawTextCommand(writeCharSubstring, cmd)
+        }
+        if (sent && cmd.isNotEmpty()) {
+            lastCommandElapsedMillis = SystemClock.elapsedRealtime()
+        }
+        sent
+    }
+
+    private suspend fun sendKsEncryptedRawTextCommand(writeCharSubstring: String, cmd: ByteArray): Boolean {
         var sent = true
         var offset = 0
         while (offset < cmd.size && sent) {
@@ -541,10 +558,28 @@ class WalkingPadManagerImpl @Inject constructor(
                 delay(KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS)
             }
         }
-        if (sent && cmd.isNotEmpty()) {
-            lastCommandElapsedMillis = SystemClock.elapsedRealtime()
+        return sent
+    }
+
+    private suspend fun sendKsEncryptedAisCommand(writeCharSubstring: String, cmd: ByteArray): Boolean {
+        val payload = if (useAisBusPayloadPrefix) {
+            byteArrayOf(KingsmithEncryptedProtocol.AIS_BUS_PREFIX) + cmd
+        } else {
+            cmd
         }
-        sent
+        val frames = KingsmithEncryptedProtocol.aisCommandFrames(payload, nextAisMessageId)
+        nextAisMessageId = (nextAisMessageId + frames.size) and 0x0F
+        var sent = true
+        for (frame in frames) {
+            sent = connection?.writeCharacteristicByUuidSubstring(
+                charUuidSubstring = writeCharSubstring,
+                data = frame,
+                preferWithoutResponse = false
+            ) ?: false
+            if (!sent) break
+            delay(KS_ENCRYPTED_AIS_FRAME_DELAY_MS)
+        }
+        return sent
     }
 
     private suspend fun sendKsEncryptedTextCommand(
@@ -762,6 +797,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
         activeKsEncryptedReadCharSubstring = pair.readCharSubstring
         activeKsEncryptedWriteCharSubstring = pair.writeCharSubstring
+        activeKsEncryptedTransport = pair.transport
         val updatesEnabled = connection?.enableUpdatesByUuidSubstring(pair.readCharSubstring) ?: false
         Timber.d(
             "WalkingPad encrypted KS updates enabled: $updatesEnabled " +
@@ -780,6 +816,14 @@ class WalkingPadManagerImpl @Inject constructor(
             delay(GATT_DESCRIPTOR_WRITE_DELAY_MS)
             ksEncryptedHandshakeIndex = 0
             sendKsEncryptedHandshakeCommand()
+            if (pair.transport == KingsmithEncryptedProtocol.Transport.Ais) {
+                delay(KS_ENCRYPTED_AIS_BUS_FALLBACK_DELAY_MS)
+                if (!ksEncryptedProtocolReady.value && ksEncryptedHandshakeIndex == 0) {
+                    useAisBusPayloadPrefix = true
+                    aisPayloadBuffers.clear()
+                    sendKsEncryptedHandshakeCommand()
+                }
+            }
         }
     }
 
@@ -812,6 +856,10 @@ class WalkingPadManagerImpl @Inject constructor(
         candidateKsEncryptedTables = KingsmithEncryptedProtocol.encryptionTables.toSet()
         activeKsEncryptedReadCharSubstring = null
         activeKsEncryptedWriteCharSubstring = null
+        activeKsEncryptedTransport = KingsmithEncryptedProtocol.Transport.EncryptedText
+        useAisBusPayloadPrefix = false
+        nextAisMessageId = 0
+        aisPayloadBuffers.clear()
     }
 
     private suspend fun sendKsEncryptedHandshakeCommand(): Boolean {
@@ -836,17 +884,64 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun handleKsEncryptedNotification(data: ByteArray) {
         lastRawNotificationHex = data.toHexString()
+        if (activeKsEncryptedTransport == KingsmithEncryptedProtocol.Transport.Ais) {
+            handleKsEncryptedAisNotification(data)
+            return
+        }
+
         ksEncryptedReadBuffer += data
         if (ksEncryptedReadBuffer.lastOrNull() != KingsmithEncryptedProtocol.TERMINATOR) return
 
         val packet = ksEncryptedReadBuffer
         ksEncryptedReadBuffer = ByteArray(0)
+        processKsEncryptedPayload(packet)
+    }
+
+    private fun handleKsEncryptedAisNotification(data: ByteArray) {
+        val packets = KingsmithEncryptedProtocol.parseAisPackets(data)
+        if (packets.isEmpty()) {
+            processKsEncryptedPayload(data)
+            return
+        }
+
+        packets.forEach { packet ->
+            val commandType = packet.commandType.toInt() and 0xFF
+            val accumulated = (aisPayloadBuffers[commandType] ?: ByteArray(0)) + packet.payload
+            if (packet.totalFrame == packet.frameSeq) {
+                aisPayloadBuffers.remove(commandType)
+                processKsEncryptedAisPayload(accumulated)
+            } else {
+                aisPayloadBuffers[commandType] = accumulated
+            }
+        }
+    }
+
+    private fun processKsEncryptedAisPayload(payload: ByteArray) {
+        val candidates = buildList {
+            if (payload.firstOrNull() == KingsmithEncryptedProtocol.AIS_BUS_PREFIX) {
+                add(payload.copyOfRange(1, payload.size) to true)
+            }
+            add(payload to false)
+            if (payload.isNotEmpty() && payload.first() != KingsmithEncryptedProtocol.AIS_BUS_PREFIX) {
+                add(payload.copyOfRange(1, payload.size) to true)
+            }
+        }
+        candidates.firstOrNull { (candidate, busPrefixed) ->
+            processKsEncryptedPayload(candidate).also { decoded ->
+                if (decoded && busPrefixed) {
+                    useAisBusPayloadPrefix = true
+                }
+            }
+        }
+    }
+
+    private fun processKsEncryptedPayload(packet: ByteArray): Boolean {
         val decodeTables = activeKsEncryptedTable?.let { setOf(it) } ?: candidateKsEncryptedTables
         val candidates = KingsmithEncryptedProtocol.decodeCandidates(packet, decodeTables)
             .ifEmpty { KingsmithEncryptedProtocol.decodeCandidates(packet) }
         val decoded = selectKsEncryptedDecodedText(candidates) ?: run {
             Timber.w("Unable to decode encrypted KS notification: ${packet.toHexString()}")
-            return
+            return false
         }
         val matchingCandidates = candidates.filter { candidate ->
             if (ksEncryptedProtocolReady.value) {
@@ -874,10 +969,11 @@ class WalkingPadManagerImpl @Inject constructor(
                 markAnyProtocolReady()
                 startStatusPolling()
             }
-            return
+            return true
         }
 
         handleKsEncryptedHandshakeText(decoded.text)
+        return true
     }
 
     private fun selectKsEncryptedDecodedText(
@@ -1020,6 +1116,8 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
         private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
+        private const val KS_ENCRYPTED_AIS_FRAME_DELAY_MS = 25L
+        private const val KS_ENCRYPTED_AIS_BUS_FALLBACK_DELAY_MS = 1_200L
         private const val KS_ENCRYPTED_HANDSHAKE_SPACING_MS = 25L
         private const val KS_ENCRYPTED_LAST_HANDSHAKE_INDEX = 7
         private const val DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS = 30
