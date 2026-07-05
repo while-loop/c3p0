@@ -97,20 +97,25 @@ class WalkingPadManagerImpl @Inject constructor(
                     }
                 }
             }
-            onServicesDiscovered = {
+            onServicesDiscovered = servicesDiscovered@{
                 val hasLegacyService = hasService(SERVICE_UUID)
-                if (!hasLegacyService && !hasAnyKsEncryptedCharacteristicPair()) {
+                val hasKsEncryptedPair = hasAnyKsEncryptedCharacteristicPair()
+                if (!hasLegacyService && !hasKsEncryptedPair) {
                     errorReporter.report(
                         "WalkingPad Bluetooth",
                         "No supported KS WalkingPad protocol service found",
                         "address=$address services=${serviceSummary()}"
                     )
+                    return@servicesDiscovered
                 }
+                startProtocolReadyWatchdog(address)
                 scope.launch {
                     if (hasLegacyService) {
                         activateLegacyProtocol(address)
                     }
-                    activateKsEncryptedProtocolIfAvailable()
+                    if (hasKsEncryptedPair) {
+                        activateKsEncryptedProtocolIfAvailable()
+                    }
                 }
             }
         }
@@ -118,7 +123,6 @@ class WalkingPadManagerImpl @Inject constructor(
         val result = connection?.connect() ?: false
         if (result) {
             _connectionState.value = ConnectionState.CONNECTING
-            startProtocolReadyWatchdog(address)
             connection?.let { bleConnection ->
                 connectionStateJob?.cancel()
                 connectionStateJob = scope.launch {

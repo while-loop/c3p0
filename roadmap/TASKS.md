@@ -11,6 +11,7 @@
 - [x] **Encrypted KS Characteristic Families**: Added live C2 service-dump support for the `24e252...` and property-verified AIS `5833ff03` read / `5833ff02` write encrypted KS characteristic families.
 - [x] **Encrypted KS Native Automatic Mode**: Enabled Automatic mode when encrypted KS control characteristics are present by sending `props ControlMode 0/1/2` mode commands with the known model encryption tables.
 - [x] **Encrypted KS Status Telemetry**: Added the Mi WalkingPad APK encrypted-text handshake, subscribed to KS read characteristics, polled `servers getProp`, and parsed `RunningSteps`/distance/time/speed/mode so newer pads can use real WalkingPad counters.
+- [x] **WalkingPad Service Discovery Watchdog**: Split Android GATT service-discovery timeout/retry errors from KS protocol-ready timeout errors so `services=none` is diagnosed as missing service discovery instead of a failed KS handshake.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
