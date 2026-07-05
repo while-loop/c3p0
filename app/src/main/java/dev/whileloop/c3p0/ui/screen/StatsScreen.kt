@@ -432,8 +432,8 @@ private fun StepPreviewChart(
             )
             drawRoundRect(
                 color = normalizedBarColor,
-                topLeft = Offset(left + (barWidth * 0.16f), size.height - normalizedHeight),
-                size = androidx.compose.ui.geometry.Size(barWidth * 0.68f, normalizedHeight),
+                topLeft = Offset(left, size.height - normalizedHeight),
+                size = androidx.compose.ui.geometry.Size(barWidth, normalizedHeight),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
             )
         }
