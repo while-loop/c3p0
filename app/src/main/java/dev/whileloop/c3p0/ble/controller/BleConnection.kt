@@ -13,8 +13,13 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import dev.whileloop.c3p0.ble.diagnostic.BleErrorReporter
 import dev.whileloop.c3p0.ble.manager.ConnectionState
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.*
 
@@ -32,7 +37,10 @@ class BleConnection(
     private var servicesDiscovered = false
     private var serviceDiscoveryAttempts = 0
     private var serviceDiscoveryGeneration = 0
+    private var pendingCharacteristicWrite: PendingGattOperation? = null
+    private var pendingDescriptorWrite: PendingGattOperation? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val gattOperationMutex = Mutex()
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState = _connectionState.asStateFlow()
 
@@ -108,6 +116,10 @@ class BleConnection(
                     "address=$address characteristic=${characteristic.uuid} status=$status"
                 )
             }
+            pendingCharacteristicWrite
+                ?.takeIf { it.uuid == characteristic.uuid }
+                ?.result
+                ?.complete(status)
         }
 
         override fun onDescriptorWrite(
@@ -122,6 +134,10 @@ class BleConnection(
                     "address=$address descriptor=${descriptor.uuid} status=$status"
                 )
             }
+            pendingDescriptorWrite
+                ?.takeIf { it.uuid == descriptor.uuid }
+                ?.result
+                ?.complete(status)
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -147,30 +163,30 @@ class BleConnection(
             _connectionState.value == ConnectionState.CONNECTED
 
     @SuppressLint("MissingPermission")
-    fun writeCharacteristic(
+    suspend fun writeCharacteristic(
         serviceUuid: UUID,
         charUuid: UUID,
         data: ByteArray,
         preferWithoutResponse: Boolean = preferWriteWithoutResponse
-    ): Boolean {
+    ): Boolean = gattOperationMutex.withLock {
         if (!hasConnectPermission()) {
             reportError("Missing Bluetooth connect permission", "write characteristic $charUuid")
-            return false
+            return@withLock false
         }
         if (!isActive()) {
             reportError(
                 "BLE characteristic write requested while disconnected",
                 "address=$address characteristic=$charUuid state=${_connectionState.value}"
             )
-            return false
+            return@withLock false
         }
         val service = bluetoothGatt?.getService(serviceUuid) ?: run {
             reportError("BLE service not found", "address=$address service=$serviceUuid")
-            return false
+            return@withLock false
         }
         val char = service.getCharacteristic(charUuid) ?: run {
             reportError("BLE characteristic not found", "address=$address characteristic=$charUuid")
-            return false
+            return@withLock false
         }
         val supportsWrite = char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
         val supportsWriteWithoutResponse =
@@ -182,7 +198,13 @@ class BleConnection(
             supportsWriteWithoutResponse -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             else -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
         }
-        return try {
+        val operation = if (writeType == BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) {
+            PendingGattOperation(charUuid)
+        } else {
+            null
+        }
+        pendingCharacteristicWrite = operation
+        val started = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 bluetoothGatt?.writeCharacteristic(char, data, writeType) == BluetoothStatusCodes.SUCCESS
             } else {
@@ -195,9 +217,36 @@ class BleConnection(
             reportError("Unable to write BLE characteristic", e.message)
             false
         }
+        if (!started) {
+            if (pendingCharacteristicWrite === operation) {
+                pendingCharacteristicWrite = null
+            }
+            return@withLock false
+        }
+
+        if (operation == null) {
+            delay(GATT_WRITE_WITHOUT_RESPONSE_SETTLE_MS)
+            return@withLock isActive()
+        }
+
+        val status = withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) {
+            operation.result.await()
+        }
+        if (pendingCharacteristicWrite === operation) {
+            pendingCharacteristicWrite = null
+        }
+        if (status == null) {
+            reportError(
+                "BLE characteristic write timed out",
+                "address=$address characteristic=$charUuid"
+            )
+            false
+        } else {
+            status == BluetoothGatt.GATT_SUCCESS && isActive()
+        }
     }
 
-    fun writeCharacteristicByUuidSubstring(
+    suspend fun writeCharacteristicByUuidSubstring(
         charUuidSubstring: String,
         data: ByteArray,
         preferWithoutResponse: Boolean = preferWriteWithoutResponse
@@ -210,7 +259,7 @@ class BleConnection(
     }
 
     @SuppressLint("MissingPermission")
-    fun enableNotifications(serviceUuid: UUID, charUuid: UUID): Boolean {
+    suspend fun enableNotifications(serviceUuid: UUID, charUuid: UUID): Boolean {
         return enableCharacteristicUpdates(
             serviceUuid = serviceUuid,
             charUuid = charUuid,
@@ -220,7 +269,7 @@ class BleConnection(
     }
 
     @SuppressLint("MissingPermission")
-    fun enableIndications(serviceUuid: UUID, charUuid: UUID): Boolean {
+    suspend fun enableIndications(serviceUuid: UUID, charUuid: UUID): Boolean {
         return enableCharacteristicUpdates(
             serviceUuid = serviceUuid,
             charUuid = charUuid,
@@ -229,7 +278,7 @@ class BleConnection(
         )
     }
 
-    fun enableUpdatesByUuidSubstring(charUuidSubstring: String): Boolean {
+    suspend fun enableUpdatesByUuidSubstring(charUuidSubstring: String): Boolean {
         val match = findCharacteristicBySubstring(charUuidSubstring) ?: run {
             reportError("BLE characteristic not found", "address=$address characteristic~=$charUuidSubstring")
             return false
@@ -291,41 +340,50 @@ class BleConnection(
     }
 
     @SuppressLint("MissingPermission")
-    private fun enableCharacteristicUpdates(
+    private suspend fun enableCharacteristicUpdates(
         serviceUuid: UUID,
         charUuid: UUID,
         descriptorValue: ByteArray,
         updateLabel: String
-    ): Boolean {
+    ): Boolean = gattOperationMutex.withLock {
         if (!hasConnectPermission()) {
             reportError("Missing Bluetooth connect permission", "enable $updateLabel for $charUuid")
-            return false
+            return@withLock false
+        }
+        if (!isActive()) {
+            reportError(
+                "BLE $updateLabel requested while disconnected",
+                "address=$address characteristic=$charUuid state=${_connectionState.value}"
+            )
+            return@withLock false
         }
         val service = bluetoothGatt?.getService(serviceUuid) ?: run {
             reportError("BLE service not found", "address=$address service=$serviceUuid")
-            return false
+            return@withLock false
         }
         val char = service.getCharacteristic(charUuid) ?: run {
             reportError("BLE characteristic not found", "address=$address characteristic=$charUuid")
-            return false
+            return@withLock false
         }
         try {
             val notificationSet = bluetoothGatt?.setCharacteristicNotification(char, true) ?: false
             if (!notificationSet) {
                 reportError("Unable to enable characteristic $updateLabel", "address=$address characteristic=$charUuid")
-                return false
+                return@withLock false
             }
         } catch (e: SecurityException) {
             Timber.e(e, "Unable to enable BLE $updateLabel without permission")
             reportError("Unable to enable BLE $updateLabel", e.message)
-            return false
+            return@withLock false
         }
         
         val descriptor = char.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID) ?: run {
             reportError("BLE $updateLabel descriptor not found", "address=$address characteristic=$charUuid")
-            return false
+            return@withLock false
         }
-        return try {
+        val operation = PendingGattOperation(descriptor.uuid)
+        pendingDescriptorWrite = operation
+        val started = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 bluetoothGatt?.writeDescriptor(
                     descriptor,
@@ -339,6 +397,28 @@ class BleConnection(
             Timber.e(e, "Unable to write BLE descriptor without permission")
             reportError("Unable to write BLE descriptor", e.message)
             false
+        }
+        if (!started) {
+            if (pendingDescriptorWrite === operation) {
+                pendingDescriptorWrite = null
+            }
+            return@withLock false
+        }
+
+        val status = withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) {
+            operation.result.await()
+        }
+        if (pendingDescriptorWrite === operation) {
+            pendingDescriptorWrite = null
+        }
+        if (status == null) {
+            reportError(
+                "BLE $updateLabel descriptor write timed out",
+                "address=$address characteristic=$charUuid descriptor=${descriptor.uuid}"
+            )
+            false
+        } else {
+            status == BluetoothGatt.GATT_SUCCESS && isActive()
         }
     }
 
@@ -383,6 +463,7 @@ class BleConnection(
     @SuppressLint("MissingPermission")
     fun disconnect() {
         _connectionState.value = ConnectionState.DISCONNECTING
+        completePendingGattOperations(BluetoothGatt.GATT_FAILURE)
         try {
             bluetoothGatt?.disconnect()
         } catch (e: SecurityException) {
@@ -397,6 +478,7 @@ class BleConnection(
         mainHandler.removeCallbacksAndMessages(null)
         servicesDiscovered = false
         serviceDiscoveryGeneration += 1
+        completePendingGattOperations(BluetoothGatt.GATT_FAILURE)
         try {
             bluetoothGatt?.close()
         } catch (e: SecurityException) {
@@ -479,6 +561,13 @@ class BleConnection(
         close()
     }
 
+    private fun completePendingGattOperations(status: Int) {
+        pendingCharacteristicWrite?.result?.complete(status)
+        pendingCharacteristicWrite = null
+        pendingDescriptorWrite?.result?.complete(status)
+        pendingDescriptorWrite = null
+    }
+
     @SuppressLint("DiscouragedPrivateApi")
     private fun refreshDeviceCache(gatt: BluetoothGatt): Boolean =
         runCatching {
@@ -510,6 +599,8 @@ class BleConnection(
         private const val SERVICE_DISCOVERY_DELAY_MS = 600L
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1_000L
         private const val SERVICE_DISCOVERY_CALLBACK_TIMEOUT_MS = 3_000L
+        private const val GATT_OPERATION_TIMEOUT_MS = 3_000L
+        private const val GATT_WRITE_WITHOUT_RESPONSE_SETTLE_MS = 40L
         private const val MAX_SERVICE_DISCOVERY_ATTEMPTS = 5
         private val CLIENT_CHARACTERISTIC_CONFIG_UUID: UUID =
             UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
@@ -528,4 +619,9 @@ class BleConnection(
             get() = properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
                 properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
     }
+
+    private data class PendingGattOperation(
+        val uuid: UUID,
+        val result: CompletableDeferred<Int> = CompletableDeferred()
+    )
 }

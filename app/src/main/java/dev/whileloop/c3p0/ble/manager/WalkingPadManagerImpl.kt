@@ -802,7 +802,7 @@ class WalkingPadManagerImpl @Inject constructor(
         return cmd
     }
 
-    private fun activateLegacyProtocol(address: String) {
+    private suspend fun activateLegacyProtocol(address: String) {
         val notificationsEnabled = connection?.enableNotifications(SERVICE_UUID, NOTIFY_CHAR_UUID) ?: false
         Timber.d("WalkingPad legacy notifications enabled: $notificationsEnabled")
         if (notificationsEnabled) {
@@ -822,7 +822,7 @@ class WalkingPadManagerImpl @Inject constructor(
         }
     }
 
-    private fun activateKsEncryptedProtocolIfAvailable() {
+    private suspend fun activateKsEncryptedProtocolIfAvailable() {
         val pair = availableKsEncryptedCharacteristicPair() ?: return
 
         activeKsEncryptedReadCharSubstring = pair.readCharSubstring

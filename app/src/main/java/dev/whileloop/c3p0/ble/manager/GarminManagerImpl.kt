@@ -45,13 +45,15 @@ class GarminManagerImpl @Inject constructor(
                 }
             }
             onServicesDiscovered = {
-                val notificationsEnabled = enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
-                if (!notificationsEnabled) {
-                    errorReporter.report(
-                        "Watch Bluetooth",
-                        "Heart-rate notifications were not enabled",
-                        "address=$address"
-                    )
+                scope.launch {
+                    val notificationsEnabled = enableNotifications(HRS_SERVICE_UUID, HR_MEASUREMENT_CHAR_UUID)
+                    if (!notificationsEnabled) {
+                        errorReporter.report(
+                            "Watch Bluetooth",
+                            "Heart-rate notifications were not enabled",
+                            "address=$address"
+                        )
+                    }
                 }
             }
         }
