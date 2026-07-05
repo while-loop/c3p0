@@ -279,28 +279,26 @@ private fun HealthConnectStepChart(
                             .fillMaxHeight(rawFraction)
                             .clip(RoundedCornerShape(6.dp))
                             .background(rawBarColor)
-                            .align(Alignment.BottomCenter),
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        StepBarValueLabel(
-                            text = compactSteps(row.rawSteps),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+                            .align(Alignment.BottomCenter)
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(0.72f)
                             .fillMaxHeight(normalizedFraction)
                             .clip(RoundedCornerShape(6.dp))
                             .background(normalizedBarColor)
-                            .align(Alignment.BottomCenter),
-                        contentAlignment = Alignment.BottomCenter
-                    ) {
-                        StepBarValueLabel(
-                            text = compactSteps(row.normalizedSteps),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
+                            .align(Alignment.BottomCenter)
+                    )
+                    StepBarValueLabel(
+                        text = compactSteps(row.rawSteps),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                    StepBarValueLabel(
+                        text = compactSteps(row.normalizedSteps),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -316,7 +314,8 @@ private fun HealthConnectStepChart(
 @Composable
 private fun StepBarValueLabel(
     text: String,
-    color: androidx.compose.ui.graphics.Color
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
 ) {
     Text(
         text = text,
@@ -325,7 +324,7 @@ private fun StepBarValueLabel(
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
         textAlign = TextAlign.Center,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 2.dp, vertical = 2.dp)
     )
@@ -408,8 +407,11 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                     normalizedSteps = monthRows.sumOf { it.normalizedSteps }
                 )
             }
-    }
+    }.dropLeadingEmptyRows()
 }
+
+private fun List<StepChartRow>.dropLeadingEmptyRows(): List<StepChartRow> =
+    dropWhile { it.rawSteps == 0L && it.normalizedSteps == 0L }
 
 private fun compactSteps(steps: Long): String =
     when {
