@@ -86,6 +86,7 @@ fun SessionDashboard(
     val sessionSteps by viewModel.sessionSteps.collectAsState()
     val sessionCalories by viewModel.sessionCalories.collectAsState()
     val normalizedStepsToGoal by viewModel.normalizedStepsToGoal.collectAsState()
+    val estimatedSecondsToStepGoal by viewModel.estimatedSecondsToStepGoal.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
     var pendingSessionAction by remember { mutableStateOf(SessionAction.Start) }
@@ -210,6 +211,7 @@ fun SessionDashboard(
                 StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
                 StatTile("Steps", sessionSteps.toString(), "steps"),
                 StatTile("Steps to Goal", normalizedStepsToGoal?.toString() ?: "---", "normalized"),
+                StatTile("Time to Goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
                 StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
                 StatTile("Calories", sessionCalories.toString(), "kcal"),
                 StatTile("Heart Rate", heartRateValue(currentHeartRate), "bpm"),
@@ -959,6 +961,22 @@ fun formatElapsedTime(seconds: Int): String {
         String.format(Locale.US, "%d:%02d:%02d", hours, minutes, remainingSeconds)
     } else {
         String.format(Locale.US, "%d:%02d", minutes, remainingSeconds)
+    }
+}
+
+private fun formatGoalEta(seconds: Int?): String {
+    if (seconds == null) return "---"
+    if (seconds <= 0) return "Done"
+
+    val minutes = ceil(seconds / 60.0).toInt()
+    if (minutes < 60) return "${minutes}m"
+
+    val hours = minutes / 60
+    val remainingMinutes = minutes % 60
+    return if (remainingMinutes == 0) {
+        "${hours}h"
+    } else {
+        "${hours}h ${remainingMinutes}m"
     }
 }
 

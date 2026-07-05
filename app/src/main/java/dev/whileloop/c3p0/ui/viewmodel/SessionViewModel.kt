@@ -71,6 +71,9 @@ class SessionViewModel @Inject constructor(
     private val _normalizedStepsToGoal = MutableStateFlow<Int?>(null)
     val normalizedStepsToGoal = _normalizedStepsToGoal.asStateFlow()
 
+    private val _estimatedSecondsToStepGoal = MutableStateFlow<Int?>(null)
+    val estimatedSecondsToStepGoal = _estimatedSecondsToStepGoal.asStateFlow()
+
     val treadmillStatus = treadmillManager.status.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -311,10 +314,44 @@ class SessionViewModel @Inject constructor(
     private fun updateNormalizedStepsToGoal() {
         val normalizedSteps = normalizedStepsToday ?: run {
             _normalizedStepsToGoal.value = null
+            _estimatedSecondsToStepGoal.value = null
             return
         }
         val inProgressSteps = if (sessionManager.isSessionActive.value) _sessionSteps.value else 0
         _normalizedStepsToGoal.value = (stepGoal.value - normalizedSteps - inProgressSteps).coerceAtLeast(0)
+        updateEstimatedSecondsToStepGoal()
+    }
+
+    private fun updateEstimatedSecondsToStepGoal() {
+        val remainingSteps = _normalizedStepsToGoal.value ?: run {
+            _estimatedSecondsToStepGoal.value = null
+            return
+        }
+        if (remainingSteps <= 0) {
+            _estimatedSecondsToStepGoal.value = 0
+            return
+        }
+        if (!sessionManager.isSessionActive.value) {
+            _estimatedSecondsToStepGoal.value = null
+            return
+        }
+
+        val elapsedSeconds = _sessionElapsedSeconds.value
+        val sessionSteps = _sessionSteps.value
+        if (elapsedSeconds < MIN_STEP_RATE_SAMPLE_SECONDS || sessionSteps < MIN_STEP_RATE_SAMPLE_STEPS) {
+            _estimatedSecondsToStepGoal.value = null
+            return
+        }
+
+        val stepsPerMinute = sessionSteps / (elapsedSeconds / 60f)
+        if (stepsPerMinute < MIN_STEPS_PER_MINUTE_FOR_GOAL_ETA) {
+            _estimatedSecondsToStepGoal.value = null
+            return
+        }
+
+        _estimatedSecondsToStepGoal.value = ((remainingSteps / stepsPerMinute) * 60f)
+            .roundToInt()
+            .coerceAtLeast(1)
     }
 
     fun incrementSpeed() {
@@ -478,6 +515,9 @@ class SessionViewModel @Inject constructor(
         private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
         private const val HEART_RATE_ZONE2_GUARD_INTERVAL_MS = 1_000L
         private const val DEFAULT_STEP_GOAL = 10000
+        private const val MIN_STEP_RATE_SAMPLE_SECONDS = 30
+        private const val MIN_STEP_RATE_SAMPLE_STEPS = 10
+        private const val MIN_STEPS_PER_MINUTE_FOR_GOAL_ETA = 1f
         private const val DEFAULT_BODY_WEIGHT_KG = 70.0
         private const val ESTIMATED_STRIDE_LENGTH_METERS = 0.75
         private const val WALKING_KCAL_PER_KG_KM = 0.7

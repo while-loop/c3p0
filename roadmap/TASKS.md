@@ -33,6 +33,7 @@
 - [x] **Pad-Reported Elapsed Time**: Session elapsed time uses the WalkingPad running-time counter delta instead of an app-local timer, with fallback calorie estimates also preferring the pad-reported active duration.
 - [x] **Session Metrics UI**: Added elapsed time, calories, current HR, session average HR, and heart-rate history chart with y-axis labels and zone-colored line segments.
 - [x] **Goal Progress Tile**: Added normalized steps remaining to daily goal on the session screen.
+- [x] **Step Goal ETA Tile**: Added a session tile that estimates time to daily step goal from current-session steps per minute after enough step data exists.
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
 - [x] **Stats Details**: Added selected-session history details and normalized Health Connect step breakdown.
 - [x] **Historical Step History**: Added Health Connect daily step history with aggregate raw totals, C3P0 steps, excluded other-source session steps, and normalized totals.
