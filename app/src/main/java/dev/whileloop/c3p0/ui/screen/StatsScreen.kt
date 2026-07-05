@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +72,7 @@ fun StatsScreen(
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val sessions by viewModel.allSessions.collectAsState()
     val selectedSession by viewModel.selectedSession.collectAsState()
     val metrics by viewModel.selectedSessionMetrics.collectAsState()
@@ -144,49 +147,48 @@ fun StatsScreen(
             onDismissRequest = { openChartSheet = null },
             sheetState = chartSheetState
         ) {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.85f),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
+                    .heightIn(max = screenHeight * 0.88f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 32.dp)
             ) {
-                item {
-                    when (sheet) {
-                        StatsChartSheet.Steps -> HealthConnectStepHistoryCard(
-                            rows = dailyStepHistory,
-                            canReadSteps = canReadHealthConnectSteps,
-                            isLoading = isStepHistoryLoading,
-                            selectedPeriod = stepChartPeriod,
-                            isExpanded = true,
-                            showCollapseControl = false,
-                            onPeriodSelected = { stepChartPeriod = it },
-                            onExpandedChange = {},
-                            onEnable = { showStepPermissionSheet = true },
-                            onRefresh = { viewModel.refreshStepHistory() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(420.dp)
-                        )
+                when (sheet) {
+                    StatsChartSheet.Steps -> HealthConnectStepHistoryCard(
+                        rows = dailyStepHistory,
+                        canReadSteps = canReadHealthConnectSteps,
+                        isLoading = isStepHistoryLoading,
+                        selectedPeriod = stepChartPeriod,
+                        isExpanded = true,
+                        showCollapseControl = false,
+                        onPeriodSelected = { stepChartPeriod = it },
+                        onExpandedChange = {},
+                        onEnable = { showStepPermissionSheet = true },
+                        onRefresh = { viewModel.refreshStepHistory() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(420.dp)
+                    )
 
-                        StatsChartSheet.Weight -> HealthConnectWeightHistoryCard(
-                            records = weightHistory,
-                            canReadWeight = canReadHealthConnectWeight,
-                            isLoading = isWeightHistoryLoading,
-                            unitSystem = unitSystem,
-                            visibleDays = weightVisibleDays,
-                            selectedGrouping = weightGrouping,
-                            onVisibleDaysChange = { weightVisibleDays = it },
-                            onXAxisPeriodSelected = { period ->
-                                weightVisibleDays = period.days.toFloat()
-                            },
-                            onGroupingSelected = { weightGrouping = it },
-                            onEnable = { showWeightPermissionSheet = true },
-                            onRefresh = { viewModel.refreshWeightHistory() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 360.dp)
-                        )
-                    }
+                    StatsChartSheet.Weight -> HealthConnectWeightHistoryCard(
+                        records = weightHistory,
+                        canReadWeight = canReadHealthConnectWeight,
+                        isLoading = isWeightHistoryLoading,
+                        unitSystem = unitSystem,
+                        visibleDays = weightVisibleDays,
+                        selectedGrouping = weightGrouping,
+                        onVisibleDaysChange = { weightVisibleDays = it },
+                        onXAxisPeriodSelected = { period ->
+                            weightVisibleDays = period.days.toFloat()
+                        },
+                        onGroupingSelected = { weightGrouping = it },
+                        onEnable = { showWeightPermissionSheet = true },
+                        onRefresh = { viewModel.refreshWeightHistory() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 360.dp)
+                    )
                 }
             }
         }
