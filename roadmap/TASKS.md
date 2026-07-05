@@ -19,7 +19,7 @@
 - [x] **AIS Bus Prefix First**: Start the `5833ff02` AIS handshake with KS Fit's BLE sub-version 18 bus payload prefix, then toggle to unprefixed AIS only if the prefixed handshake does not answer.
 - [x] **KingSmith FTMS Supplement Route**: Prefer KS FTMS Control Point plus the ODM/supplement property-list preamble over `5833ff02` when `0x1826` and `24e2521c`/`d18d2c10` are present, and parse the KingSmith FTMS step extension.
 - [x] **FTMS Pause/Stop Split**: Send FTMS pause as `08 02` and final stop as `08 01` so the app matches KS Fit's pause-then-stop flow on FTMS WalkingPads.
-- [x] **FTMS No-Load Acknowledgement**: Decode the supplement `autoStop` ACK, save FTMS no-load settings only after a matching response, and surface mismatched bytes for sniff-based follow-up.
+- [x] **FTMS No-Load Boolean Acknowledgement**: Decode the supplement `autoStop` on/off ACK, save FTMS no-load enablement only after a matching response, and avoid presenting timeout seconds as confirmed on FTMS pads until the timeout setter is decoded.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
@@ -70,5 +70,5 @@
 - [ ] **Elapsed vs Active Time**: Decide whether to display both wall-clock elapsed time and active/moving time. Current session timers pause with the session; many fitness apps keep elapsed wall-clock time separate from active time.
 - [ ] **Backup Restore Verification**: Manually verify Android Auto Backup restore behavior on a real signed install path; restore timing is controlled by Android and Google backup services.
 - [ ] **Unit Tests**: Add comprehensive test suite for `AutoSpeedController`.
-- [ ] **FTMS No-Load Stop Setter**: Sniff KS Fit BLE packets or decode the remaining supplement command map to identify the exact FTMS+supplement no-load setter and readback.
+- [ ] **FTMS No-Load Timeout Setter**: Sniff KS Fit BLE packets or decode the remaining supplement command map to identify the exact FTMS+supplement no-load timeout setter and readback.
 - [ ] **No-Load Stop Readback Polling**: Sniff KS Fit BLE packets or decode the remaining property map to identify the numeric `servers getProp` IDs for proactive no-load stop readback.

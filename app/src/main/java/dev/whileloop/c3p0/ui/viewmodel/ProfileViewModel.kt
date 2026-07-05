@@ -116,6 +116,12 @@ class ProfileViewModel @Inject constructor(
         treadmillManager.connectionState.value
     )
 
+    val treadmillStatus = treadmillManager.status.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        treadmillManager.status.value
+    )
+
     val watchConnectionState = heartRateManager.connectionState.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -236,7 +242,11 @@ class ProfileViewModel @Inject constructor(
     fun updateNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
         viewModelScope.launch {
             if (treadmillManager.setNoLoadStop(enabled, timeoutSeconds)) {
-                settingsRepository.saveNoLoadStop(enabled, timeoutSeconds)
+                val confirmedStatus = treadmillManager.status.value
+                settingsRepository.saveNoLoadStop(
+                    enabled = confirmedStatus.noLoadStopEnabled ?: enabled,
+                    timeoutSeconds = confirmedStatus.noLoadStopTimeoutSeconds ?: noLoadStopTimeoutSeconds.value
+                )
             }
         }
     }

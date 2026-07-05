@@ -55,11 +55,16 @@ fun ProfileScreen(
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
     val watchAddress by viewModel.watchAddress.collectAsState()
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
+    val treadmillStatus by viewModel.treadmillStatus.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isTreadmillConnected = treadmillConnectionState == ConnectionState.CONNECTED
     val hasTreadmillAddress = treadmillAddress != null
     val canConnectTreadmillBluetooth = hasTreadmillAddress && treadmillConnectionState == ConnectionState.DISCONNECTED
     val canRefreshTreadmillProtocol = hasTreadmillAddress && treadmillConnectionState != ConnectionState.DISCONNECTING
+    val noLoadStopTimeoutConfirmed =
+        !isTreadmillConnected ||
+            treadmillStatus.noLoadStopEnabled != noLoadStopEnabled ||
+            treadmillStatus.noLoadStopTimeoutSeconds != null
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     var launchHealthConnectPermissions by remember { mutableStateOf(false) }
@@ -194,7 +199,11 @@ fun ProfileScreen(
             supportingContent = {
                 Text(
                     if (noLoadStopEnabled) {
-                        "Stop after ${noLoadStopTimeoutSeconds}s without load"
+                        if (noLoadStopTimeoutConfirmed) {
+                            "Stop after ${noLoadStopTimeoutSeconds}s without load"
+                        } else {
+                            "Idle shutdown is on; timeout unchanged on pad"
+                        }
                     } else {
                         "Idle shutdown is off"
                     }
@@ -221,7 +230,7 @@ fun ProfileScreen(
                 FilterChip(
                     selected = noLoadStopTimeoutSeconds == timeoutSeconds,
                     onClick = { viewModel.updateNoLoadStop(noLoadStopEnabled, timeoutSeconds) },
-                    enabled = isTreadmillConnected && noLoadStopEnabled,
+                    enabled = isTreadmillConnected && noLoadStopEnabled && noLoadStopTimeoutConfirmed,
                     label = { Text("${timeoutSeconds}s") }
                 )
             }

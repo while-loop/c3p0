@@ -46,14 +46,14 @@ class KingsmithFtmsProtocolTest {
     }
 
     @Test
-    fun noLoadStopResponseParsesEnabledTimeoutAck() {
+    fun noLoadStopResponseParsesEnabledBooleanAck() {
         val response = KingsmithFtmsProtocol.parseNoLoadStopResponse(
-            byteArrayOf(0x72, 0x81.toByte(), 0x02, 0x02, 0x05, 0xf7.toByte())
+            byteArrayOf(0x72, 0x81.toByte(), 0x02, 0x02, 0x01, 0xf7.toByte())
         )
 
         checkNotNull(response)
         assertEquals(true, response.enabled)
-        assertEquals(5, response.timeoutSeconds)
+        assertEquals(null, response.timeoutSeconds)
     }
 
     @Test

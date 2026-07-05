@@ -509,11 +509,11 @@ class WalkingPadManagerImpl @Inject constructor(
         val response = lastKsFtmsNoLoadStopResponse
         if (lastKsFtmsSupplementNotificationSeq > previousSupplementNotificationSeq &&
             response != null &&
-            noLoadStopResponseMatches(response, enabled, timeout)
+            noLoadStopResponseMatches(response, enabled)
         ) {
             _status.value = status.value.copy(
                 noLoadStopEnabled = enabled,
-                noLoadStopTimeoutSeconds = timeout
+                noLoadStopTimeoutSeconds = response.timeoutSeconds ?: status.value.noLoadStopTimeoutSeconds
             )
             return true
         }
@@ -530,8 +530,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private fun noLoadStopResponseMatches(
         response: KingsmithFtmsProtocol.NoLoadStopResponse,
-        enabled: Boolean,
-        timeoutSeconds: Int
+        enabled: Boolean
     ): Boolean =
         response.enabled == enabled
 

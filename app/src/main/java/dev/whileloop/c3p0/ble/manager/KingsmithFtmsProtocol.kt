@@ -89,7 +89,7 @@ internal object KingsmithFtmsProtocol {
         val value = data.getOrNull(propertyIndex + 1)?.toInt()?.and(0xFF) ?: return null
         return NoLoadStopResponse(
             enabled = value > 0,
-            timeoutSeconds = value.takeIf { it > 0 }
+            timeoutSeconds = null
         )
     }
 
