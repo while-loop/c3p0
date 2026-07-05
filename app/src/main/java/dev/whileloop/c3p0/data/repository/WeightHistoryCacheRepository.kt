@@ -15,6 +15,9 @@ class WeightHistoryCacheRepository @Inject constructor(
     private val cacheFile: File
         get() = File(context.noBackupFilesDir, CACHE_FILE_NAME)
 
+    private val metadataFile: File
+        get() = File(context.noBackupFilesDir, METADATA_FILE_NAME)
+
     suspend fun readWeightHistory(): List<CachedWeightHistoryRecord> =
         runCatching {
             cacheFile
@@ -25,7 +28,17 @@ class WeightHistoryCacheRepository @Inject constructor(
                 .sortedBy { it.time }
         }.getOrDefault(emptyList())
 
-    suspend fun saveWeightHistory(records: List<CachedWeightHistoryRecord>) {
+    suspend fun readLastFetchTime(): Instant? =
+        runCatching {
+            metadataFile
+                .takeIf { it.exists() }
+                ?.readText()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { Instant.parse(it) }
+        }.getOrNull()
+
+    suspend fun saveWeightHistory(records: List<CachedWeightHistoryRecord>, fetchedThroughTime: Instant) {
         runCatching {
             cacheFile.parentFile?.mkdirs()
             cacheFile.writeText(
@@ -38,6 +51,7 @@ class WeightHistoryCacheRepository @Inject constructor(
                         ).joinToString(separator = FIELD_SEPARATOR)
                     }
             )
+            metadataFile.writeText(fetchedThroughTime.toString())
         }
     }
 
@@ -54,6 +68,7 @@ class WeightHistoryCacheRepository @Inject constructor(
 
     private companion object {
         private const val CACHE_FILE_NAME = "weight_history_cache.tsv"
+        private const val METADATA_FILE_NAME = "weight_history_last_fetch.txt"
         private const val FIELD_SEPARATOR = "\t"
         private const val CACHE_FIELD_COUNT = 2
     }

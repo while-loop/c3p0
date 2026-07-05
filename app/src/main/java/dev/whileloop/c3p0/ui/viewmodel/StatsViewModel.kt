@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -122,7 +124,10 @@ class StatsViewModel @Inject constructor(
             if (cachedHistory.isNotEmpty()) {
                 _dailyStepHistory.value = cachedHistory.map { it.toDailyStepHistory() }
             }
-            refreshStepHistory()
+            refreshStepHistoryFromCache(
+                cachedHistory = cachedHistory,
+                lastFetchDate = stepHistoryCacheRepository.readLastFetchDate()
+            )
         }
     }
 
@@ -132,56 +137,101 @@ class StatsViewModel @Inject constructor(
             if (cachedHistory.isNotEmpty()) {
                 _weightHistory.value = cachedHistory.map { it.toWeightHistoryRecord() }
             }
-            refreshWeightHistory()
+            refreshWeightHistoryFromCache(
+                cachedHistory = cachedHistory,
+                lastFetchTime = weightHistoryCacheRepository.readLastFetchTime()
+            )
         }
     }
 
     fun refreshStepHistory() {
         viewModelScope.launch {
-            _isStepHistoryLoading.value = true
-            try {
-                val canReadSteps = stepNormalizationUseCase.canReadStepHistory()
-                _canReadHealthConnectSteps.value = canReadSteps
-                if (canReadSteps) {
-                    stepNormalizationUseCase.getDailyStepHistory()
-                        .also { freshHistory ->
-                            _dailyStepHistory.value = freshHistory
-                            stepHistoryCacheRepository.saveDailyStepHistory(
-                                freshHistory.map { it.toCachedDailyStepHistory() }
-                            )
-                        }
-                }
-            } finally {
-                _isStepHistoryLoading.value = false
-            }
+            refreshStepHistoryRange(startDate = defaultStepHistoryStartDate(), cachedHistory = emptyList())
         }
     }
 
     fun refreshWeightHistory() {
         viewModelScope.launch {
-            _isWeightHistoryLoading.value = true
-            try {
-                val canReadWeight = healthConnectManager.hasWeightHistoryPermission()
-                _canReadHealthConnectWeight.value = canReadWeight
-                if (canReadWeight) {
-                    val zone = ZoneId.systemDefault()
-                    val today = LocalDate.now(zone)
-                    val startTime = today
-                        .minusDays((DEFAULT_WEIGHT_HISTORY_DAYS - 1).toLong())
-                        .atStartOfDay(zone)
-                        .toInstant()
-                    val endTime = today.plusDays(1).atStartOfDay(zone).toInstant()
-                    healthConnectManager.readWeightHistory(startTime, endTime)
-                        .also { freshHistory ->
-                            _weightHistory.value = freshHistory
-                            weightHistoryCacheRepository.saveWeightHistory(
-                                freshHistory.map { it.toCachedWeightHistoryRecord() }
-                            )
-                        }
-                }
-            } finally {
-                _isWeightHistoryLoading.value = false
+            refreshWeightHistoryRange(startTime = defaultWeightHistoryStartTime(), cachedHistory = emptyList())
+        }
+    }
+
+    private suspend fun refreshStepHistoryFromCache(
+        cachedHistory: List<CachedDailyStepHistory>,
+        lastFetchDate: LocalDate?
+    ) {
+        val startDate = (lastFetchDate ?: cachedHistory.maxOfOrNull { it.date })
+            ?.minusDays(INCREMENTAL_REFRESH_BUFFER_DAYS)
+            ?: defaultStepHistoryStartDate()
+        refreshStepHistoryRange(startDate = startDate, cachedHistory = cachedHistory)
+    }
+
+    private suspend fun refreshStepHistoryRange(
+        startDate: LocalDate,
+        cachedHistory: List<CachedDailyStepHistory>
+    ) {
+        _isStepHistoryLoading.value = true
+        try {
+            val canReadSteps = stepNormalizationUseCase.canReadStepHistory()
+            _canReadHealthConnectSteps.value = canReadSteps
+            if (canReadSteps) {
+                val today = LocalDate.now(ZoneId.systemDefault())
+                val freshHistory = stepNormalizationUseCase.getDailyStepHistory(
+                    startDate = startDate,
+                    endDate = today
+                )
+                val mergedHistory = mergeStepHistory(
+                    cachedHistory = cachedHistory,
+                    freshHistory = freshHistory,
+                    refreshStartDate = startDate
+                )
+                _dailyStepHistory.value = mergedHistory.map { it.toDailyStepHistory() }
+                stepHistoryCacheRepository.saveDailyStepHistory(
+                    rows = mergedHistory,
+                    fetchedThroughDate = today
+                )
             }
+        } finally {
+            _isStepHistoryLoading.value = false
+        }
+    }
+
+    private suspend fun refreshWeightHistoryFromCache(
+        cachedHistory: List<CachedWeightHistoryRecord>,
+        lastFetchTime: Instant?
+    ) {
+        val startTime = (lastFetchTime ?: cachedHistory.maxOfOrNull { it.time })
+            ?.minus(Duration.ofDays(INCREMENTAL_REFRESH_BUFFER_DAYS))
+            ?: defaultWeightHistoryStartTime()
+        refreshWeightHistoryRange(startTime = startTime, cachedHistory = cachedHistory)
+    }
+
+    private suspend fun refreshWeightHistoryRange(
+        startTime: Instant,
+        cachedHistory: List<CachedWeightHistoryRecord>
+    ) {
+        _isWeightHistoryLoading.value = true
+        try {
+            val canReadWeight = healthConnectManager.hasWeightHistoryPermission()
+            _canReadHealthConnectWeight.value = canReadWeight
+            if (canReadWeight) {
+                val endTime = nextLocalMidnight()
+                val freshHistory = healthConnectManager
+                    .readWeightHistory(startTime, endTime)
+                    .map { it.toCachedWeightHistoryRecord() }
+                val mergedHistory = mergeWeightHistory(
+                    cachedHistory = cachedHistory,
+                    freshHistory = freshHistory,
+                    refreshStartTime = startTime
+                )
+                _weightHistory.value = mergedHistory.map { it.toWeightHistoryRecord() }
+                weightHistoryCacheRepository.saveWeightHistory(
+                    records = mergedHistory,
+                    fetchedThroughTime = endTime
+                )
+            }
+        } finally {
+            _isWeightHistoryLoading.value = false
         }
     }
 
@@ -215,8 +265,45 @@ class StatsViewModel @Inject constructor(
             weightKg = weightKg
         )
 
+    private fun mergeStepHistory(
+        cachedHistory: List<CachedDailyStepHistory>,
+        freshHistory: List<DailyStepHistory>,
+        refreshStartDate: LocalDate
+    ): List<CachedDailyStepHistory> =
+        (cachedHistory.filter { it.date < refreshStartDate } +
+            freshHistory.map { it.toCachedDailyStepHistory() })
+            .distinctBy { it.date }
+            .sortedByDescending { it.date }
+
+    private fun mergeWeightHistory(
+        cachedHistory: List<CachedWeightHistoryRecord>,
+        freshHistory: List<CachedWeightHistoryRecord>,
+        refreshStartTime: Instant
+    ): List<CachedWeightHistoryRecord> =
+        (cachedHistory.filter { it.time < refreshStartTime } + freshHistory)
+            .distinctBy { it.time }
+            .sortedBy { it.time }
+
+    private fun defaultStepHistoryStartDate(): LocalDate {
+        val zone = ZoneId.systemDefault()
+        return LocalDate.now(zone).minusDays((DEFAULT_STEP_HISTORY_DAYS - 1).toLong())
+    }
+
+    private fun defaultWeightHistoryStartTime(): Instant =
+        LocalDate.now(ZoneId.systemDefault())
+            .minusDays((DEFAULT_WEIGHT_HISTORY_DAYS - 1).toLong())
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+
+    private fun nextLocalMidnight(): Instant {
+        val zone = ZoneId.systemDefault()
+        return LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant()
+    }
+
     private companion object {
         private const val DEFAULT_STEP_GOAL = 10_000
+        private const val DEFAULT_STEP_HISTORY_DAYS = 180
         private const val DEFAULT_WEIGHT_HISTORY_DAYS = 180
+        private const val INCREMENTAL_REFRESH_BUFFER_DAYS = 7L
     }
 }

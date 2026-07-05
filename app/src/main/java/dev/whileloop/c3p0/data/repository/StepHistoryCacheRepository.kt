@@ -15,6 +15,9 @@ class StepHistoryCacheRepository @Inject constructor(
     private val cacheFile: File
         get() = File(context.noBackupFilesDir, CACHE_FILE_NAME)
 
+    private val metadataFile: File
+        get() = File(context.noBackupFilesDir, METADATA_FILE_NAME)
+
     suspend fun readDailyStepHistory(): List<CachedDailyStepHistory> =
         runCatching {
             cacheFile
@@ -24,7 +27,17 @@ class StepHistoryCacheRepository @Inject constructor(
                 .orEmpty()
         }.getOrDefault(emptyList())
 
-    suspend fun saveDailyStepHistory(rows: List<CachedDailyStepHistory>) {
+    suspend fun readLastFetchDate(): LocalDate? =
+        runCatching {
+            metadataFile
+                .takeIf { it.exists() }
+                ?.readText()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { LocalDate.parse(it) }
+        }.getOrNull()
+
+    suspend fun saveDailyStepHistory(rows: List<CachedDailyStepHistory>, fetchedThroughDate: LocalDate) {
         runCatching {
             cacheFile.parentFile?.mkdirs()
             cacheFile.writeText(
@@ -38,6 +51,7 @@ class StepHistoryCacheRepository @Inject constructor(
                     ).joinToString(separator = FIELD_SEPARATOR)
                 }
             )
+            metadataFile.writeText(fetchedThroughDate.toString())
         }
     }
 
@@ -57,6 +71,7 @@ class StepHistoryCacheRepository @Inject constructor(
 
     private companion object {
         private const val CACHE_FILE_NAME = "daily_step_history_cache.tsv"
+        private const val METADATA_FILE_NAME = "daily_step_history_last_fetch.txt"
         private const val FIELD_SEPARATOR = "\t"
         private const val CACHE_FIELD_COUNT = 5
     }

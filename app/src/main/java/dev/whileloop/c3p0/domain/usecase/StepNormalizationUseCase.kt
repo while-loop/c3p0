@@ -55,8 +55,20 @@ class StepNormalizationUseCase @Inject constructor(
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val startDate = today.minusDays((days - 1).coerceAtLeast(0).toLong())
+        return getDailyStepHistory(startDate = startDate, endDate = today)
+    }
+
+    suspend fun getDailyStepHistory(
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): List<DailyStepHistory> {
+        val zone = ZoneId.systemDefault()
+        val normalizedEndDate = maxOf(startDate, endDate)
+        val days = (normalizedEndDate.toEpochDay() - startDate.toEpochDay() + 1)
+            .coerceAtLeast(1)
+            .toInt()
         val startTime = startDate.atStartOfDay(zone).toInstant()
-        val endTime = today.plusDays(1).atStartOfDay(zone).toInstant()
+        val endTime = normalizedEndDate.plusDays(1).atStartOfDay(zone).toInstant()
         val records = stepHistoryDataSource.readRawSteps(startTime, endTime)
         val sessions = sessionRepository.getSessionsBetween(startTime, endTime)
 

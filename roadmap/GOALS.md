@@ -45,6 +45,7 @@
 - [x] Support direct two-finger pinch adjustment of the weight chart's visible x-axis period.
 - [x] Surface the saved daily step goal in historical steps charts.
 - [x] Preserve chart context when changing weight trend time periods.
+- [x] Avoid repeated full-history Health Connect reads during normal chart startup refresh.
 
 ## Phase 5: Cloud Sync & Final Polish [COMPLETED]
 - [x] Integrate Google Drive via Android Auto Backup.
