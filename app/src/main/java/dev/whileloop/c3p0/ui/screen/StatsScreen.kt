@@ -228,7 +228,7 @@ fun StatsScreen(
                         onClick = { openChartSheet = StatsChartSheet.Steps },
                         modifier = Modifier
                             .weight(1f)
-                            .height(176.dp)
+                            .height(156.dp)
                     )
                     WeightHistoryPreviewCard(
                         records = weightHistory,
@@ -238,7 +238,7 @@ fun StatsScreen(
                         onClick = { openChartSheet = StatsChartSheet.Weight },
                         modifier = Modifier
                             .weight(1f)
-                            .height(176.dp)
+                            .height(156.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -276,7 +276,7 @@ private fun StepHistoryPreviewCard(
     Card(
         modifier = modifier.clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             ChartPreviewHeader(
                 title = "Steps",
                 isLoading = isLoading,
@@ -327,7 +327,7 @@ private fun WeightHistoryPreviewCard(
     Card(
         modifier = modifier.clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             ChartPreviewHeader(
                 title = "Weight",
                 isLoading = isLoading,
