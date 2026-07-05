@@ -307,7 +307,7 @@ private fun WeightHistoryPreviewCard(
         records.toWeightChartPoints(unitSystem, WeightChartGrouping.Day)
     }
     val previewPoints = remember(chartPoints) { chartPoints.takeLast(PREVIEW_DAY_COUNT) }
-    val latestWeight = previewPoints.lastOrNull()?.rawWeight
+    val latestWeight = previewPoints.lastOrNull()?.trailingAverage
 
     Card(
         modifier = modifier.clickable(onClick = onClick)
@@ -438,11 +438,10 @@ private fun WeightPreviewChart(
     points: List<WeightChartPoint>,
     modifier: Modifier = Modifier
 ) {
-    val rawColor = MaterialTheme.colorScheme.outline
     val trendColor = MaterialTheme.colorScheme.primary
     val pointFillColor = MaterialTheme.colorScheme.surface
-    val minValue = points.minOf { minOf(it.rawWeight, it.trailingAverage) }
-    val maxValue = points.maxOf { maxOf(it.rawWeight, it.trailingAverage) }
+    val minValue = points.minOf { it.trailingAverage }
+    val maxValue = points.maxOf { it.trailingAverage }
     val valueRange = (maxValue - minValue).coerceAtLeast(0.5)
     val startTime = points.first().time.toEpochMilli()
     val endTime = points.last().time.toEpochMilli()
@@ -461,13 +460,6 @@ private fun WeightPreviewChart(
             verticalPadding + ((maxValue - value).toFloat() / valueRange.toFloat()) * chartHeight
 
         points.zipWithNext().forEach { (a, b) ->
-            drawLine(
-                color = rawColor,
-                start = Offset(xFor(a.time.toEpochMilli()), yFor(a.rawWeight)),
-                end = Offset(xFor(b.time.toEpochMilli()), yFor(b.rawWeight)),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round
-            )
             drawLine(
                 color = trendColor,
                 start = Offset(xFor(a.time.toEpochMilli()), yFor(a.trailingAverage)),
