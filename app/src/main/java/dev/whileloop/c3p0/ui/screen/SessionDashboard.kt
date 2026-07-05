@@ -210,8 +210,8 @@ fun SessionDashboard(
             tiles = listOf(
                 StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
                 StatTile("Steps", sessionSteps.toString(), "steps"),
-                StatTile("Steps to Goal", normalizedStepsToGoal?.toString() ?: "---", "normalized"),
-                StatTile("Time to Goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
+                StatTile("Steps to goal", normalizedStepsToGoal?.toString() ?: "---", "nrm"),
+                StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
                 StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
                 StatTile("Calories", sessionCalories.toString(), "kcal"),
                 StatTile("Heart Rate", heartRateValue(currentHeartRate), "bpm"),
