@@ -15,7 +15,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Pause
@@ -176,178 +178,197 @@ fun SessionDashboard(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Session",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            
-            // Connection Status Indicators
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusIndicator("Pad", connectionState == ConnectionState.CONNECTED)
-                Spacer(modifier = Modifier.width(12.dp))
-                StatusIndicator("Watch", watchConnectionState == ConnectionState.CONNECTED)
-                Spacer(modifier = Modifier.width(12.dp))
-                StatusIndicator("HR", heartRateActive)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        AdaptiveStatGrid(
-            tiles = listOf(
-                StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
-                StatTile("Steps", sessionSteps.toString(), ""),
-                StatTile("Steps to goal", normalizedStepsToGoal?.toString() ?: "---", ""),
-                StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
-                StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
-                StatTile("Calories", sessionCalories.toString(), "kcal"),
-                StatTile("Heart Rate", heartRateValue(currentHeartRate), "bpm"),
-                StatTile("Avg HR", heartRateValue(averageHeartRate), "bpm")
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        HeartRateHistoryChart(
-            heartRates = heartRateHistory,
-            zone2MinHeartRate = zone2MinHeartRate,
-            zone2MaxHeartRate = zone2MaxHeartRate,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(150.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Speed Control
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            IconButton(
-                onClick = { viewModel.decrementSpeed() },
-                enabled = isPadReady
-            ) {
-                Text("-", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            }
-            
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp)
-            ) {
-                Text(
-                    text = String.format(Locale.US, "%.1f %s", displayedSpeed.value, displayedSpeed.unit),
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
-                    fontSize = 24.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            IconButton(
-                onClick = { viewModel.incrementSpeed() },
-                enabled = isPadReady
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Increase Speed")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Mode and Power
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 16.dp, bottom = SESSION_FOOTER_RESERVED_HEIGHT),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (isSessionActive) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        onClick = {
-                            if (isSessionPaused) {
-                                if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
-                                    neverAskAgain = false
-                                    pendingSessionAction = SessionAction.Resume
-                                    showInactiveDeviceSheet = true
-                                } else {
-                                    viewModel.resumeSession()
-                                }
-                            } else {
-                                viewModel.pauseSession()
-                            }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (isSessionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                            contentDescription = if (isSessionPaused) "Resume" else "Pause"
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isSessionPaused) "Resume" else "Pause")
-                    }
-                    if (isSessionPaused) {
-                        Spacer(modifier = Modifier.width(12.dp))
-                        LongPressStopButton(onStop = { viewModel.stopSession() })
-                    }
-                }
-            } else {
-                Button(
-                    onClick = {
-                        if (context.hasPermissions(permissions)) {
-                            if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
-                                neverAskAgain = false
-                                pendingSessionAction = SessionAction.Start
-                                showInactiveDeviceSheet = true
-                            } else {
-                                viewModel.startSession()
-                            }
-                        } else {
-                            showPermissionSheet = true
-                        }
-                    }
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Start")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Session",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+
+                // Connection Status Indicators
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusIndicator("Pad", connectionState == ConnectionState.CONNECTED)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    StatusIndicator("Watch", watchConnectionState == ConnectionState.CONNECTED)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    StatusIndicator("HR", heartRateActive)
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            AdaptiveStatGrid(
+                tiles = listOf(
+                    StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
+                    StatTile("Steps", sessionSteps.toString(), ""),
+                    StatTile("Steps to goal", normalizedStepsToGoal?.toString() ?: "---", ""),
+                    StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
+                    StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
+                    StatTile("Calories", sessionCalories.toString(), "kcal"),
+                    StatTile("Heart Rate", heartRateValue(currentHeartRate), "bpm"),
+                    StatTile("Avg HR", heartRateValue(averageHeartRate), "bpm")
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Spacer(modifier = Modifier.height(12.dp))
-            val sessionModeCount = 2
-            SingleChoiceSegmentedButtonRow {
-                SegmentedButton(
-                    selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
-                    onClick = { viewModel.setMode(TreadmillMode.MANUAL) },
-                    enabled = isPadReady,
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = sessionModeCount)
+
+            HeartRateHistoryChart(
+                heartRates = heartRateHistory,
+                zone2MinHeartRate = zone2MinHeartRate,
+                zone2MaxHeartRate = zone2MaxHeartRate,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Speed Control
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                IconButton(
+                    onClick = { viewModel.decrementSpeed() },
+                    enabled = isPadReady
                 ) {
-                    Text("Manual")
+                    Text("-", fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 }
-                SegmentedButton(
-                    selected = isAutoSpeedEnabled,
-                    onClick = { viewModel.enableZone2Mode() },
-                    enabled = isPadReady && heartRateActive,
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount)
+
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 ) {
-                    Text("Zone 2")
+                    Text(
+                        text = String.format(Locale.US, "%.1f %s", displayedSpeed.value, displayedSpeed.unit),
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
+                        fontSize = 24.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                IconButton(
+                    onClick = { viewModel.incrementSpeed() },
+                    enabled = isPadReady
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Increase Speed")
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp,
+            shadowElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isSessionActive) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                if (isSessionPaused) {
+                                    if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
+                                        neverAskAgain = false
+                                        pendingSessionAction = SessionAction.Resume
+                                        showInactiveDeviceSheet = true
+                                    } else {
+                                        viewModel.resumeSession()
+                                    }
+                                } else {
+                                    viewModel.pauseSession()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (isSessionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = if (isSessionPaused) "Resume" else "Pause"
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isSessionPaused) "Resume" else "Pause")
+                        }
+                        if (isSessionPaused) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            LongPressStopButton(onStop = { viewModel.stopSession() })
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            if (context.hasPermissions(permissions)) {
+                                if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
+                                    neverAskAgain = false
+                                    pendingSessionAction = SessionAction.Start
+                                    showInactiveDeviceSheet = true
+                                } else {
+                                    viewModel.startSession()
+                                }
+                            } else {
+                                showPermissionSheet = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Start")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Start")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                val sessionModeCount = 2
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = status.mode == TreadmillMode.MANUAL && !isAutoSpeedEnabled,
+                        onClick = { viewModel.setMode(TreadmillMode.MANUAL) },
+                        enabled = isPadReady,
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = sessionModeCount),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Manual")
+                    }
+                    SegmentedButton(
+                        selected = isAutoSpeedEnabled,
+                        onClick = { viewModel.enableZone2Mode() },
+                        enabled = isPadReady && heartRateActive,
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = sessionModeCount),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Zone 2")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -976,6 +997,7 @@ private const val CHART_MAX_HEART_RATE = 190
 private val CHART_PADDING = 8.dp
 private val STAT_GRID_GAP = 10.dp
 private val MIN_STAT_TILE_WIDTH = 100.dp
+private val SESSION_FOOTER_RESERVED_HEIGHT = 180.dp
 private const val STOP_HOLD_DURATION_MS = 3_000L
 private const val STOP_PROGRESS_FRAME_MS = 16L
 private const val STOP_HOLD_SCALE = 2f
