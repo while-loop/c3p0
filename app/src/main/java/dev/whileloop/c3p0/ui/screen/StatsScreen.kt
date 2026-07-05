@@ -10,8 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +58,7 @@ fun StatsScreen(
     val unitSystem by viewModel.unitSystem.collectAsState()
     var showStepPermissionSheet by remember { mutableStateOf(false) }
     var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
+    var isStepHistoryExpanded by rememberSaveable { mutableStateOf(true) }
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -102,12 +107,18 @@ fun StatsScreen(
                     canReadSteps = canReadHealthConnectSteps,
                     isLoading = isStepHistoryLoading,
                     selectedPeriod = stepChartPeriod,
+                    isExpanded = isStepHistoryExpanded,
                     onPeriodSelected = { stepChartPeriod = it },
+                    onExpandedChange = { isStepHistoryExpanded = it },
                     onEnable = { showStepPermissionSheet = true },
                     onRefresh = { viewModel.refreshStepHistory() },
-                    modifier = Modifier
-                        .fillParentMaxHeight(0.42f)
-                        .heightIn(min = 320.dp)
+                    modifier = if (isStepHistoryExpanded) {
+                        Modifier
+                            .fillParentMaxHeight(0.42f)
+                            .heightIn(min = 320.dp)
+                    } else {
+                        Modifier.fillMaxWidth()
+                    }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -135,7 +146,9 @@ private fun HealthConnectStepHistoryCard(
     canReadSteps: Boolean,
     isLoading: Boolean,
     selectedPeriod: StepChartPeriod,
+    isExpanded: Boolean,
     onPeriodSelected: (StepChartPeriod) -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
@@ -145,7 +158,7 @@ private fun HealthConnectStepHistoryCard(
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .then(if (isExpanded) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
@@ -153,7 +166,27 @@ private fun HealthConnectStepHistoryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onExpandedChange(!isExpanded) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) {
+                            Icons.Default.KeyboardArrowUp
+                        } else {
+                            Icons.Default.KeyboardArrowDown
+                        },
+                        contentDescription = if (isExpanded) {
+                            "Collapse Health Connect steps"
+                        } else {
+                            "Expand Health Connect steps"
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
+                }
                 TextButton(
                     onClick = if (canReadSteps) onRefresh else onEnable,
                     enabled = !isLoading,
@@ -163,37 +196,39 @@ private fun HealthConnectStepHistoryCard(
                     Text(if (canReadSteps) "Refresh" else "Enable")
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                StepChartPeriod.entries.forEachIndexed { index, period ->
-                    SegmentedButton(
-                        selected = selectedPeriod == period,
-                        onClick = { onPeriodSelected(period) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
-                            count = StepChartPeriod.entries.size
-                        )
-                    ) {
-                        Text(period.label)
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    StepChartPeriod.entries.forEachIndexed { index, period ->
+                        SegmentedButton(
+                            selected = selectedPeriod == period,
+                            onClick = { onPeriodSelected(period) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = StepChartPeriod.entries.size
+                            )
+                        ) {
+                            Text(period.label)
+                        }
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            if (canReadSteps && rows.isNotEmpty()) {
-                StepChartLegend()
-                Spacer(modifier = Modifier.height(6.dp))
-            }
-            when {
-                isLoading -> Text("Loading step history...")
-                !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
-                rows.isEmpty() -> Text("No Health Connect step data found.")
-                chartRows.isEmpty() -> Text("No grouped step data found.")
-                else -> HealthConnectStepChart(
-                    rows = chartRows,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (canReadSteps && rows.isNotEmpty()) {
+                    StepChartLegend()
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+                when {
+                    isLoading -> Text("Loading step history...")
+                    !canReadSteps -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
+                    rows.isEmpty() -> Text("No Health Connect step data found.")
+                    chartRows.isEmpty() -> Text("No grouped step data found.")
+                    else -> HealthConnectStepChart(
+                        rows = chartRows,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                }
             }
         }
     }
