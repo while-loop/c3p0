@@ -205,9 +205,7 @@ class BleConnection(
         }
         pendingCharacteristicWrite = operation
         val started = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                bluetoothGatt?.writeCharacteristic(char, data, writeType) == BluetoothStatusCodes.SUCCESS
-            } else {
+            runOnMainThread {
                 char.writeType = writeType
                 char.value = data
                 bluetoothGatt?.writeCharacteristic(char) ?: false
@@ -384,12 +382,7 @@ class BleConnection(
         val operation = PendingGattOperation(descriptor.uuid)
         pendingDescriptorWrite = operation
         val started = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                bluetoothGatt?.writeDescriptor(
-                    descriptor,
-                    descriptorValue
-                ) == BluetoothStatusCodes.SUCCESS
-            } else {
+            runOnMainThread {
                 descriptor.value = descriptorValue
                 bluetoothGatt?.writeDescriptor(descriptor) ?: false
             }
@@ -566,6 +559,18 @@ class BleConnection(
         pendingCharacteristicWrite = null
         pendingDescriptorWrite?.result?.complete(status)
         pendingDescriptorWrite = null
+    }
+
+    private suspend fun <T> runOnMainThread(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return block()
+        }
+
+        val result = CompletableDeferred<Result<T>>()
+        mainHandler.post {
+            result.complete(runCatching(block))
+        }
+        return result.await().getOrThrow()
     }
 
     @SuppressLint("DiscouragedPrivateApi")
