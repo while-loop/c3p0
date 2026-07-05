@@ -731,16 +731,30 @@ private data class WeightChartPoint(
     val trailingAverage: Double
 )
 
+private data class DailyWeightPoint(
+    val date: LocalDate,
+    val weightKg: Double
+)
+
 private fun List<WeightHistoryRecord>.toWeightChartPoints(unitSystem: UnitSystem): List<WeightChartPoint> {
-    val chronological = sortedBy { it.time }
-    return chronological.mapIndexed { index, record ->
-        val windowStart = record.time.minus(Duration.ofDays(6))
-        val currentWindow = chronological
+    val zone = ZoneId.systemDefault()
+    val dailyWeights = groupBy { it.time.atZone(zone).toLocalDate() }
+        .toSortedMap()
+        .map { (date, records) ->
+            DailyWeightPoint(
+                date = date,
+                weightKg = records.map { it.weightKg }.average()
+            )
+        }
+
+    return dailyWeights.mapIndexed { index, dailyWeight ->
+        val windowStart = dailyWeight.date.minusDays(6)
+        val currentWindow = dailyWeights
             .take(index + 1)
-            .filter { !it.time.isBefore(windowStart) && !it.time.isAfter(record.time) }
+            .filter { !it.date.isBefore(windowStart) && !it.date.isAfter(dailyWeight.date) }
         WeightChartPoint(
-            time = record.time,
-            rawWeight = displayWeight(record.weightKg, unitSystem),
+            time = dailyWeight.date.atStartOfDay(zone).toInstant(),
+            rawWeight = displayWeight(dailyWeight.weightKg, unitSystem),
             trailingAverage = currentWindow
                 .map { displayWeight(it.weightKg, unitSystem) }
                 .average()
