@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -79,6 +81,7 @@ fun StatsScreen(
     val metrics by viewModel.selectedSessionMetrics.collectAsState()
     val normalizedSteps by viewModel.normalizedSteps.collectAsState()
     val dailyStepHistory by viewModel.dailyStepHistory.collectAsState()
+    val stepGoal by viewModel.stepGoal.collectAsState()
     val canReadHealthConnectSteps by viewModel.canReadHealthConnectSteps.collectAsState()
     val isStepHistoryLoading by viewModel.isStepHistoryLoading.collectAsState()
     val weightHistory by viewModel.weightHistory.collectAsState()
@@ -158,6 +161,7 @@ fun StatsScreen(
                 when (sheet) {
                     StatsChartSheet.Steps -> HealthConnectStepHistoryCard(
                         rows = dailyStepHistory,
+                        stepGoal = stepGoal,
                         canReadSteps = canReadHealthConnectSteps,
                         isLoading = isStepHistoryLoading,
                         selectedPeriod = stepChartPeriod,
@@ -218,6 +222,7 @@ fun StatsScreen(
                 ) {
                     StepHistoryPreviewCard(
                         rows = dailyStepHistory,
+                        stepGoal = stepGoal,
                         canReadSteps = canReadHealthConnectSteps,
                         isLoading = isStepHistoryLoading,
                         onClick = { openChartSheet = StatsChartSheet.Steps },
@@ -259,6 +264,7 @@ fun StatsScreen(
 @Composable
 private fun StepHistoryPreviewCard(
     rows: List<DailyStepHistory>,
+    stepGoal: Int,
     canReadSteps: Boolean,
     isLoading: Boolean,
     onClick: () -> Unit,
@@ -288,6 +294,7 @@ private fun StepHistoryPreviewCard(
                 previewRows.isEmpty() -> PreviewLoadingText("No step data found")
                 else -> StepPreviewChart(
                     rows = previewRows,
+                    stepGoal = stepGoal,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
@@ -408,13 +415,20 @@ private fun ChartPreviewValueRow(value: String, unit: String) {
 @Composable
 private fun StepPreviewChart(
     rows: List<StepChartRow>,
+    stepGoal: Int,
     modifier: Modifier = Modifier
 ) {
     val previewRows = rows.takeLast(PREVIEW_DAY_COUNT)
     val emptyLeadingSlots = PREVIEW_DAY_COUNT - previewRows.size
-    val maxSteps = previewRows.maxOfOrNull { it.rawSteps }?.coerceAtLeast(1L) ?: 1L
+    val maxSteps = maxOf(
+        previewRows.maxOfOrNull { it.rawSteps } ?: 0L,
+        stepGoal.toLong()
+    ).coerceAtLeast(1L)
     val rawBarColor = MaterialTheme.colorScheme.primaryContainer
     val normalizedBarColor = MaterialTheme.colorScheme.primary
+    val goalRawBarColor = goalRawStepColor()
+    val goalNormalizedBarColor = goalNormalizedStepColor()
+    val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
 
     Canvas(modifier = modifier) {
         val slotWidth = size.width / PREVIEW_DAY_COUNT
@@ -425,19 +439,21 @@ private fun StepPreviewChart(
             val rawHeight = size.height * barFraction(row.rawSteps, maxSteps)
             val normalizedHeight = size.height *
                 barFraction(row.normalizedSteps, maxSteps).coerceAtMost(barFraction(row.rawSteps, maxSteps))
+            val goalMet = row.normalizedSteps >= stepGoal
             drawRoundRect(
-                color = rawBarColor,
+                color = if (goalMet) goalRawBarColor else rawBarColor,
                 topLeft = Offset(left, size.height - rawHeight),
                 size = androidx.compose.ui.geometry.Size(barWidth, rawHeight),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
             )
             drawRoundRect(
-                color = normalizedBarColor,
+                color = if (goalMet) goalNormalizedBarColor else normalizedBarColor,
                 topLeft = Offset(left, size.height - normalizedHeight),
                 size = androidx.compose.ui.geometry.Size(barWidth, normalizedHeight),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
             )
         }
+        drawStepGoalLine(stepGoal, maxSteps, goalLineColor)
     }
 }
 
@@ -500,6 +516,7 @@ private fun WeightPreviewChart(
 @Composable
 private fun HealthConnectStepHistoryCard(
     rows: List<DailyStepHistory>,
+    stepGoal: Int,
     canReadSteps: Boolean,
     isLoading: Boolean,
     selectedPeriod: StepChartPeriod,
@@ -585,6 +602,7 @@ private fun HealthConnectStepHistoryCard(
                     chartRows.isEmpty() -> Text("No grouped step data found.")
                     else -> HealthConnectStepChart(
                         rows = chartRows,
+                        stepGoal = stepGoal,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -1089,9 +1107,13 @@ private fun WeightChartLegend() {
 @Composable
 private fun HealthConnectStepChart(
     rows: List<StepChartRow>,
+    stepGoal: Int,
     modifier: Modifier = Modifier
 ) {
-    val maxSteps = rows.maxOfOrNull { it.rawSteps }?.coerceAtLeast(1L) ?: 1L
+    val maxSteps = maxOf(
+        rows.maxOfOrNull { it.rawSteps } ?: 0L,
+        stepGoal.toLong()
+    ).coerceAtLeast(1L)
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = (rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0)
     )
@@ -1100,6 +1122,9 @@ private fun HealthConnectStepChart(
     }
     val rawBarColor = MaterialTheme.colorScheme.primaryContainer
     val normalizedBarColor = MaterialTheme.colorScheme.primary
+    val goalRawBarColor = goalRawStepColor()
+    val goalNormalizedBarColor = goalNormalizedStepColor()
+    val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
     LazyRow(
@@ -1111,6 +1136,7 @@ private fun HealthConnectStepChart(
         items(rows) { row ->
             val rawFraction = barFraction(row.rawSteps, maxSteps)
             val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
+            val goalMet = row.normalizedSteps >= stepGoal
             Column(
                 modifier = Modifier
                     .width(42.dp)
@@ -1130,7 +1156,7 @@ private fun HealthConnectStepChart(
                             .fillMaxWidth()
                             .fillMaxHeight(rawFraction)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(rawBarColor)
+                            .background(if (goalMet) goalRawBarColor else rawBarColor)
                             .align(Alignment.BottomCenter)
                     )
                     Box(
@@ -1138,9 +1164,12 @@ private fun HealthConnectStepChart(
                             .fillMaxWidth()
                             .fillMaxHeight(normalizedFraction)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(normalizedBarColor)
+                            .background(if (goalMet) goalNormalizedBarColor else normalizedBarColor)
                             .align(Alignment.BottomCenter)
                     )
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawStepGoalLine(stepGoal, maxSteps, goalLineColor)
+                    }
                     StepBarValueLabel(
                         text = compactSteps(row.rawSteps),
                         color = MaterialTheme.colorScheme.onSurface,
@@ -1193,6 +1222,39 @@ private fun StepBarValueLabel(
         maxLines = 1,
         textAlign = TextAlign.Center,
         modifier = labelModifier
+    )
+}
+
+@Composable
+private fun goalRawStepColor(): Color =
+    if (isSystemInDarkTheme()) {
+        Color(0xFF275C36)
+    } else {
+        Color(0xFFC8E6C9)
+    }
+
+@Composable
+private fun goalNormalizedStepColor(): Color =
+    if (isSystemInDarkTheme()) {
+        Color(0xFF81C784)
+    } else {
+        Color(0xFF2E7D32)
+    }
+
+private fun DrawScope.drawStepGoalLine(
+    stepGoal: Int,
+    maxSteps: Long,
+    color: Color
+) {
+    if (stepGoal <= 0 || maxSteps <= 0L) return
+    val goalFraction = (stepGoal.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
+    val y = size.height * (1f - goalFraction)
+    drawLine(
+        color = color,
+        start = Offset(0f, y),
+        end = Offset(size.width, y),
+        strokeWidth = 1.dp.toPx(),
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
     )
 }
 

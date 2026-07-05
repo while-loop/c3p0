@@ -52,6 +52,12 @@ class StatsViewModel @Inject constructor(
         UnitSystem.Imperial
     )
 
+    val stepGoal = settingsRepository.stepGoal.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        DEFAULT_STEP_GOAL
+    )
+
     private val _selectedSession = MutableStateFlow<SessionEntity?>(null)
     val selectedSession = _selectedSession.asStateFlow()
 
@@ -210,6 +216,7 @@ class StatsViewModel @Inject constructor(
         )
 
     private companion object {
+        private const val DEFAULT_STEP_GOAL = 10_000
         private const val DEFAULT_WEIGHT_HISTORY_DAYS = 180
     }
 }
