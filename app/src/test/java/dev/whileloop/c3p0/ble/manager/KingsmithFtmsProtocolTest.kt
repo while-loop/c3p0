@@ -17,6 +17,24 @@ class KingsmithFtmsProtocolTest {
     }
 
     @Test
+    fun stopAndPauseUseDistinctFtmsParams() {
+        assertArrayEquals(byteArrayOf(0x08, 0x01), KingsmithFtmsProtocol.STOP_COMMAND)
+        assertArrayEquals(byteArrayOf(0x08, 0x02), KingsmithFtmsProtocol.PAUSE_COMMAND)
+    }
+
+    @Test
+    fun noLoadStopUsesAutoStopSupplementProperty() {
+        assertArrayEquals(
+            byteArrayOf(0x01, 0x00, 0x04, 0x00, 0x21, 0x02, 0x1e, 0x41),
+            KingsmithFtmsProtocol.noLoadStopCommands(enabled = true, timeoutSeconds = 30).single()
+        )
+        assertArrayEquals(
+            byteArrayOf(0x01, 0x00, 0x04, 0x00, 0x21, 0x02, 0x00, 0x23),
+            KingsmithFtmsProtocol.noLoadStopCommands(enabled = false, timeoutSeconds = 30).single()
+        )
+    }
+
+    @Test
     fun treadmillDataParsesKingSmithStepExtension() {
         val flags = 0x2404
         val data = byteArrayOf(

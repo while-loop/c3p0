@@ -28,6 +28,11 @@ internal object KingsmithFtmsProtocol {
     val PAUSE_COMMAND = byteArrayOf(0x08, 0x02)
     val STOP_COMMAND = byteArrayOf(0x08, 0x01)
 
+    private const val SUPPLEMENT_HEADER_0 = 0x01
+    private const val SUPPLEMENT_HEADER_1 = 0x00
+    private const val SUPPLEMENT_SET_PROPERTY = 0x21
+    private const val SUPPLEMENT_PROPERTY_AUTO_STOP = 0x02
+
     fun setTargetSpeedCommand(speedKmh: Float): ByteArray {
         val raw = (speedKmh * 100).toInt().coerceIn(0, 0xFFFF)
         return byteArrayOf(
@@ -35,6 +40,35 @@ internal object KingsmithFtmsProtocol {
             (raw and 0xFF).toByte(),
             ((raw shr 8) and 0xFF).toByte()
         )
+    }
+
+    fun noLoadStopCommands(enabled: Boolean, timeoutSeconds: Int): List<ByteArray> {
+        val value = if (enabled) timeoutSeconds.coerceIn(0, 255) else 0
+        return listOf(
+            supplementPropertyCommand(
+                propertyId = SUPPLEMENT_PROPERTY_AUTO_STOP,
+                value = value
+            )
+        )
+    }
+
+    private fun supplementPropertyCommand(propertyId: Int, value: Int): ByteArray =
+        wrapSupplementCommand(
+            byteArrayOf(
+                SUPPLEMENT_SET_PROPERTY.toByte(),
+                propertyId.toByte(),
+                value.toByte()
+            )
+        )
+
+    private fun wrapSupplementCommand(body: ByteArray): ByteArray {
+        val checksum = body.fold(0) { sum, byte -> sum + (byte.toInt() and 0xFF) } and 0xFF
+        return byteArrayOf(
+            SUPPLEMENT_HEADER_0.toByte(),
+            SUPPLEMENT_HEADER_1.toByte(),
+            (body.size + 1).toByte(),
+            0x00
+        ) + body + checksum.toByte()
     }
 
     fun parseTreadmillData(data: ByteArray, current: TreadmillStatus): TreadmillStatus? {

@@ -218,7 +218,7 @@ class WalkingPadManagerImpl @Inject constructor(
 
     override suspend fun stop(): Boolean {
         return if (ksFtmsProtocolReady.value) {
-            pauseKsFtmsBelt()
+            stopKsFtmsBelt()
         } else if (ksEncryptedProtocolReady.value) {
             stopKsEncryptedBelt()
         } else {
@@ -244,6 +244,18 @@ class WalkingPadManagerImpl @Inject constructor(
         )
         if (sent) {
             _status.value = status.value.copy(state = TreadmillState.STANDBY, speed = 0f)
+        }
+        return sent
+    }
+
+    private suspend fun stopKsFtmsBelt(): Boolean {
+        val sent = sendKsFtmsControlCommand(
+            label = "stop belt",
+            command = KingsmithFtmsProtocol.STOP_COMMAND,
+            isApplied = { status -> status.state == TreadmillState.STOPPED }
+        )
+        if (sent) {
+            _status.value = status.value.copy(state = TreadmillState.STOPPED, speed = 0f)
         }
         return sent
     }
@@ -426,10 +438,14 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun setNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean {
+        if (ksFtmsProtocolReady.value) {
+            return setKsFtmsNoLoadStop(enabled, timeoutSeconds)
+        }
+
         if (!ksEncryptedProtocolReady.value) {
             errorReporter.report(
                 "WalkingPad Bluetooth",
-                "No-load stop requires encrypted KS WalkingPad protocol",
+                "No-load stop requires a KS WalkingPad protocol that exposes settings writes",
                 "enabled=$enabled timeoutSeconds=$timeoutSeconds connection=${connectionState.value} services=${connection?.serviceSummary() ?: "none"}"
             )
             return false
@@ -451,6 +467,28 @@ class WalkingPadManagerImpl @Inject constructor(
                     "WalkingPad Bluetooth",
                     "WalkingPad did not accept no-load stop command",
                     "command=$command enabled=$enabled timeoutSeconds=$timeout"
+                )
+                return false
+            }
+        }
+
+        _status.value = status.value.copy(
+            noLoadStopEnabled = enabled,
+            noLoadStopTimeoutSeconds = timeout
+        )
+        return true
+    }
+
+    private suspend fun setKsFtmsNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean {
+        val timeout = timeoutSeconds.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
+            ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
+        val commands = KingsmithFtmsProtocol.noLoadStopCommands(enabled, timeout)
+        for (command in commands) {
+            if (!sendKsFtmsSupplementCommand(command)) {
+                errorReporter.report(
+                    "WalkingPad Bluetooth",
+                    "WalkingPad did not accept KS FTMS no-load stop command",
+                    "command=${command.toHexString()} enabled=$enabled timeoutSeconds=$timeout write~=${activeKsFtmsSupplementWriteCharSubstring ?: "none"}"
                 )
                 return false
             }
@@ -633,6 +671,53 @@ class WalkingPadManagerImpl @Inject constructor(
             data = KingsmithFtmsProtocol.PROPERTY_LIST_PREAMBLE,
             preferWithoutResponse = true
         ) ?: false
+    }
+
+    private suspend fun sendKsFtmsSupplementCommand(
+        cmd: ByteArray,
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS
+    ): Boolean = commandMutex.withLock {
+        if (!awaitProtocolReady(WalkingPadProtocol.KingsmithFtms)) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "WalkingPad protocol is not ready",
+                "protocol=${WalkingPadProtocol.KingsmithFtms} command=${cmd.toHexString()} connection=${connectionState.value} services=${connection?.serviceSummary() ?: "none"}"
+            )
+            return@withLock false
+        }
+
+        val writeChar = activeKsFtmsSupplementWriteCharSubstring
+        if (writeChar == null) {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "KS FTMS supplement write characteristic is not available",
+                "command=${cmd.toHexString()} services=${connection?.serviceSummary() ?: "none"}"
+            )
+            return@withLock false
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        val elapsedSinceLastCommand = now - lastCommandElapsedMillis
+        if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < minCommandSpacingMs) {
+            delay(minCommandSpacingMs - elapsedSinceLastCommand)
+        }
+
+        val sent = connection?.writeCharacteristicByUuidSubstring(
+            charUuidSubstring = writeChar,
+            data = cmd,
+            preferWithoutResponse = true
+        ) ?: false
+
+        if (sent) {
+            lastCommandElapsedMillis = SystemClock.elapsedRealtime()
+        } else {
+            errorReporter.report(
+                "WalkingPad Bluetooth",
+                "KS FTMS supplement write was not accepted by Android Bluetooth",
+                "command=${cmd.toHexString()} write~=$writeChar services=${connection?.serviceSummary() ?: "none"}"
+            )
+        }
+        sent
     }
 
     private suspend fun sendKsEncryptedCommand(
