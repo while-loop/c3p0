@@ -253,22 +253,22 @@ private fun HealthConnectStepChart(
     LazyRow(
         state = listState,
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 2.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+        contentPadding = PaddingValues(horizontal = 0.dp)
     ) {
         items(rows) { row ->
             val rawFraction = barFraction(row.rawSteps, maxSteps)
             val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
             Column(
                 modifier = Modifier
-                    .width(50.dp)
+                    .width(46.dp)
                     .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .width(36.dp)
+                        .width(32.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(trackColor),
                     contentAlignment = Alignment.BottomCenter
@@ -291,8 +291,9 @@ private fun HealthConnectStepChart(
                     )
                     StepBarValueLabel(
                         text = compactSteps(row.rawSteps),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.align(Alignment.TopCenter)
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
                     )
                     StepBarValueLabel(
                         text = compactSteps(row.normalizedSteps),
@@ -315,8 +316,23 @@ private fun HealthConnectStepChart(
 private fun StepBarValueLabel(
     text: String,
     color: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    backgroundColor: androidx.compose.ui.graphics.Color? = null
 ) {
+    val labelModifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 1.dp, vertical = 2.dp)
+        .then(
+            if (backgroundColor != null) {
+                Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(backgroundColor)
+                    .padding(horizontal = 1.dp)
+            } else {
+                Modifier
+            }
+        )
+
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
@@ -324,9 +340,7 @@ private fun StepBarValueLabel(
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
         textAlign = TextAlign.Center,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 2.dp)
+        modifier = labelModifier
     )
 }
 
