@@ -233,7 +233,7 @@ class SessionManager @Inject constructor(
             sessionRepository.endSession(id, sessionStats)
             
             // Write to Health Connect
-            healthConnectManager.writeSession(start, end, totalSteps, distanceMeters)
+            healthConnectManager.writeSession(start, end, totalSteps, distanceMeters, reportedCalories)
             settingsRepository.requestBackupIfEnabled()
 
             Timber.d("Session stopped and saved")

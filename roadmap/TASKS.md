@@ -69,6 +69,7 @@
 - [x] **Full Chart Refresh Upserts**: Keep existing chart cache rows during manual full refresh and overwrite only matching Health Connect dates or timestamps.
 - [x] **Zone 2 HR Chart Guides**: Draw session chart Zone 2 min/max guides as dashed lines so they read as thresholds instead of data.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
+- [x] **Health Connect Calorie Export**: Add total-calories write permission and export WalkingPad-reported kcal with completed Health Connect walking sessions.
 - [x] **Health Connect Permissions**: Scoped runtime checks by operation, refreshed permission state on profile resume, and opened Health Connect settings when the user wants to revoke access.
 - [x] **Cloud Sync**: Configured Android Auto Backup rules for Google Drive, including Room DB files and DataStore preferences.
 - [x] **Backup Requests**: Persisted the backup toggle and request backups on app cold start, backup toggle enable, persisted settings changes, active session progress, and session completion.
