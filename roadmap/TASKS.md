@@ -60,6 +60,7 @@
 - [x] **Steps Chart Bar Layering**: Match preview and full steps charts by drawing raw and normalized bars at the same width with normalized layered on top.
 - [x] **Steps Goal Chart State**: Draw the daily step-goal threshold on preview and full steps charts, and tint goal-met normalized days green.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
+- [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
 - [x] **Zone 2 HR Chart Guides**: Draw session chart Zone 2 min/max guides as dashed lines so they read as thresholds instead of data.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.

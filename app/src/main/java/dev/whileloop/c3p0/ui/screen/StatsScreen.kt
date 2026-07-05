@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -236,7 +237,7 @@ fun StatsScreen(
                         onClick = { openChartSheet = StatsChartSheet.Steps },
                         modifier = Modifier
                             .weight(1f)
-                            .height(156.dp)
+                            .height(164.dp)
                     )
                     WeightHistoryPreviewCard(
                         records = weightHistory,
@@ -246,7 +247,7 @@ fun StatsScreen(
                         onClick = { openChartSheet = StatsChartSheet.Weight },
                         modifier = Modifier
                             .weight(1f)
-                            .height(156.dp)
+                            .height(164.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -284,7 +285,7 @@ private fun StepHistoryPreviewCard(
     Card(
         modifier = modifier.clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             ChartPreviewHeader(
                 title = "Steps",
                 isLoading = isLoading,
@@ -335,7 +336,7 @@ private fun WeightHistoryPreviewCard(
     Card(
         modifier = modifier.clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             ChartPreviewHeader(
                 title = "Weight",
                 isLoading = isLoading,
@@ -409,11 +410,17 @@ private fun PreviewLoadingText(text: String) {
 @Composable
 private fun ChartPreviewValueRow(value: String, unit: String) {
     Row(verticalAlignment = Alignment.Bottom) {
-        Text(value, style = MaterialTheme.typography.titleLarge)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 24.sp,
+                lineHeight = 28.sp
+            )
+        )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             unit,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 2.dp)
         )
