@@ -82,6 +82,7 @@
 - [x] **Launcher Icon Restore**: Restored the robot launcher icon through the validated manifest/adaptive/fallback resource paths after the red icon probe confirmed updates apply.
 - [x] **Launcher Component Refresh**: Moved the launcher intent filter to a new activity-alias component so Pixel Launcher cannot reuse the cached MainActivity icon entry.
 - [x] **Launcher Foreground Resource Fix**: Renamed adaptive icon foreground/background resources away from `ic_launcher_*` so density PNGs cannot override the XML foreground on Pixel devices.
+- [x] **Launcher Icon Zoom**: Increased the robot foreground size in both adaptive XML and density PNG fallback resources after the foreground resolution issue was fixed.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
