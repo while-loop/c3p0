@@ -44,10 +44,7 @@ class StepHistoryCacheRepository @Inject constructor(
                 rows.joinToString(separator = "\n") { row ->
                     listOf(
                         row.date,
-                        row.rawSteps,
-                        row.normalizedSteps,
-                        row.c3p0Steps,
-                        row.excludedOtherSessionSteps
+                        row.steps
                     ).joinToString(separator = FIELD_SEPARATOR)
                 }
             )
@@ -57,14 +54,11 @@ class StepHistoryCacheRepository @Inject constructor(
 
     private fun String.toCachedDailyStepHistoryOrNull(): CachedDailyStepHistory? {
         val fields = split(FIELD_SEPARATOR)
-        if (fields.size != CACHE_FIELD_COUNT) return null
+        if (fields.size != CACHE_FIELD_COUNT && fields.size != LEGACY_CACHE_FIELD_COUNT) return null
         return runCatching {
             CachedDailyStepHistory(
                 date = LocalDate.parse(fields[0]),
-                rawSteps = fields[1].toLong(),
-                normalizedSteps = fields[2].toLong(),
-                c3p0Steps = fields[3].toLong(),
-                excludedOtherSessionSteps = fields[4].toLong()
+                steps = fields[1].toLong()
             )
         }.getOrNull()
     }
@@ -73,6 +67,7 @@ class StepHistoryCacheRepository @Inject constructor(
         private const val CACHE_FILE_NAME = "daily_step_history_cache.tsv"
         private const val METADATA_FILE_NAME = "daily_step_history_last_fetch.txt"
         private const val FIELD_SEPARATOR = "\t"
-        private const val CACHE_FIELD_COUNT = 5
+        private const val CACHE_FIELD_COUNT = 2
+        private const val LEGACY_CACHE_FIELD_COUNT = 5
     }
 }

@@ -18,7 +18,6 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Length
 import androidx.health.connect.client.units.Velocity
-import dev.whileloop.c3p0.domain.usecase.StepCountRecord
 import dev.whileloop.c3p0.domain.usecase.StepHistoryDataSource
 import timber.log.Timber
 import java.time.Instant
@@ -52,39 +51,6 @@ class HealthConnectManager @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Error checking Health Connect permissions")
             false
-        }
-    }
-
-    override suspend fun readRawSteps(startTime: Instant, endTime: Instant): List<StepCountRecord> {
-        if (!hasPermissions(STEP_HISTORY_PERMISSIONS)) return emptyList()
-
-        return try {
-            val records = mutableListOf<StepsRecord>()
-            var pageToken: String? = null
-            do {
-                val response = healthConnectClient.readRecords(
-                    ReadRecordsRequest(
-                        recordType = StepsRecord::class,
-                        timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
-                        pageSize = STEP_READ_PAGE_SIZE,
-                        pageToken = pageToken
-                    )
-                )
-                records += response.records
-                pageToken = response.pageToken
-            } while (!pageToken.isNullOrBlank())
-
-            records.map { record ->
-                StepCountRecord(
-                    startTime = record.startTime,
-                    endTime = record.endTime,
-                    count = record.count,
-                    packageName = record.metadata.dataOrigin.packageName
-                )
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error reading steps from Health Connect")
-            emptyList()
         }
     }
 
@@ -227,7 +193,6 @@ class HealthConnectManager @Inject constructor(
     }
 
     companion object {
-        private const val STEP_READ_PAGE_SIZE = 1000
         private const val WEIGHT_READ_PAGE_SIZE = 1000
         val STEP_HISTORY_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(StepsRecord::class),

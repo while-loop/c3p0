@@ -42,13 +42,13 @@
 - [x] **Live Session Deltas**: Session-screen distance and steps use current-session deltas instead of lifetime WalkingPad counters.
 - [x] **Pad-Reported Elapsed Time**: Session elapsed time uses the WalkingPad running-time counter delta instead of an app-local timer, with fallback calorie estimates also preferring the pad-reported active duration.
 - [x] **Session Metrics UI**: Added elapsed time, calories, current HR, session average HR, and heart-rate history chart with y-axis labels and zone-colored line segments.
-- [x] **Goal Progress Tile**: Added normalized steps remaining to daily goal on the session screen.
+- [x] **Goal Progress Tile**: Added Health Connect steps remaining to daily goal on the session screen.
 - [x] **Step Goal ETA Tile**: Added a session tile that estimates time to daily step goal from current-session steps per minute after enough step data exists.
 - [x] **Recent Step Goal ETA**: Estimate time to daily goal from the last 3 minutes of session steps instead of full-session average pace.
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
-- [x] **Stats Details**: Added selected-session history details and normalized Health Connect step breakdown.
-- [x] **Historical Step History**: Added Health Connect daily step history with aggregate raw totals, C3P0 steps, excluded other-source session steps, and normalized totals.
-- [x] **Step Normalization Tests**: Added JVM coverage for selected-session normalization, day-boundary prorating, and multiple C3P0 sessions on the same day.
+- [x] **Stats Details**: Added selected-session history details.
+- [x] **Historical Step History**: Added Health Connect daily step history using aggregate deduplicated totals.
+- [x] **Step History Tests**: Added JVM coverage for aggregate Health Connect step reads and default history range requests.
 - [x] **Permissions UX**: Added bottom sheets to explain permission requests before invoking system permission prompts.
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
@@ -58,8 +58,8 @@
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
 - [x] **Health Connect Weight Trend**: Read Health Connect weight history for a raw weight and 7-day trailing average chart while keeping calories sourced from the WalkingPad counter.
 - [x] **Weight Chart Pinch Zoom**: Handle two-finger pinch gestures ahead of horizontal scrolling so the visible x-axis period can be adjusted directly on the chart.
-- [x] **Steps Chart Bar Layering**: Match preview and full steps charts by drawing raw and normalized bars at the same width with normalized layered on top.
-- [x] **Steps Goal Chart State**: Draw the daily step-goal threshold on preview and full steps charts, and tint goal-met normalized days green.
+- [x] **Steps Chart Bars**: Match preview and full steps charts with single Health Connect step bars.
+- [x] **Steps Goal Chart State**: Draw the daily step-goal threshold on preview and full steps charts, and tint goal-met days green.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.

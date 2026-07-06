@@ -87,7 +87,7 @@ fun permissionGuidance(kind: PermissionRequestKind): PermissionGuidance =
 
         PermissionRequestKind.HealthConnectSteps -> PermissionGuidance(
             title = "Read step history",
-            body = "C3P0 needs Health Connect step access to show historical totals and exclude other apps' steps during C3P0 sessions.",
+            body = "C3P0 needs Health Connect step access to show historical step totals.",
             actionLabel = "Continue"
         )
 

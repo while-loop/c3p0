@@ -4,8 +4,5 @@ import java.time.LocalDate
 
 data class CachedDailyStepHistory(
     val date: LocalDate,
-    val rawSteps: Long,
-    val normalizedSteps: Long,
-    val c3p0Steps: Long,
-    val excludedOtherSessionSteps: Long
+    val steps: Long
 )

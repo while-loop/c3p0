@@ -50,7 +50,6 @@ import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
-import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
 import dev.whileloop.c3p0.health.WeightHistoryRecord
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
@@ -80,7 +79,6 @@ fun StatsScreen(
     val sessions by viewModel.allSessions.collectAsState()
     val selectedSession by viewModel.selectedSession.collectAsState()
     val metrics by viewModel.selectedSessionMetrics.collectAsState()
-    val normalizedSteps by viewModel.normalizedSteps.collectAsState()
     val dailyStepHistory by viewModel.dailyStepHistory.collectAsState()
     val stepGoal by viewModel.stepGoal.collectAsState()
     val canReadHealthConnectSteps by viewModel.canReadHealthConnectSteps.collectAsState()
@@ -255,7 +253,7 @@ fun StatsScreen(
 
             selectedSession?.let { session ->
                 item {
-                    SessionDetailCard(session, metrics, normalizedSteps, unitSystem)
+                    SessionDetailCard(session, metrics, unitSystem)
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
@@ -280,7 +278,7 @@ private fun StepHistoryPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val previewRows = remember(rows) { rows.toStepPreviewRows() }
-    val latestSteps = previewRows.lastOrNull()?.rawSteps
+    val latestSteps = previewRows.lastOrNull()?.steps
 
     Card(
         modifier = modifier.clickable(onClick = onClick)
@@ -436,13 +434,11 @@ private fun StepPreviewChart(
     val previewRows = rows.takeLast(PREVIEW_DAY_COUNT)
     val emptyLeadingSlots = PREVIEW_DAY_COUNT - previewRows.size
     val maxSteps = maxOf(
-        previewRows.maxOfOrNull { it.rawSteps } ?: 0L,
+        previewRows.maxOfOrNull { it.steps } ?: 0L,
         stepGoal.toLong()
     ).coerceAtLeast(1L)
-    val rawBarColor = MaterialTheme.colorScheme.primaryContainer
-    val normalizedBarColor = MaterialTheme.colorScheme.primary
-    val goalRawBarColor = goalRawStepColor()
-    val goalNormalizedBarColor = goalNormalizedStepColor()
+    val barColor = MaterialTheme.colorScheme.primary
+    val goalBarColor = goalStepColor()
     val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
 
     Canvas(modifier = modifier) {
@@ -451,20 +447,12 @@ private fun StepPreviewChart(
         previewRows.forEachIndexed { index, row ->
             val slotIndex = emptyLeadingSlots + index
             val left = (slotIndex * slotWidth) + ((slotWidth - barWidth) / 2f)
-            val rawHeight = size.height * barFraction(row.rawSteps, maxSteps)
-            val normalizedHeight = size.height *
-                barFraction(row.normalizedSteps, maxSteps).coerceAtMost(barFraction(row.rawSteps, maxSteps))
-            val goalMet = row.normalizedSteps >= stepGoal
+            val barHeight = size.height * barFraction(row.steps, maxSteps)
+            val goalMet = row.steps >= stepGoal
             drawRoundRect(
-                color = if (goalMet) goalRawBarColor else rawBarColor,
-                topLeft = Offset(left, size.height - rawHeight),
-                size = androidx.compose.ui.geometry.Size(barWidth, rawHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
-            )
-            drawRoundRect(
-                color = if (goalMet) goalNormalizedBarColor else normalizedBarColor,
-                topLeft = Offset(left, size.height - normalizedHeight),
-                size = androidx.compose.ui.geometry.Size(barWidth, normalizedHeight),
+                color = if (goalMet) goalBarColor else barColor,
+                topLeft = Offset(left, size.height - barHeight),
+                size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
             )
         }
@@ -606,13 +594,9 @@ private fun HealthConnectStepHistoryCard(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                if (rows.isNotEmpty()) {
-                    StepChartLegend()
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
                 when {
                     isLoading && rows.isEmpty() -> Text("Loading step history...")
-                    !canReadSteps && rows.isEmpty() -> Text("Enable Health Connect step access to view raw and normalized historical steps.")
+                    !canReadSteps && rows.isEmpty() -> Text("Enable Health Connect step access to view historical steps.")
                     rows.isEmpty() -> Text("No Health Connect step data found.")
                     chartRows.isEmpty() -> Text("No grouped step data found.")
                     else -> HealthConnectStepChart(
@@ -1255,7 +1239,7 @@ private fun HealthConnectStepChart(
     modifier: Modifier = Modifier
 ) {
     val maxSteps = maxOf(
-        rows.maxOfOrNull { it.rawSteps } ?: 0L,
+        rows.maxOfOrNull { it.steps } ?: 0L,
         stepGoal.toLong()
     ).coerceAtLeast(1L)
     val listState = rememberLazyListState(
@@ -1264,10 +1248,8 @@ private fun HealthConnectStepChart(
     LaunchedEffect(rows.size) {
         listState.scrollToItem((rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0))
     }
-    val rawBarColor = MaterialTheme.colorScheme.primaryContainer
-    val normalizedBarColor = MaterialTheme.colorScheme.primary
-    val goalRawBarColor = goalRawStepColor()
-    val goalNormalizedBarColor = goalNormalizedStepColor()
+    val barColor = MaterialTheme.colorScheme.primary
+    val goalBarColor = goalStepColor()
     val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
@@ -1278,9 +1260,8 @@ private fun HealthConnectStepChart(
         contentPadding = PaddingValues(horizontal = 0.dp)
     ) {
         items(rows) { row ->
-            val rawFraction = barFraction(row.rawSteps, maxSteps)
-            val normalizedFraction = barFraction(row.normalizedSteps, maxSteps).coerceAtMost(rawFraction)
-            val goalMet = row.normalizedSteps >= stepGoal
+            val stepFraction = barFraction(row.steps, maxSteps)
+            val goalMet = row.steps >= stepGoal
             Column(
                 modifier = Modifier
                     .width(42.dp)
@@ -1298,30 +1279,16 @@ private fun HealthConnectStepChart(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(rawFraction)
+                            .fillMaxHeight(stepFraction)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (goalMet) goalRawBarColor else rawBarColor)
-                            .align(Alignment.BottomCenter)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(normalizedFraction)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (goalMet) goalNormalizedBarColor else normalizedBarColor)
+                            .background(if (goalMet) goalBarColor else barColor)
                             .align(Alignment.BottomCenter)
                     )
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawStepGoalLine(stepGoal, maxSteps, goalLineColor)
                     }
                     StepBarValueLabel(
-                        text = compactSteps(row.rawSteps),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
-                    )
-                    StepBarValueLabel(
-                        text = compactSteps(row.normalizedSteps),
+                        text = compactSteps(row.steps),
                         color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
@@ -1370,15 +1337,7 @@ private fun StepBarValueLabel(
 }
 
 @Composable
-private fun goalRawStepColor(): Color =
-    if (isSystemInDarkTheme()) {
-        Color(0xFF275C36)
-    } else {
-        Color(0xFFC8E6C9)
-    }
-
-@Composable
-private fun goalNormalizedStepColor(): Color =
+private fun goalStepColor(): Color =
     if (isSystemInDarkTheme()) {
         Color(0xFF81C784)
     } else {
@@ -1400,19 +1359,6 @@ private fun DrawScope.drawStepGoalLine(
         strokeWidth = 1.dp.toPx(),
         pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
     )
-}
-
-@Composable
-private fun StepChartLegend() {
-    val rawBarColor = MaterialTheme.colorScheme.primaryContainer
-    val normalizedBarColor = MaterialTheme.colorScheme.primary
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        LegendItem(color = rawBarColor, label = "Raw")
-        LegendItem(color = normalizedBarColor, label = "Normalized")
-    }
 }
 
 @Composable
@@ -1445,8 +1391,7 @@ private enum class StatsChartSheet {
 private data class StepChartRow(
     val startDate: LocalDate,
     val label: String,
-    val rawSteps: Long,
-    val normalizedSteps: Long
+    val steps: Long
 )
 
 private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): List<StepChartRow> {
@@ -1456,8 +1401,7 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
             StepChartRow(
                 startDate = row.date,
                 label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                rawSteps = row.rawSteps,
-                normalizedSteps = row.normalizedSteps
+                steps = row.steps
             )
         }
         StepChartPeriod.Week -> chronological
@@ -1469,8 +1413,7 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                 StepChartRow(
                     startDate = weekStart,
                     label = weekStart.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                    rawSteps = weekRows.sumOf { it.rawSteps },
-                    normalizedSteps = weekRows.sumOf { it.normalizedSteps }
+                    steps = weekRows.sumOf { it.steps }
                 )
             }
         StepChartPeriod.Month -> chronological
@@ -1480,8 +1423,7 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                 StepChartRow(
                     startDate = monthStart,
                     label = monthStart.format(DateTimeFormatter.ofPattern("MMM", Locale.US)),
-                    rawSteps = monthRows.sumOf { it.rawSteps },
-                    normalizedSteps = monthRows.sumOf { it.normalizedSteps }
+                    steps = monthRows.sumOf { it.steps }
                 )
             }
     }.dropLeadingEmptyRows()
@@ -1494,13 +1436,12 @@ private fun List<DailyStepHistory>.toStepPreviewRows(): List<StepChartRow> =
             StepChartRow(
                 startDate = row.date,
                 label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                rawSteps = row.rawSteps,
-                normalizedSteps = row.normalizedSteps
+                steps = row.steps
             )
         }
 
 private fun List<StepChartRow>.dropLeadingEmptyRows(): List<StepChartRow> =
-    dropWhile { it.rawSteps == 0L && it.normalizedSteps == 0L }
+    dropWhile { it.steps == 0L }
 
 private fun compactSteps(steps: Long): String =
     when {
@@ -1870,7 +1811,6 @@ fun SessionItem(session: SessionEntity, unitSystem: UnitSystem, onClick: () -> U
 private fun SessionDetailCard(
     session: SessionEntity,
     metrics: List<SessionMetricEntity>,
-    normalizedSteps: NormalizedStepsResult?,
     unitSystem: UnitSystem
 ) {
     val distance = displayHistoryDistance(session.totalDistance, unitSystem)
@@ -1885,10 +1825,6 @@ private fun SessionDetailCard(
             StatLine("Duration", formatSessionDuration(session))
             StatLine("Distance", String.format(Locale.US, "%.2f %s", distance.value, distance.unit))
             StatLine("Steps", session.totalSteps.toString())
-            normalizedSteps?.let {
-                StatLine("Normalized steps", it.normalized.toString())
-                StatLine("Other source steps", it.otherSteps.toString())
-            }
             StatLine("Calories", "${session.totalEnergy} kcal")
             StatLine("Avg HR", heartRateSummary(session.averageHeartRate, measuredHeartRates.averageOrNull()))
             StatLine("Max HR", heartRateSummary(session.maxHeartRate, measuredHeartRates.maxOrNull()?.toDouble()))

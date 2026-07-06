@@ -13,11 +13,9 @@ I also want to use Android's backup/sync using the user's Google account Google 
 I added screenshots of something I'd want the app to look like.
 
 Features:
-- Normalized steps vs raw steps
-  - Normalzed Steps = Normalized steps excludes all data origins that overlap with walking sessions in the app
-  - This is needed because my watch could also track steps while the treadmill is counting steps. Both will send data to Health Connect
-  - So I want the app to be able to pull from Health Connect and exlcude all steps that aren;'t C3P0 to get accurate steps for this session and previous sessions and historical steps charts
-- Weekly l/monthly charts for normalized/raw steps
+- Health Connect steps
+  - Health Connect app priority handles overlapping sources, so the app should use Health Connect aggregate step totals directly.
+- Weekly/monthly charts for Health Connect steps
 - Ability to set daily step goals
 - Auto-stop session and treadmill when the daily goal is hit. (with the ability for an N miniute cooldown where speed gradually goes to 1mph to end the session)
 - Auto Adjust Speed

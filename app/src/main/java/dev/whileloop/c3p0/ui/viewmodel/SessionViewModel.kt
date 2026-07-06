@@ -12,7 +12,7 @@ import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.manager.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.whileloop.c3p0.domain.usecase.StepNormalizationUseCase
+import dev.whileloop.c3p0.domain.usecase.StepHistoryUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,7 +35,7 @@ class SessionViewModel @Inject constructor(
     private val treadmillManager: TreadmillManager,
     private val heartRateManager: HeartRateManager,
     private val settingsRepository: SettingsRepository,
-    private val stepNormalizationUseCase: StepNormalizationUseCase
+    private val stepHistoryUseCase: StepHistoryUseCase
 ) : ViewModel() {
     private var heartRateHistoryJob: Job? = null
     private var speedCommandJob: Job? = null
@@ -47,7 +47,7 @@ class SessionViewModel @Inject constructor(
     private var sessionStartSteps = 0
     private var sessionStartCalories = 0
     private var sessionStartPadTime = 0
-    private var normalizedStepsToday: Int? = null
+    private var stepsToday: Int? = null
     private var stepGoalEtaSamples = emptyList<StepGoalEtaSample>()
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
@@ -68,8 +68,8 @@ class SessionViewModel @Inject constructor(
     private val _averageHeartRate = MutableStateFlow(0)
     val averageHeartRate = _averageHeartRate.asStateFlow()
 
-    private val _normalizedStepsToGoal = MutableStateFlow<Int?>(null)
-    val normalizedStepsToGoal = _normalizedStepsToGoal.asStateFlow()
+    private val _stepsToGoal = MutableStateFlow<Int?>(null)
+    val stepsToGoal = _stepsToGoal.asStateFlow()
 
     private val _estimatedSecondsToStepGoal = MutableStateFlow<Int?>(null)
     val estimatedSecondsToStepGoal = _estimatedSecondsToStepGoal.asStateFlow()
@@ -191,7 +191,7 @@ class SessionViewModel @Inject constructor(
                         stopSessionStats()
                         if (!isActive) {
                             statsStarted = false
-                            refreshNormalizedStepsToGoal()
+                            refreshStepsToGoal()
                         }
                     }
                 }
@@ -212,7 +212,7 @@ class SessionViewModel @Inject constructor(
                         elapsedSeconds = _sessionElapsedSeconds.value,
                         sessionSteps = _sessionSteps.value
                     )
-                    updateNormalizedStepsToGoal()
+                    updateStepsToGoal()
                 }
             }
         }
@@ -237,7 +237,7 @@ class SessionViewModel @Inject constructor(
 
         viewModelScope.launch {
             settingsRepository.stepGoal.distinctUntilChanged().collect {
-                updateNormalizedStepsToGoal()
+                updateStepsToGoal()
             }
         }
 
@@ -263,7 +263,7 @@ class SessionViewModel @Inject constructor(
                 }
         }
 
-        refreshNormalizedStepsToGoal()
+        refreshStepsToGoal()
     }
 
     fun startSession() {
@@ -291,31 +291,31 @@ class SessionViewModel @Inject constructor(
         }
     }
 
-    fun refreshNormalizedStepsToGoal() {
+    fun refreshStepsToGoal() {
         viewModelScope.launch {
-            if (!stepNormalizationUseCase.canReadStepHistory()) {
-                normalizedStepsToday = null
-                _normalizedStepsToGoal.value = null
+            if (!stepHistoryUseCase.canReadStepHistory()) {
+                stepsToday = null
+                _stepsToGoal.value = null
                 return@launch
             }
-            normalizedStepsToday = stepNormalizationUseCase.getTodayNormalizedSteps().toInt()
-            updateNormalizedStepsToGoal()
+            stepsToday = stepHistoryUseCase.getTodaySteps().toInt()
+            updateStepsToGoal()
         }
     }
 
-    private fun updateNormalizedStepsToGoal() {
-        val normalizedSteps = normalizedStepsToday ?: run {
-            _normalizedStepsToGoal.value = null
+    private fun updateStepsToGoal() {
+        val currentSteps = stepsToday ?: run {
+            _stepsToGoal.value = null
             _estimatedSecondsToStepGoal.value = null
             return
         }
         val inProgressSteps = if (sessionManager.isSessionActive.value) _sessionSteps.value else 0
-        _normalizedStepsToGoal.value = (stepGoal.value - normalizedSteps - inProgressSteps).coerceAtLeast(0)
+        _stepsToGoal.value = (stepGoal.value - currentSteps - inProgressSteps).coerceAtLeast(0)
         updateEstimatedSecondsToStepGoal()
     }
 
     private fun updateEstimatedSecondsToStepGoal() {
-        val remainingSteps = _normalizedStepsToGoal.value ?: run {
+        val remainingSteps = _stepsToGoal.value ?: run {
             _estimatedSecondsToStepGoal.value = null
             return
         }

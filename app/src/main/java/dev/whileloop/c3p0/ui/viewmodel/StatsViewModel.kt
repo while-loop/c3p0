@@ -13,8 +13,7 @@ import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.data.repository.StepHistoryCacheRepository
 import dev.whileloop.c3p0.data.repository.WeightHistoryCacheRepository
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
-import dev.whileloop.c3p0.domain.usecase.NormalizedStepsResult
-import dev.whileloop.c3p0.domain.usecase.StepNormalizationUseCase
+import dev.whileloop.c3p0.domain.usecase.StepHistoryUseCase
 import dev.whileloop.c3p0.health.HealthConnectManager
 import dev.whileloop.c3p0.health.WeightHistoryRecord
 import kotlinx.coroutines.Job
@@ -34,13 +33,12 @@ import javax.inject.Inject
 class StatsViewModel @Inject constructor(
     private val repository: SessionRepository,
     settingsRepository: SettingsRepository,
-    private val stepNormalizationUseCase: StepNormalizationUseCase,
+    private val stepHistoryUseCase: StepHistoryUseCase,
     private val stepHistoryCacheRepository: StepHistoryCacheRepository,
     private val weightHistoryCacheRepository: WeightHistoryCacheRepository,
     private val healthConnectManager: HealthConnectManager
 ) : ViewModel() {
     private var selectedMetricsJob: Job? = null
-    private var normalizedStepsJob: Job? = null
 
     val allSessions = repository.getAllSessions().stateIn(
         viewModelScope,
@@ -65,9 +63,6 @@ class StatsViewModel @Inject constructor(
 
     private val _selectedSessionMetrics = MutableStateFlow<List<SessionMetricEntity>>(emptyList())
     val selectedSessionMetrics: StateFlow<List<SessionMetricEntity>> = _selectedSessionMetrics
-
-    private val _normalizedSteps = MutableStateFlow<NormalizedStepsResult?>(null)
-    val normalizedSteps = _normalizedSteps.asStateFlow()
 
     private val _dailyStepHistory = MutableStateFlow<List<DailyStepHistory>>(emptyList())
     val dailyStepHistory = _dailyStepHistory.asStateFlow()
@@ -95,27 +90,19 @@ class StatsViewModel @Inject constructor(
     fun selectSession(session: SessionEntity) {
         _selectedSession.value = session
         selectedMetricsJob?.cancel()
-        normalizedStepsJob?.cancel()
         selectedMetricsJob = viewModelScope.launch {
             val sessionId = session.id
             repository.getMetricsForSession(sessionId).collect {
                 _selectedSessionMetrics.value = it
             }
         }
-        normalizedStepsJob = viewModelScope.launch {
-            val endTime = session.endTime ?: return@launch
-            _normalizedSteps.value = stepNormalizationUseCase.getNormalizedSteps(session.startTime, endTime)
-        }
     }
 
     fun clearSelectedSession() {
         selectedMetricsJob?.cancel()
-        normalizedStepsJob?.cancel()
         selectedMetricsJob = null
-        normalizedStepsJob = null
         _selectedSession.value = null
         _selectedSessionMetrics.value = emptyList()
-        _normalizedSteps.value = null
     }
 
     private fun loadCachedThenRefreshStepHistory() {
@@ -178,11 +165,11 @@ class StatsViewModel @Inject constructor(
     ) {
         _isStepHistoryLoading.value = true
         try {
-            val canReadSteps = stepNormalizationUseCase.canReadStepHistory()
+            val canReadSteps = stepHistoryUseCase.canReadStepHistory()
             _canReadHealthConnectSteps.value = canReadSteps
             if (canReadSteps) {
                 val today = LocalDate.now(ZoneId.systemDefault())
-                val freshHistory = stepNormalizationUseCase.getDailyStepHistory(
+                val freshHistory = stepHistoryUseCase.getDailyStepHistory(
                     startDate = startDate,
                     endDate = today
                 )
@@ -242,19 +229,13 @@ class StatsViewModel @Inject constructor(
     private fun CachedDailyStepHistory.toDailyStepHistory(): DailyStepHistory =
         DailyStepHistory(
             date = date,
-            rawSteps = rawSteps,
-            normalizedSteps = normalizedSteps,
-            c3p0Steps = c3p0Steps,
-            excludedOtherSessionSteps = excludedOtherSessionSteps
+            steps = steps
         )
 
     private fun DailyStepHistory.toCachedDailyStepHistory(): CachedDailyStepHistory =
         CachedDailyStepHistory(
             date = date,
-            rawSteps = rawSteps,
-            normalizedSteps = normalizedSteps,
-            c3p0Steps = c3p0Steps,
-            excludedOtherSessionSteps = excludedOtherSessionSteps
+            steps = steps
         )
 
     private fun CachedWeightHistoryRecord.toWeightHistoryRecord(): WeightHistoryRecord =
