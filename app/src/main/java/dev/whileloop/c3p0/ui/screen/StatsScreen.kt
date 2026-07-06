@@ -740,65 +740,21 @@ private fun WeightChartControls(
     onXAxisPeriodSelected: (WeightXAxisPeriod) -> Unit,
     onGroupingSelected: (WeightChartGrouping) -> Unit
 ) {
-    var isGroupingMenuOpen by remember { mutableStateOf(false) }
     val matchingPeriod = remember(visibleDays) { matchingWeightXAxisPeriod(visibleDays) }
-    val chipColors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-        selectedLabelColor = MaterialTheme.colorScheme.primary,
-        selectedTrailingIconColor = MaterialTheme.colorScheme.primary
+    ChartPeriodGroupingControls(
+        periodOptions = WeightXAxisPeriod.entries.map { period ->
+            ChartControlOption(value = period, label = period.label)
+        },
+        selectedPeriod = matchingPeriod,
+        onPeriodSelected = onXAxisPeriodSelected,
+        customSelectedPeriodLabel = matchingPeriod?.let { null } ?: formatVisibleWeightRange(visibleDays),
+        groupingOptions = WeightChartGrouping.entries.map { grouping ->
+            ChartControlOption(value = grouping, label = grouping.label, shortLabel = grouping.shortLabel)
+        },
+        selectedGrouping = selectedGrouping,
+        onGroupingSelected = onGroupingSelected,
+        groupingContentDescription = "Choose weight grouping"
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        WeightXAxisPeriod.entries.forEach { period ->
-            FilterChip(
-                selected = matchingPeriod == period,
-                onClick = { onXAxisPeriodSelected(period) },
-                label = { Text(period.label) },
-                colors = chipColors
-            )
-        }
-        if (matchingPeriod == null) {
-            FilterChip(
-                selected = true,
-                onClick = {},
-                label = { Text(formatVisibleWeightRange(visibleDays)) },
-                colors = chipColors
-            )
-        }
-        Box {
-            FilterChip(
-                selected = true,
-                onClick = { isGroupingMenuOpen = true },
-                label = { Text(selectedGrouping.shortLabel) },
-                colors = chipColors,
-                trailingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Choose weight grouping"
-                    )
-                }
-            )
-            DropdownMenu(
-                expanded = isGroupingMenuOpen,
-                onDismissRequest = { isGroupingMenuOpen = false }
-            ) {
-                WeightChartGrouping.entries.forEach { grouping ->
-                    DropdownMenuItem(
-                        text = { Text(grouping.label) },
-                        onClick = {
-                            isGroupingMenuOpen = false
-                            onGroupingSelected(grouping)
-                        }
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1237,6 +1193,32 @@ private fun StepChartControls(
     onXAxisPeriodSelected: (StepXAxisPeriod) -> Unit,
     onGroupingSelected: (StepChartGrouping) -> Unit
 ) {
+    ChartPeriodGroupingControls(
+        periodOptions = StepXAxisPeriod.entries.map { period ->
+            ChartControlOption(value = period, label = period.label)
+        },
+        selectedPeriod = selectedXAxisPeriod,
+        onPeriodSelected = onXAxisPeriodSelected,
+        groupingOptions = StepChartGrouping.entries.map { grouping ->
+            ChartControlOption(value = grouping, label = grouping.label, shortLabel = grouping.shortLabel)
+        },
+        selectedGrouping = selectedGrouping,
+        onGroupingSelected = onGroupingSelected,
+        groupingContentDescription = "Choose step grouping"
+    )
+}
+
+@Composable
+private fun <P, G> ChartPeriodGroupingControls(
+    periodOptions: List<ChartControlOption<P>>,
+    selectedPeriod: P?,
+    onPeriodSelected: (P) -> Unit,
+    groupingOptions: List<ChartControlOption<G>>,
+    selectedGrouping: G,
+    onGroupingSelected: (G) -> Unit,
+    groupingContentDescription: String,
+    customSelectedPeriodLabel: String? = null
+) {
     var isGroupingMenuOpen by remember { mutableStateOf(false) }
     val chipColors = FilterChipDefaults.filterChipColors(
         selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
@@ -1250,11 +1232,19 @@ private fun StepChartControls(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StepXAxisPeriod.entries.forEach { period ->
+        periodOptions.forEach { option ->
             FilterChip(
-                selected = selectedXAxisPeriod == period,
-                onClick = { onXAxisPeriodSelected(period) },
-                label = { Text(period.label) },
+                selected = selectedPeriod == option.value,
+                onClick = { onPeriodSelected(option.value) },
+                label = { Text(option.label) },
+                colors = chipColors
+            )
+        }
+        customSelectedPeriodLabel?.let { label ->
+            FilterChip(
+                selected = true,
+                onClick = {},
+                label = { Text(label) },
                 colors = chipColors
             )
         }
@@ -1262,12 +1252,12 @@ private fun StepChartControls(
             FilterChip(
                 selected = true,
                 onClick = { isGroupingMenuOpen = true },
-                label = { Text(selectedGrouping.shortLabel) },
+                label = { Text(groupingOptions.shortLabelFor(selectedGrouping)) },
                 colors = chipColors,
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Choose step grouping"
+                        contentDescription = groupingContentDescription
                     )
                 }
             )
@@ -1275,12 +1265,12 @@ private fun StepChartControls(
                 expanded = isGroupingMenuOpen,
                 onDismissRequest = { isGroupingMenuOpen = false }
             ) {
-                StepChartGrouping.entries.forEach { grouping ->
+                groupingOptions.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(grouping.label) },
+                        text = { Text(option.label) },
                         onClick = {
                             isGroupingMenuOpen = false
-                            onGroupingSelected(grouping)
+                            onGroupingSelected(option.value)
                         }
                     )
                 }
@@ -1288,6 +1278,15 @@ private fun StepChartControls(
         }
     }
 }
+
+private data class ChartControlOption<T>(
+    val value: T,
+    val label: String,
+    val shortLabel: String = label
+)
+
+private fun <T> List<ChartControlOption<T>>.shortLabelFor(value: T): String =
+    firstOrNull { it.value == value }?.shortLabel ?: ""
 
 @Composable
 private fun HealthConnectStepChart(
