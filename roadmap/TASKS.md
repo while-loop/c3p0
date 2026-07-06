@@ -80,6 +80,7 @@
 - [x] **Launcher PNG Fallback Refresh**: Regenerated all launcher PNG fallback resources with the smaller centered robot so density-specific launcher lookups cannot show the old clipped art.
 - [x] **Red Launcher Icon Probe**: Switched manifest icon resources and all launcher PNG fallbacks to a red test icon to verify whether Pixel Launcher is applying app icon updates.
 - [x] **Launcher Icon Restore**: Restored the robot launcher icon through the validated manifest/adaptive/fallback resource paths after the red icon probe confirmed updates apply.
+- [x] **Launcher Component Refresh**: Moved the launcher intent filter to a new activity-alias component so Pixel Launcher cannot reuse the cached MainActivity icon entry.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
