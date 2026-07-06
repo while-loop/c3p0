@@ -24,6 +24,8 @@ import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import java.util.*
 import javax.inject.Inject
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class WalkingPadManagerImpl @Inject constructor(
     private val context: Context,
@@ -304,7 +306,7 @@ class WalkingPadManagerImpl @Inject constructor(
         targetSpeed: Float,
         verifyApplied: Boolean = true
     ): Boolean {
-        val s = (targetSpeed * 10).toInt().toByte()
+        val s = (targetSpeed * 10).roundToInt().toByte()
         val cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte())
         return sendSpeedCommand(
             targetSpeed = targetSpeed,
@@ -324,7 +326,7 @@ class WalkingPadManagerImpl @Inject constructor(
                 label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
                 command = command,
                 minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
-                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+                isApplied = { status -> speedMatchesTarget(status.speed, targetSpeed) }
             )
         } else {
             sendKsEncryptedTextCommand(command, minCommandSpacingMs = SPEED_COMMAND_SPACING_MS)
@@ -341,7 +343,7 @@ class WalkingPadManagerImpl @Inject constructor(
                 label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
                 command = command,
                 minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
-                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+                isApplied = { status -> speedMatchesTarget(status.speed, targetSpeed) }
             )
         } else {
             sendKsFtmsControlPoint(command, SPEED_COMMAND_SPACING_MS)
@@ -360,7 +362,7 @@ class WalkingPadManagerImpl @Inject constructor(
                 cmd = cmd,
                 protocol = protocol,
                 minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
-                isApplied = { status -> kotlin.math.abs(status.speed - targetSpeed) <= SPEED_APPLIED_TOLERANCE_KMH }
+                isApplied = { status -> speedMatchesTarget(status.speed, targetSpeed) }
             )
         } else {
             sendCommand(cmd, protocol, SPEED_COMMAND_SPACING_MS)
@@ -1040,6 +1042,12 @@ class WalkingPadManagerImpl @Inject constructor(
     private fun isBeltStopped(status: TreadmillStatus): Boolean =
         status.state == TreadmillState.STOPPED || status.speed <= SPEED_APPLIED_TOLERANCE_KMH
 
+    private fun speedMatchesTarget(reportedSpeed: Float, targetSpeed: Float): Boolean {
+        val reportedTenths = (reportedSpeed * SPEED_REPORTING_SCALE).roundToInt()
+        val targetTenths = (targetSpeed * SPEED_REPORTING_SCALE).roundToInt()
+        return abs(reportedTenths - targetTenths) <= SPEED_APPLIED_TOLERANCE_TENTHS
+    }
+
     private fun availableKsEncryptedWriteChars(): List<String> =
         KingsmithEncryptedProtocol.characteristicPairs.map { it.writeCharSubstring }.filter { writeChar ->
             connection?.hasWriteCharacteristicUuidSubstring(writeChar) == true
@@ -1281,10 +1289,9 @@ class WalkingPadManagerImpl @Inject constructor(
             return
         }
 
-        errorReporter.report(
-            "WalkingPad Bluetooth",
-            "KS FTMS supplement notification received",
-            "notify~=${activeKsFtmsSupplementNotifyCharSubstring ?: "unknown"} data=${data.toHexString()}"
+        Timber.d(
+            "KS FTMS supplement notification received: notify~=${activeKsFtmsSupplementNotifyCharSubstring ?: "unknown"} " +
+                "data=${data.toHexString()}"
         )
     }
 
@@ -1537,6 +1544,8 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val STATUS_POLL_INTERVAL_MS = 750L
         private const val COMMAND_REPLY_TIMEOUT_MS = 2_500L
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
+        private const val SPEED_REPORTING_SCALE = 10f
+        private const val SPEED_APPLIED_TOLERANCE_TENTHS = 1
         private const val PROTOCOL_READY_DELAY_MS = 500L
         private const val PROTOCOL_READY_TIMEOUT_MS = 5_000L
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L

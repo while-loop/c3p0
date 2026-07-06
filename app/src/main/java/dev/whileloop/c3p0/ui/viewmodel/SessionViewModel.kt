@@ -528,7 +528,7 @@ class SessionViewModel @Inject constructor(
         private const val KM_PER_MILE = 1.60934f
         private const val MIN_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
-        private const val SPEED_APPLIED_TOLERANCE_KMH = 0.05f
+        private const val SPEED_APPLIED_TOLERANCE_KMH = 0.11f
         private const val PENDING_SPEED_TIMEOUT_MS = 3_000L
         private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
         private const val HEART_RATE_ZONE2_GUARD_INTERVAL_MS = 1_000L

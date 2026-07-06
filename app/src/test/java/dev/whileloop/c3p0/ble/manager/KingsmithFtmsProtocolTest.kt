@@ -17,6 +17,14 @@ class KingsmithFtmsProtocolTest {
     }
 
     @Test
+    fun setTargetSpeedRoundsToNearestHundredth() {
+        assertArrayEquals(
+            byteArrayOf(0x02, 0x91.toByte(), 0x01),
+            KingsmithFtmsProtocol.setTargetSpeedCommand(4.005f)
+        )
+    }
+
+    @Test
     fun stopAndPauseUseDistinctFtmsParams() {
         assertArrayEquals(byteArrayOf(0x08, 0x01), KingsmithFtmsProtocol.STOP_COMMAND)
         assertArrayEquals(byteArrayOf(0x08, 0x02), KingsmithFtmsProtocol.PAUSE_COMMAND)

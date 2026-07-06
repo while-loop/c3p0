@@ -4,6 +4,7 @@ import dev.whileloop.c3p0.ble.model.TreadmillMode
 import dev.whileloop.c3p0.ble.model.TreadmillState
 import dev.whileloop.c3p0.ble.model.TreadmillStatus
 import java.util.UUID
+import kotlin.math.roundToInt
 
 internal object KingsmithFtmsProtocol {
     data class NoLoadStopResponse(
@@ -43,7 +44,7 @@ internal object KingsmithFtmsProtocol {
     private const val SUPPLEMENT_PROPERTY_AUTO_STOP = 0x02
 
     fun setTargetSpeedCommand(speedKmh: Float): ByteArray {
-        val raw = (speedKmh * 100).toInt().coerceIn(0, 0xFFFF)
+        val raw = (speedKmh * 100).roundToInt().coerceIn(0, 0xFFFF)
         return byteArrayOf(
             0x02,
             (raw and 0xFF).toByte(),

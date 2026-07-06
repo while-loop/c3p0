@@ -20,6 +20,8 @@
 - [x] **KingSmith FTMS Supplement Route**: Prefer KS FTMS Control Point plus the ODM/supplement property-list preamble over `5833ff02` when `0x1826` and `24e2521c`/`d18d2c10` are present, and parse the KingSmith FTMS step extension.
 - [x] **FTMS Pause/Stop Split**: Send FTMS pause as `08 02` and final stop as `08 01` so the app matches KS Fit's pause-then-stop flow on FTMS WalkingPads.
 - [x] **FTMS No-Load Boolean Acknowledgement**: Decode the supplement `autoStop` on/off ACK, save FTMS no-load enablement only after a matching response, and avoid presenting timeout seconds as confirmed on FTMS pads until the timeout setter is decoded.
+- [x] **FTMS Supplement Notification Noise**: Keep unmatched FTMS supplement notifications in debug logs instead of surfacing them as user-visible Bluetooth errors.
+- [x] **Speed Apply Tolerance**: Verify set-speed commands against the treadmill's one-decimal reported speed resolution to avoid false errors from 0.1 km/h rounding.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
