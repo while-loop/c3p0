@@ -9,10 +9,8 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -1293,6 +1291,7 @@ private fun HealthConnectStepChart(
     rows: List<StepChartRow>,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
     val maxSteps = maxOf(
         rows.maxOfOrNull { it.steps } ?: 0L,
         rows.maxOfOrNull { it.goalSteps } ?: 0L
@@ -1303,72 +1302,147 @@ private fun HealthConnectStepChart(
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
     BoxWithConstraints(modifier = modifier) {
-        val visibleBarCount = stepChartVisibleBarCount(maxWidth)
-        val listState = rememberLazyListState(
-            initialFirstVisibleItemIndex = (rows.size - visibleBarCount).coerceAtLeast(0)
+        val goalGuideSteps = rows.maxOfOrNull { it.goalSteps } ?: 0L
+        val goalFraction = (goalGuideSteps.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
+        val labelWidth = STEP_CHART_GOAL_LABEL_WIDTH
+        val chartWidth = (maxWidth - labelWidth).coerceAtLeast(STEP_CHART_MIN_BAR_SLOT_WIDTH)
+        val barSlotWidth = stepChartBarSlotWidth(chartWidth, rows.size)
+        val barWidth = stepChartBarWidth(barSlotWidth)
+        val contentWidth = maxOf(
+            chartWidth,
+            (barSlotWidth * rows.size.toFloat()) + STEP_CHART_EDGE_PADDING
         )
-        LaunchedEffect(rows.size, visibleBarCount) {
-            listState.scrollToItem((rows.size - visibleBarCount).coerceAtLeast(0))
+
+        LaunchedEffect(rows.size, contentWidth, chartWidth) {
+            withFrameNanos { }
+            scrollState.scrollTo(scrollState.maxValue)
         }
 
-        LazyRow(
-            state = listState,
+        Row(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(STEP_CHART_BAR_SPACING, Alignment.End),
-            contentPadding = PaddingValues(end = STEP_CHART_EDGE_PADDING)
+            verticalAlignment = Alignment.Top
         ) {
-            items(rows) { row ->
-                val stepFraction = barFraction(row.steps, maxSteps)
-                val goalMet = row.steps >= row.goalSteps
-                Column(
+            BoxWithConstraints(
+                modifier = Modifier
+                    .width(labelWidth)
+                    .fillMaxHeight()
+                    .padding(end = 6.dp, bottom = STEP_CHART_X_AXIS_LABEL_HEIGHT)
+            ) {
+                val labelHeight = 16.dp
+                val yOffset = ((maxHeight - labelHeight) * (1f - goalFraction))
+                    .coerceIn(0.dp, (maxHeight - labelHeight).coerceAtLeast(0.dp))
+                Text(
+                    text = goalGuideLabel(goalGuideSteps),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    textAlign = TextAlign.End,
                     modifier = Modifier
-                        .width(STEP_CHART_BAR_SLOT_WIDTH)
-                        .fillMaxHeight(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
+                        .align(Alignment.TopEnd)
+                        .offset(y = yOffset)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .width(STEP_CHART_BAR_WIDTH)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(trackColor),
-                        contentAlignment = Alignment.BottomCenter
+                            .width(contentWidth)
+                            .fillMaxHeight()
+                            .horizontalScroll(scrollState),
+                        horizontalArrangement = Arrangement.spacedBy(STEP_CHART_BAR_SPACING, Alignment.End),
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(stepFraction)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (goalMet) goalBarColor else barColor)
-                                .align(Alignment.BottomCenter)
-                        )
-                        Canvas(modifier = Modifier.matchParentSize()) {
-                            drawStepGoalLine(row.goalSteps, maxSteps, goalLineColor)
+                        rows.forEach { row ->
+                            val stepFraction = barFraction(row.steps, maxSteps)
+                            val goalMet = row.steps >= row.goalSteps
+                            Box(
+                                modifier = Modifier
+                                    .width(barSlotWidth)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(barWidth)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(trackColor),
+                                    contentAlignment = Alignment.BottomCenter
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight(stepFraction)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (goalMet) goalBarColor else barColor)
+                                            .align(Alignment.BottomCenter)
+                                    )
+                                    StepBarValueLabel(
+                                        text = compactSteps(row.steps),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                    )
+                                }
+                            }
                         }
-                        StepBarValueLabel(
-                            text = compactSteps(row.steps),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.align(Alignment.BottomCenter)
+                        Spacer(modifier = Modifier.width(STEP_CHART_EDGE_PADDING))
+                    }
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawStepGoalLine(goalGuideSteps, maxSteps, goalLineColor)
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .width(contentWidth)
+                        .height(STEP_CHART_X_AXIS_LABEL_HEIGHT)
+                        .horizontalScroll(scrollState),
+                    horizontalArrangement = Arrangement.spacedBy(STEP_CHART_BAR_SPACING, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    rows.forEach { row ->
+                        Text(
+                            text = row.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.width(barSlotWidth)
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = row.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
-                    )
+                    Spacer(modifier = Modifier.width(STEP_CHART_EDGE_PADDING))
                 }
             }
         }
     }
 }
 
-private fun stepChartVisibleBarCount(width: androidx.compose.ui.unit.Dp): Int {
-    val availableWidth = (width - STEP_CHART_EDGE_PADDING).coerceAtLeast(STEP_CHART_BAR_SLOT_WIDTH)
-    val slotWithSpacing = STEP_CHART_BAR_SLOT_WIDTH + STEP_CHART_BAR_SPACING
-    return floor(((availableWidth + STEP_CHART_BAR_SPACING).value / slotWithSpacing.value))
-        .toInt()
-        .coerceAtLeast(1)
+private fun stepChartBarSlotWidth(width: androidx.compose.ui.unit.Dp, rowCount: Int): androidx.compose.ui.unit.Dp {
+    if (rowCount <= 0) return STEP_CHART_BAR_SLOT_WIDTH
+    val fittedWidth = width / rowCount.toFloat()
+    return fittedWidth.coerceIn(STEP_CHART_MIN_BAR_SLOT_WIDTH, STEP_CHART_BAR_SLOT_WIDTH)
+}
+
+private fun stepChartBarWidth(slotWidth: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
+    (slotWidth - 4.dp).coerceIn(STEP_CHART_MIN_BAR_WIDTH, STEP_CHART_BAR_WIDTH)
+
+private fun goalGuideLabel(goalSteps: Long): String =
+    "Goal ${compactSteps(goalSteps)}"
+
+private fun DrawScope.drawStepGoalLine(
+    stepGoal: Long,
+    maxSteps: Long,
+    color: Color
+) {
+    if (stepGoal <= 0L || maxSteps <= 0L) return
+    val goalFraction = (stepGoal.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
+    val y = size.height * (1f - goalFraction)
+    drawLine(
+        color = color,
+        start = Offset(0f, y),
+        end = Offset(size.width, y),
+        strokeWidth = 1.dp.toPx(),
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+    )
 }
 
 @Composable
@@ -1410,23 +1484,6 @@ private fun goalStepColor(): Color =
     } else {
         Color(0xFF2E7D32)
     }
-
-private fun DrawScope.drawStepGoalLine(
-    stepGoal: Long,
-    maxSteps: Long,
-    color: Color
-) {
-    if (stepGoal <= 0L || maxSteps <= 0L) return
-    val goalFraction = (stepGoal.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
-    val y = size.height * (1f - goalFraction)
-    drawLine(
-        color = color,
-        start = Offset(0f, y),
-        end = Offset(size.width, y),
-        strokeWidth = 1.dp.toPx(),
-        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
-    )
-}
 
 @Composable
 private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String) {
@@ -2000,3 +2057,7 @@ private val STEP_CHART_BAR_SLOT_WIDTH = 42.dp
 private val STEP_CHART_BAR_WIDTH = 32.dp
 private val STEP_CHART_BAR_SPACING = 2.dp
 private val STEP_CHART_EDGE_PADDING = 8.dp
+private val STEP_CHART_GOAL_LABEL_WIDTH = 58.dp
+private val STEP_CHART_X_AXIS_LABEL_HEIGHT = 22.dp
+private val STEP_CHART_MIN_BAR_SLOT_WIDTH = 8.dp
+private val STEP_CHART_MIN_BAR_WIDTH = 4.dp
