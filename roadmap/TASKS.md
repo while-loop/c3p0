@@ -24,6 +24,7 @@
 - [x] **Speed Apply Tolerance**: Verify set-speed commands against the treadmill's one-decimal reported speed resolution to avoid false errors from 0.1 km/h rounding.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
+- [x] **Press-Hold Speed Controls**: Manual speed +/- buttons repeat every 0.5 seconds while held and accelerate to two steps per tick after 3 seconds.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
 - [x] **Zone 2 Visibility And Tuning**: Drew user-specific Zone 2 min/max lines on the HR chart and tuned Zone 2 speed control to adjust aggressively outside Zone 2 while using only slow 0.1 mph edge-guard nudges inside Zone 2.
 - [x] **Zone 2 Max Speed Setting**: Added a Profile max-speed slider for Zone 2, defaulted to 3.5 mph, and clamped controller speed adjustments to the saved cap.

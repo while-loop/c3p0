@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.ui.screen
 import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +33,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +45,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,6 +67,9 @@ import dev.whileloop.c3p0.ui.permission.permissionGuidance
 import dev.whileloop.c3p0.ui.permission.sessionPermissions
 import dev.whileloop.c3p0.ui.viewmodel.SessionViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -245,9 +258,10 @@ fun SessionDashboard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                IconButton(
-                    onClick = { viewModel.decrementSpeed() },
-                    enabled = isPadReady
+                SpeedAdjustButton(
+                    enabled = isPadReady,
+                    contentDescription = "Decrease speed",
+                    onStep = { viewModel.decrementSpeed() }
                 ) {
                     Text("-", fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 }
@@ -266,11 +280,12 @@ fun SessionDashboard(
                     )
                 }
 
-                IconButton(
-                    onClick = { viewModel.incrementSpeed() },
-                    enabled = isPadReady
+                SpeedAdjustButton(
+                    enabled = isPadReady,
+                    contentDescription = "Increase speed",
+                    onStep = { viewModel.incrementSpeed() }
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Increase Speed")
+                    Icon(Icons.Default.Add, contentDescription = null)
                 }
             }
         }
@@ -369,6 +384,92 @@ fun SessionDashboard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SpeedAdjustButton(
+    enabled: Boolean,
+    contentDescription: String,
+    onStep: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val latestOnStep by rememberUpdatedState(onStep)
+    val scope = rememberCoroutineScope()
+    var repeatJob by remember { mutableStateOf<Job?>(null) }
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+
+    fun stopRepeating() {
+        repeatJob?.cancel()
+        repeatJob = null
+    }
+
+    fun startRepeating() {
+        if (repeatJob != null) return
+        latestOnStep()
+        val startedAt = SystemClock.elapsedRealtime()
+        repeatJob = scope.launch {
+            delay(SPEED_HOLD_REPEAT_INTERVAL_MS)
+            while (isActive) {
+                val heldMillis = SystemClock.elapsedRealtime() - startedAt
+                val stepCount = if (heldMillis >= SPEED_HOLD_ACCELERATION_MS) {
+                    SPEED_HOLD_ACCELERATED_STEP_COUNT
+                } else {
+                    1
+                }
+                repeat(stepCount) { latestOnStep() }
+                delay(SPEED_HOLD_REPEAT_INTERVAL_MS)
+            }
+        }
+    }
+
+    DisposableEffect(enabled) {
+        if (!enabled) stopRepeating()
+        onDispose { stopRepeating() }
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .semantics {
+                role = Role.Button
+                this.contentDescription = contentDescription
+                onClick {
+                    if (!enabled) return@onClick false
+                    latestOnStep()
+                    true
+                }
+            }
+            .then(
+                if (enabled) {
+                    Modifier.pointerInteropFilter { event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                startRepeating()
+                                true
+                            }
+                            MotionEvent.ACTION_UP,
+                            MotionEvent.ACTION_CANCEL -> {
+                                stopRepeating()
+                                true
+                            }
+                            else -> true
+                        }
+                    }
+                } else {
+                    Modifier
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            content()
         }
     }
 }
@@ -1008,3 +1109,6 @@ private val STOP_BUTTON_SIZE = 72.dp
 private val STOP_HOLD_ELEVATION = 24.dp
 private val STOP_RING_STROKE_WIDTH = 4.dp
 private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
+private const val SPEED_HOLD_REPEAT_INTERVAL_MS = 500L
+private const val SPEED_HOLD_ACCELERATION_MS = 3_000L
+private const val SPEED_HOLD_ACCELERATED_STEP_COUNT = 2
