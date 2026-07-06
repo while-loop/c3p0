@@ -74,6 +74,7 @@
 - [x] **XML Adaptive Launcher Icon**: Converted the robot launcher art into an XML vector foreground over a solid blue adaptive icon background.
 - [x] **Launcher Icon Safe Area**: Scaled the adaptive icon foreground inside the mask-safe zone so Pixel Launcher no longer cuts off the robot.
 - [x] **Launcher Icon Mask Margin**: Reduced the adaptive foreground scale further so Pixel search/app-drawer circular masks leave visible margin around the full robot.
+- [x] **Launcher Icon Direct Scale**: Baked the smaller adaptive foreground size into the vector coordinates instead of relying on a group transform.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
