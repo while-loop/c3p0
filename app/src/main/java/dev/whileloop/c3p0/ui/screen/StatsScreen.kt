@@ -1297,66 +1297,78 @@ private fun HealthConnectStepChart(
         rows.maxOfOrNull { it.steps } ?: 0L,
         rows.maxOfOrNull { it.goalSteps } ?: 0L
     ).coerceAtLeast(1L)
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = (rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0)
-    )
-    LaunchedEffect(rows.size) {
-        listState.scrollToItem((rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0))
-    }
     val barColor = MaterialTheme.colorScheme.primary
     val goalBarColor = goalStepColor()
     val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
-    LazyRow(
-        state = listState,
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
-        contentPadding = PaddingValues(horizontal = 0.dp)
-    ) {
-        items(rows) { row ->
-            val stepFraction = barFraction(row.steps, maxSteps)
-            val goalMet = row.steps >= row.goalSteps
-            Column(
-                modifier = Modifier
-                    .width(42.dp)
-                    .fillMaxHeight(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
+    BoxWithConstraints(modifier = modifier) {
+        val visibleBarCount = stepChartVisibleBarCount(maxWidth)
+        val listState = rememberLazyListState(
+            initialFirstVisibleItemIndex = (rows.size - visibleBarCount).coerceAtLeast(0)
+        )
+        LaunchedEffect(rows.size, visibleBarCount) {
+            listState.scrollToItem((rows.size - visibleBarCount).coerceAtLeast(0))
+        }
+
+        LazyRow(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(STEP_CHART_BAR_SPACING, Alignment.End),
+            contentPadding = PaddingValues(end = STEP_CHART_EDGE_PADDING)
+        ) {
+            items(rows) { row ->
+                val stepFraction = barFraction(row.steps, maxSteps)
+                val goalMet = row.steps >= row.goalSteps
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .width(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(trackColor),
-                    contentAlignment = Alignment.BottomCenter
+                        .width(STEP_CHART_BAR_SLOT_WIDTH)
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(stepFraction)
+                            .weight(1f)
+                            .width(STEP_CHART_BAR_WIDTH)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (goalMet) goalBarColor else barColor)
-                            .align(Alignment.BottomCenter)
-                    )
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        drawStepGoalLine(row.goalSteps, maxSteps, goalLineColor)
+                            .background(trackColor),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(stepFraction)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (goalMet) goalBarColor else barColor)
+                                .align(Alignment.BottomCenter)
+                        )
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            drawStepGoalLine(row.goalSteps, maxSteps, goalLineColor)
+                        }
+                        StepBarValueLabel(
+                            text = compactSteps(row.steps),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
                     }
-                    StepBarValueLabel(
-                        text = compactSteps(row.steps),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.align(Alignment.BottomCenter)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = row.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = row.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1
-                )
             }
         }
     }
+}
+
+private fun stepChartVisibleBarCount(width: androidx.compose.ui.unit.Dp): Int {
+    val availableWidth = (width - STEP_CHART_EDGE_PADDING).coerceAtLeast(STEP_CHART_BAR_SLOT_WIDTH)
+    val slotWithSpacing = STEP_CHART_BAR_SLOT_WIDTH + STEP_CHART_BAR_SPACING
+    return floor(((availableWidth + STEP_CHART_BAR_SPACING).value / slotWithSpacing.value))
+        .toInt()
+        .coerceAtLeast(1)
 }
 
 @Composable
@@ -1982,6 +1994,9 @@ private const val MIN_WEIGHT_PINCH_ZOOM = 0.80f
 private const val MAX_WEIGHT_PINCH_ZOOM = 1.25f
 private const val WEIGHT_PINCH_ZOOM_SENSITIVITY = 0.35f
 private const val MIN_WEIGHT_PINCH_DELTA = 0.01f
-private const val DEFAULT_VISIBLE_CHART_BARS = 9
 private const val PREVIEW_DAY_COUNT = 7
 private const val DAYS_PER_WEEK = 7L
+private val STEP_CHART_BAR_SLOT_WIDTH = 42.dp
+private val STEP_CHART_BAR_WIDTH = 32.dp
+private val STEP_CHART_BAR_SPACING = 2.dp
+private val STEP_CHART_EDGE_PADDING = 8.dp
