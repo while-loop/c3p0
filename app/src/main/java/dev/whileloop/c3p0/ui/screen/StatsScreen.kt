@@ -90,7 +90,8 @@ fun StatsScreen(
     var showStepPermissionSheet by remember { mutableStateOf(false) }
     var showWeightPermissionSheet by remember { mutableStateOf(false) }
     var openChartSheet by remember { mutableStateOf<StatsChartSheet?>(null) }
-    var stepChartPeriod by remember { mutableStateOf(StepChartPeriod.Day) }
+    var stepVisiblePeriod by remember { mutableStateOf(StepXAxisPeriod.Month) }
+    var stepGrouping by remember { mutableStateOf(StepChartGrouping.Day) }
     var weightVisibleDays by remember { mutableStateOf(WeightXAxisPeriod.Month.days.toFloat()) }
     var weightGrouping by remember { mutableStateOf(WeightChartGrouping.Day) }
     var weightRightAnchorMillis by remember { mutableStateOf<Long?>(null) }
@@ -166,10 +167,12 @@ fun StatsScreen(
                         stepGoal = stepGoal,
                         canReadSteps = canReadHealthConnectSteps,
                         isLoading = isStepHistoryLoading,
-                        selectedPeriod = stepChartPeriod,
+                        selectedXAxisPeriod = stepVisiblePeriod,
+                        selectedGrouping = stepGrouping,
                         isExpanded = true,
                         showCollapseControl = false,
-                        onPeriodSelected = { stepChartPeriod = it },
+                        onXAxisPeriodSelected = { stepVisiblePeriod = it },
+                        onGroupingSelected = { stepGrouping = it },
                         onExpandedChange = {},
                         onEnable = { showStepPermissionSheet = true },
                         onRefresh = { viewModel.refreshStepHistory() },
@@ -522,17 +525,19 @@ private fun HealthConnectStepHistoryCard(
     stepGoal: Int,
     canReadSteps: Boolean,
     isLoading: Boolean,
-    selectedPeriod: StepChartPeriod,
+    selectedXAxisPeriod: StepXAxisPeriod,
+    selectedGrouping: StepChartGrouping,
     isExpanded: Boolean,
     showCollapseControl: Boolean = true,
-    onPeriodSelected: (StepChartPeriod) -> Unit,
+    onXAxisPeriodSelected: (StepXAxisPeriod) -> Unit,
+    onGroupingSelected: (StepChartGrouping) -> Unit,
     onExpandedChange: (Boolean) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val chartRows = remember(rows, selectedPeriod, stepGoal) {
-        rows.toStepChartRows(selectedPeriod, stepGoal)
+    val chartRows = remember(rows, selectedXAxisPeriod, selectedGrouping, stepGoal) {
+        rows.toStepChartRows(selectedXAxisPeriod, selectedGrouping, stepGoal)
     }
 
     Card(modifier = modifier.fillMaxWidth()) {
@@ -581,20 +586,12 @@ private fun HealthConnectStepHistoryCard(
             }
             if (isExpanded) {
                 Spacer(modifier = Modifier.height(4.dp))
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    StepChartPeriod.entries.forEachIndexed { index, period ->
-                        SegmentedButton(
-                            selected = selectedPeriod == period,
-                            onClick = { onPeriodSelected(period) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = StepChartPeriod.entries.size
-                            )
-                        ) {
-                            Text(period.label)
-                        }
-                    }
-                }
+                StepChartControls(
+                    selectedXAxisPeriod = selectedXAxisPeriod,
+                    selectedGrouping = selectedGrouping,
+                    onXAxisPeriodSelected = onXAxisPeriodSelected,
+                    onGroupingSelected = onGroupingSelected
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 when {
                     isLoading && rows.isEmpty() -> Text("Loading step history...")
@@ -1234,6 +1231,65 @@ private fun WeightChartLegend() {
 }
 
 @Composable
+private fun StepChartControls(
+    selectedXAxisPeriod: StepXAxisPeriod,
+    selectedGrouping: StepChartGrouping,
+    onXAxisPeriodSelected: (StepXAxisPeriod) -> Unit,
+    onGroupingSelected: (StepChartGrouping) -> Unit
+) {
+    var isGroupingMenuOpen by remember { mutableStateOf(false) }
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        selectedLabelColor = MaterialTheme.colorScheme.primary,
+        selectedTrailingIconColor = MaterialTheme.colorScheme.primary
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StepXAxisPeriod.entries.forEach { period ->
+            FilterChip(
+                selected = selectedXAxisPeriod == period,
+                onClick = { onXAxisPeriodSelected(period) },
+                label = { Text(period.label) },
+                colors = chipColors
+            )
+        }
+        Box {
+            FilterChip(
+                selected = true,
+                onClick = { isGroupingMenuOpen = true },
+                label = { Text(selectedGrouping.shortLabel) },
+                colors = chipColors,
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Choose step grouping"
+                    )
+                }
+            )
+            DropdownMenu(
+                expanded = isGroupingMenuOpen,
+                onDismissRequest = { isGroupingMenuOpen = false }
+            ) {
+                StepChartGrouping.entries.forEach { grouping ->
+                    DropdownMenuItem(
+                        text = { Text(grouping.label) },
+                        onClick = {
+                            isGroupingMenuOpen = false
+                            onGroupingSelected(grouping)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun HealthConnectStepChart(
     rows: List<StepChartRow>,
     modifier: Modifier = Modifier
@@ -1377,10 +1433,18 @@ private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String)
     }
 }
 
-private enum class StepChartPeriod(val label: String) {
-    Day("Day"),
-    Week("Week"),
-    Month("Month")
+private enum class StepXAxisPeriod(val label: String, val days: Int) {
+    Week("1W", 7),
+    Month("1M", 30),
+    ThreeMonths("3M", 90),
+    SixMonths("6M", 180),
+    Year("1Y", 365)
+}
+
+private enum class StepChartGrouping(val label: String, val shortLabel: String) {
+    Day("Day", "D"),
+    Week("Week", "W"),
+    Month("Month", "M")
 }
 
 private enum class StatsChartSheet {
@@ -1396,13 +1460,14 @@ private data class StepChartRow(
 )
 
 private fun List<DailyStepHistory>.toStepChartRows(
-    period: StepChartPeriod,
+    xAxisPeriod: StepXAxisPeriod,
+    grouping: StepChartGrouping,
     stepGoal: Int
 ): List<StepChartRow> {
-    val chronological = sortedBy { it.date }
+    val chronological = filterToLatestStepWindow(xAxisPeriod).sortedBy { it.date }
     val dailyGoal = stepGoal.toLong().coerceAtLeast(0L)
-    return when (period) {
-        StepChartPeriod.Day -> chronological.map { row ->
+    return when (grouping) {
+        StepChartGrouping.Day -> chronological.map { row ->
             StepChartRow(
                 startDate = row.date,
                 label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
@@ -1410,7 +1475,7 @@ private fun List<DailyStepHistory>.toStepChartRows(
                 goalSteps = dailyGoal
             )
         }
-        StepChartPeriod.Week -> chronological
+        StepChartGrouping.Week -> chronological
             .groupBy { row ->
                 row.date.with(ChronoField.DAY_OF_WEEK, 1)
             }
@@ -1423,7 +1488,7 @@ private fun List<DailyStepHistory>.toStepChartRows(
                     goalSteps = dailyGoal * DAYS_PER_WEEK
                 )
             }
-        StepChartPeriod.Month -> chronological
+        StepChartGrouping.Month -> chronological
             .groupBy { row -> row.date.withDayOfMonth(1) }
             .toSortedMap()
             .map { (monthStart, monthRows) ->
@@ -1435,6 +1500,14 @@ private fun List<DailyStepHistory>.toStepChartRows(
                 )
             }
     }.dropLeadingEmptyRows()
+}
+
+private fun List<DailyStepHistory>.filterToLatestStepWindow(
+    xAxisPeriod: StepXAxisPeriod
+): List<DailyStepHistory> {
+    val latestDate = maxOfOrNull { it.date } ?: return emptyList()
+    val startDate = latestDate.minusDays((xAxisPeriod.days - 1).toLong())
+    return filter { it.date >= startDate && it.date <= latestDate }
 }
 
 private fun List<DailyStepHistory>.toStepPreviewRows(stepGoal: Int): List<StepChartRow> {

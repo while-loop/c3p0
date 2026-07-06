@@ -60,6 +60,7 @@
 - [x] **Weight Chart Pinch Zoom**: Handle two-finger pinch gestures ahead of horizontal scrolling so the visible x-axis period can be adjusted directly on the chart.
 - [x] **Steps Chart Bars**: Match preview and full steps charts with single Health Connect step bars.
 - [x] **Steps Goal Chart State**: Draw matching day/week/month step-goal thresholds on preview and full steps charts, and tint only goal-met bars green.
+- [x] **Steps Chart Range Controls**: Added 1W/1M/3M/6M/1Y range chips plus Day/Week/Month grouping for Health Connect steps.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
