@@ -76,6 +76,8 @@
 - [x] **Launcher Icon Mask Margin**: Reduced the adaptive foreground scale further so Pixel search/app-drawer circular masks leave visible margin around the full robot.
 - [x] **Launcher Icon Direct Scale**: Baked the smaller adaptive foreground size into the vector coordinates instead of relying on a group transform.
 - [x] **Launcher Icon Resource Refresh**: Moved the app icon manifest entry to a new `c3p0_launcher` resource and removed the separate round icon path to avoid stale Pixel Launcher icon cache.
+- [x] **Launcher Icon Cache Bust**: Bumped the app version code and pointed both normal and round manifest icons to `c3p0_launcher` so Pixel Launcher resolves the updated adaptive icon.
+- [x] **Launcher PNG Fallback Refresh**: Regenerated all launcher PNG fallback resources with the smaller centered robot so density-specific launcher lookups cannot show the old clipped art.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
