@@ -30,18 +30,25 @@ fun BleErrorHost(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 360.dp)
-            .verticalScroll(rememberScrollState()),
+            .heightIn(max = 360.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        errors.asReversed().forEach { error ->
-            BleErrorCard(
-                error = error,
-                onDismiss = { onDismiss(error.id) }
-            )
-        }
         TextButton(onClick = onClearAll) {
             Text("Clear Bluetooth errors")
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 304.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            errors.asReversed().forEach { error ->
+                BleErrorCard(
+                    error = error,
+                    onDismiss = { onDismiss(error.id) }
+                )
+            }
         }
     }
 }
