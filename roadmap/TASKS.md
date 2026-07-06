@@ -59,7 +59,7 @@
 - [x] **Health Connect Weight Trend**: Read Health Connect weight history for a raw weight and 7-day trailing average chart while keeping calories sourced from the WalkingPad counter.
 - [x] **Weight Chart Pinch Zoom**: Handle two-finger pinch gestures ahead of horizontal scrolling so the visible x-axis period can be adjusted directly on the chart.
 - [x] **Steps Chart Bars**: Match preview and full steps charts with single Health Connect step bars.
-- [x] **Steps Goal Chart State**: Draw the daily step-goal threshold on preview and full steps charts, and tint goal-met days green.
+- [x] **Steps Goal Chart State**: Draw matching day/week/month step-goal thresholds on preview and full steps charts, and tint only goal-met bars green.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.

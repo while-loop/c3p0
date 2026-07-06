@@ -277,7 +277,7 @@ private fun StepHistoryPreviewCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val previewRows = remember(rows) { rows.toStepPreviewRows() }
+    val previewRows = remember(rows, stepGoal) { rows.toStepPreviewRows(stepGoal) }
     val latestSteps = previewRows.lastOrNull()?.steps
 
     Card(
@@ -456,7 +456,7 @@ private fun StepPreviewChart(
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
             )
         }
-        drawStepGoalLine(stepGoal, maxSteps, goalLineColor)
+        drawStepGoalLine(stepGoal.toLong(), maxSteps, goalLineColor)
     }
 }
 
@@ -531,7 +531,9 @@ private fun HealthConnectStepHistoryCard(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val chartRows = remember(rows, selectedPeriod) { rows.toStepChartRows(selectedPeriod) }
+    val chartRows = remember(rows, selectedPeriod, stepGoal) {
+        rows.toStepChartRows(selectedPeriod, stepGoal)
+    }
 
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
@@ -601,7 +603,6 @@ private fun HealthConnectStepHistoryCard(
                     chartRows.isEmpty() -> Text("No grouped step data found.")
                     else -> HealthConnectStepChart(
                         rows = chartRows,
-                        stepGoal = stepGoal,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -1235,12 +1236,11 @@ private fun WeightChartLegend() {
 @Composable
 private fun HealthConnectStepChart(
     rows: List<StepChartRow>,
-    stepGoal: Int,
     modifier: Modifier = Modifier
 ) {
     val maxSteps = maxOf(
         rows.maxOfOrNull { it.steps } ?: 0L,
-        stepGoal.toLong()
+        rows.maxOfOrNull { it.goalSteps } ?: 0L
     ).coerceAtLeast(1L)
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = (rows.size - DEFAULT_VISIBLE_CHART_BARS).coerceAtLeast(0)
@@ -1261,7 +1261,7 @@ private fun HealthConnectStepChart(
     ) {
         items(rows) { row ->
             val stepFraction = barFraction(row.steps, maxSteps)
-            val goalMet = row.steps >= stepGoal
+            val goalMet = row.steps >= row.goalSteps
             Column(
                 modifier = Modifier
                     .width(42.dp)
@@ -1285,7 +1285,7 @@ private fun HealthConnectStepChart(
                             .align(Alignment.BottomCenter)
                     )
                     Canvas(modifier = Modifier.matchParentSize()) {
-                        drawStepGoalLine(stepGoal, maxSteps, goalLineColor)
+                        drawStepGoalLine(row.goalSteps, maxSteps, goalLineColor)
                     }
                     StepBarValueLabel(
                         text = compactSteps(row.steps),
@@ -1345,11 +1345,11 @@ private fun goalStepColor(): Color =
     }
 
 private fun DrawScope.drawStepGoalLine(
-    stepGoal: Int,
+    stepGoal: Long,
     maxSteps: Long,
     color: Color
 ) {
-    if (stepGoal <= 0 || maxSteps <= 0L) return
+    if (stepGoal <= 0L || maxSteps <= 0L) return
     val goalFraction = (stepGoal.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
     val y = size.height * (1f - goalFraction)
     drawLine(
@@ -1391,17 +1391,23 @@ private enum class StatsChartSheet {
 private data class StepChartRow(
     val startDate: LocalDate,
     val label: String,
-    val steps: Long
+    val steps: Long,
+    val goalSteps: Long
 )
 
-private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): List<StepChartRow> {
+private fun List<DailyStepHistory>.toStepChartRows(
+    period: StepChartPeriod,
+    stepGoal: Int
+): List<StepChartRow> {
     val chronological = sortedBy { it.date }
+    val dailyGoal = stepGoal.toLong().coerceAtLeast(0L)
     return when (period) {
         StepChartPeriod.Day -> chronological.map { row ->
             StepChartRow(
                 startDate = row.date,
                 label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                steps = row.steps
+                steps = row.steps,
+                goalSteps = dailyGoal
             )
         }
         StepChartPeriod.Week -> chronological
@@ -1413,7 +1419,8 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                 StepChartRow(
                     startDate = weekStart,
                     label = weekStart.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                    steps = weekRows.sumOf { it.steps }
+                    steps = weekRows.sumOf { it.steps },
+                    goalSteps = dailyGoal * DAYS_PER_WEEK
                 )
             }
         StepChartPeriod.Month -> chronological
@@ -1423,22 +1430,26 @@ private fun List<DailyStepHistory>.toStepChartRows(period: StepChartPeriod): Lis
                 StepChartRow(
                     startDate = monthStart,
                     label = monthStart.format(DateTimeFormatter.ofPattern("MMM", Locale.US)),
-                    steps = monthRows.sumOf { it.steps }
+                    steps = monthRows.sumOf { it.steps },
+                    goalSteps = dailyGoal * monthStart.lengthOfMonth().toLong()
                 )
             }
     }.dropLeadingEmptyRows()
 }
 
-private fun List<DailyStepHistory>.toStepPreviewRows(): List<StepChartRow> =
-    sortedBy { it.date }
+private fun List<DailyStepHistory>.toStepPreviewRows(stepGoal: Int): List<StepChartRow> {
+    val dailyGoal = stepGoal.toLong().coerceAtLeast(0L)
+    return sortedBy { it.date }
         .takeLast(PREVIEW_DAY_COUNT)
         .map { row ->
             StepChartRow(
                 startDate = row.date,
                 label = row.date.format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
-                steps = row.steps
+                steps = row.steps,
+                goalSteps = dailyGoal
             )
         }
+}
 
 private fun List<StepChartRow>.dropLeadingEmptyRows(): List<StepChartRow> =
     dropWhile { it.steps == 0L }
@@ -1901,3 +1912,4 @@ private const val WEIGHT_PINCH_ZOOM_SENSITIVITY = 0.35f
 private const val MIN_WEIGHT_PINCH_DELTA = 0.01f
 private const val DEFAULT_VISIBLE_CHART_BARS = 9
 private const val PREVIEW_DAY_COUNT = 7
+private const val DAYS_PER_WEEK = 7L
