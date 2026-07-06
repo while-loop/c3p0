@@ -71,6 +71,7 @@
 - [x] **Scrollable Steps History Window**: Full steps charts keep retained history scrollable while range chips control the visible viewport width, and step history now backfills a one-year cache for the 1Y option.
 - [x] **Steps Chart Local Y Scale**: Full steps charts scale bar height from the current viewport plus one selected period before and after, so old outlier days do not flatten the active view.
 - [x] **PNG Launcher Icons**: Removed the adaptive icon override so Android resolves the launcher icon to the supplied density PNGs.
+- [x] **XML Adaptive Launcher Icon**: Converted the robot launcher art into an XML vector foreground over a solid blue adaptive icon background.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.
