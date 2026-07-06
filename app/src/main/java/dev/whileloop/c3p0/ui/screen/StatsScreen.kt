@@ -534,8 +534,8 @@ private fun HealthConnectStepHistoryCard(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val chartRows = remember(rows, selectedXAxisPeriod, selectedGrouping, stepGoal) {
-        rows.toStepChartRows(selectedXAxisPeriod, selectedGrouping, stepGoal)
+    val chartRows = remember(rows, selectedGrouping, stepGoal) {
+        rows.toStepChartRows(selectedGrouping, stepGoal)
     }
 
     Card(modifier = modifier.fillMaxWidth()) {
@@ -598,6 +598,8 @@ private fun HealthConnectStepHistoryCard(
                     chartRows.isEmpty() -> Text("No grouped step data found.")
                     else -> HealthConnectStepChart(
                         rows = chartRows,
+                        visiblePeriod = selectedXAxisPeriod,
+                        grouping = selectedGrouping,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -1289,6 +1291,8 @@ private fun <T> List<ChartControlOption<T>>.shortLabelFor(value: T): String =
 @Composable
 private fun HealthConnectStepChart(
     rows: List<StepChartRow>,
+    visiblePeriod: StepXAxisPeriod,
+    grouping: StepChartGrouping,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -1306,14 +1310,16 @@ private fun HealthConnectStepChart(
         val goalFraction = (goalGuideSteps.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
         val labelWidth = STEP_CHART_GOAL_LABEL_WIDTH
         val chartWidth = (maxWidth - labelWidth).coerceAtLeast(STEP_CHART_MIN_BAR_SLOT_WIDTH)
-        val barSlotWidth = stepChartBarSlotWidth(chartWidth, rows.size)
+        val visibleBarSlots = visiblePeriod.visibleBarSlots(grouping)
+        val barSlotWidth = stepChartBarSlotWidth(chartWidth, visibleBarSlots)
         val barWidth = stepChartBarWidth(barSlotWidth)
+        val interBarSpacingWidth = STEP_CHART_BAR_SPACING * (rows.size - 1).coerceAtLeast(0).toFloat()
         val contentWidth = maxOf(
             chartWidth,
-            (barSlotWidth * rows.size.toFloat()) + STEP_CHART_EDGE_PADDING
+            (barSlotWidth * rows.size.toFloat()) + interBarSpacingWidth + STEP_CHART_EDGE_PADDING
         )
 
-        LaunchedEffect(rows.size, contentWidth, chartWidth) {
+        LaunchedEffect(rows.size, visibleBarSlots, contentWidth, chartWidth) {
             withFrameNanos { }
             scrollState.scrollTo(scrollState.maxValue)
         }
@@ -1515,6 +1521,13 @@ private enum class StepChartGrouping(val label: String, val shortLabel: String) 
     Month("Month", "M")
 }
 
+private fun StepXAxisPeriod.visibleBarSlots(grouping: StepChartGrouping): Int =
+    when (grouping) {
+        StepChartGrouping.Day -> days
+        StepChartGrouping.Week -> ceil(days / DAYS_PER_WEEK.toDouble()).toInt()
+        StepChartGrouping.Month -> ceil(days / AVERAGE_DAYS_PER_MONTH).toInt()
+    }.coerceAtLeast(1)
+
 private enum class StatsChartSheet {
     Steps,
     Weight
@@ -1528,11 +1541,10 @@ private data class StepChartRow(
 )
 
 private fun List<DailyStepHistory>.toStepChartRows(
-    xAxisPeriod: StepXAxisPeriod,
     grouping: StepChartGrouping,
     stepGoal: Int
 ): List<StepChartRow> {
-    val chronological = filterToLatestStepWindow(xAxisPeriod).sortedBy { it.date }
+    val chronological = sortedBy { it.date }
     val dailyGoal = stepGoal.toLong().coerceAtLeast(0L)
     return when (grouping) {
         StepChartGrouping.Day -> chronological.map { row ->
@@ -1568,14 +1580,6 @@ private fun List<DailyStepHistory>.toStepChartRows(
                 )
             }
     }.dropLeadingEmptyRows()
-}
-
-private fun List<DailyStepHistory>.filterToLatestStepWindow(
-    xAxisPeriod: StepXAxisPeriod
-): List<DailyStepHistory> {
-    val latestDate = maxOfOrNull { it.date } ?: return emptyList()
-    val startDate = latestDate.minusDays((xAxisPeriod.days - 1).toLong())
-    return filter { it.date >= startDate && it.date <= latestDate }
 }
 
 private fun List<DailyStepHistory>.toStepPreviewRows(stepGoal: Int): List<StepChartRow> {
@@ -2045,6 +2049,7 @@ private const val KG_TO_LBS = 2.2046226218
 private const val WEIGHT_CHART_PADDING = 1.0
 private const val WEIGHT_LINE_SMOOTHING = 0.16f
 private const val MILLIS_PER_DAY = 86_400_000.0
+private const val AVERAGE_DAYS_PER_MONTH = 30.4375
 private const val MIN_WEIGHT_VISIBLE_DAYS = 3f
 private const val MAX_WEIGHT_VISIBLE_DAYS = 365f
 private const val MIN_WEIGHT_PINCH_ZOOM = 0.80f

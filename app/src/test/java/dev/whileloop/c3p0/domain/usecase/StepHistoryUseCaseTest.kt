@@ -50,16 +50,16 @@ class StepHistoryUseCaseTest {
     }
 
     @Test
-    fun defaultDailyHistoryRequestsOneHundredEightyDays() = runBlocking {
+    fun defaultDailyHistoryRequestsOneYear() = runBlocking {
         val today = LocalDate.now(zone)
-        val expectedStart = today.minusDays(179).atStartOfDay(zone).toInstant()
+        val expectedStart = today.minusDays(364).atStartOfDay(zone).toInstant()
         val expectedEnd = today.plusDays(1).atStartOfDay(zone).toInstant()
         val dataSource = FakeStepHistoryDataSource()
         val useCase = StepHistoryUseCase(dataSource)
 
         val result = useCase.getDailyStepHistory()
 
-        assertEquals(180, result.size)
+        assertEquals(365, result.size)
         assertEquals(expectedStart, dataSource.firstAggregateStartTime)
         assertEquals(expectedEnd, dataSource.lastAggregateEndTime)
     }

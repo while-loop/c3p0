@@ -68,6 +68,7 @@
 - [x] **Shared Chart Controls**: Extracted reusable period chips plus grouping dropdown controls for steps, weight, and future chart types.
 - [x] **Steps Chart Latest Bar Visibility**: Made full steps chart startup positioning use the actual viewport width so the latest bar is fully visible.
 - [x] **Steps Chart Goal Guide**: Draw the full-width steps goal guide with a y-axis goal label for grouped day/week/month views.
+- [x] **Scrollable Steps History Window**: Full steps charts keep retained history scrollable while range chips control the visible viewport width, and step history now backfills a one-year cache for the 1Y option.
 - [x] **Stats Preview Tile Density**: Reduced stats preview tile height and vertical padding so chart cards do not leave excessive empty space below values.
 - [x] **Stats Preview Tile Balance**: Restored moderate preview tile padding and reduced value text size to avoid cramped chart cards.
 - [x] **Weight Range Anchor Switching**: Keep the visible right-edge date anchored when switching weight chart x-axis periods.

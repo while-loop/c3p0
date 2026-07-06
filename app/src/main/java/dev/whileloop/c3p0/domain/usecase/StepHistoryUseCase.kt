@@ -51,7 +51,7 @@ class StepHistoryUseCase @Inject constructor(
         getDailyStepHistory(days = 1).firstOrNull()?.steps ?: 0L
 
     private companion object {
-        private const val DEFAULT_HISTORY_DAYS = 180
+        private const val DEFAULT_HISTORY_DAYS = 365
     }
 }
 

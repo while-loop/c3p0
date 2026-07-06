@@ -153,9 +153,16 @@ class StatsViewModel @Inject constructor(
         cachedHistory: List<CachedDailyStepHistory>,
         lastFetchDate: LocalDate?
     ) {
-        val startDate = (lastFetchDate ?: cachedHistory.maxOfOrNull { it.date })
+        val defaultStartDate = defaultStepHistoryStartDate()
+        val cachedStartDate = cachedHistory.minOfOrNull { it.date }
+        val incrementalStartDate = (lastFetchDate ?: cachedHistory.maxOfOrNull { it.date })
             ?.minusDays(INCREMENTAL_REFRESH_BUFFER_DAYS)
-            ?: defaultStepHistoryStartDate()
+            ?: defaultStartDate
+        val startDate = if (cachedStartDate == null || cachedStartDate.isAfter(defaultStartDate)) {
+            defaultStartDate
+        } else {
+            incrementalStartDate
+        }
         refreshStepHistoryRange(startDate = startDate, cachedHistory = cachedHistory)
     }
 
@@ -286,7 +293,7 @@ class StatsViewModel @Inject constructor(
 
     private companion object {
         private const val DEFAULT_STEP_GOAL = 10_000
-        private const val DEFAULT_STEP_HISTORY_DAYS = 180
+        private const val DEFAULT_STEP_HISTORY_DAYS = 365
         private const val DEFAULT_WEIGHT_HISTORY_DAYS = 180
         private const val INCREMENTAL_REFRESH_BUFFER_DAYS = 7L
     }
