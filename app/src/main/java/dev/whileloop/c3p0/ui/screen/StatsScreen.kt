@@ -1296,28 +1296,37 @@ private fun HealthConnectStepChart(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val maxSteps = maxOf(
-        rows.maxOfOrNull { it.steps } ?: 0L,
-        rows.maxOfOrNull { it.goalSteps } ?: 0L
-    ).coerceAtLeast(1L)
+    val density = LocalDensity.current
     val barColor = MaterialTheme.colorScheme.primary
     val goalBarColor = goalStepColor()
     val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
     BoxWithConstraints(modifier = modifier) {
-        val goalGuideSteps = rows.maxOfOrNull { it.goalSteps } ?: 0L
-        val goalFraction = (goalGuideSteps.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
         val labelWidth = STEP_CHART_GOAL_LABEL_WIDTH
         val chartWidth = (maxWidth - labelWidth).coerceAtLeast(STEP_CHART_MIN_BAR_SLOT_WIDTH)
         val visibleBarSlots = visiblePeriod.visibleBarSlots(grouping)
         val barSlotWidth = stepChartBarSlotWidth(chartWidth, visibleBarSlots)
         val barWidth = stepChartBarWidth(barSlotWidth)
-        val interBarSpacingWidth = STEP_CHART_BAR_SPACING * (rows.size - 1).coerceAtLeast(0).toFloat()
+        val interBarSpacingWidth = STEP_CHART_BAR_SPACING * rows.size.coerceAtLeast(0).toFloat()
         val contentWidth = maxOf(
             chartWidth,
             (barSlotWidth * rows.size.toFloat()) + interBarSpacingWidth + STEP_CHART_EDGE_PADDING
         )
+        val visibleRows = visibleStepRows(
+            rows = rows,
+            scrollOffsetPx = scrollState.value.toFloat(),
+            viewportWidthPx = with(density) { chartWidth.toPx() },
+            barSlotWidthPx = with(density) { barSlotWidth.toPx() },
+            barSpacingPx = with(density) { STEP_CHART_BAR_SPACING.toPx() },
+            periodDays = visiblePeriod.days
+        )
+        val maxSteps = maxOf(
+            visibleRows.maxOfOrNull { it.steps } ?: 0L,
+            visibleRows.maxOfOrNull { it.goalSteps } ?: 0L
+        ).coerceAtLeast(1L)
+        val goalGuideSteps = visibleRows.maxOfOrNull { it.goalSteps } ?: 0L
+        val goalFraction = (goalGuideSteps.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
 
         LaunchedEffect(rows.size, visibleBarSlots, contentWidth, chartWidth) {
             withFrameNanos { }
@@ -1527,6 +1536,33 @@ private fun StepXAxisPeriod.visibleBarSlots(grouping: StepChartGrouping): Int =
         StepChartGrouping.Week -> ceil(days / DAYS_PER_WEEK.toDouble()).toInt()
         StepChartGrouping.Month -> ceil(days / AVERAGE_DAYS_PER_MONTH).toInt()
     }.coerceAtLeast(1)
+
+private fun visibleStepRows(
+    rows: List<StepChartRow>,
+    scrollOffsetPx: Float,
+    viewportWidthPx: Float,
+    barSlotWidthPx: Float,
+    barSpacingPx: Float,
+    periodDays: Int
+): List<StepChartRow> {
+    if (rows.isEmpty()) return emptyList()
+
+    val rowStridePx = (barSlotWidthPx + barSpacingPx).coerceAtLeast(1f)
+    val firstVisibleIndex = floor(scrollOffsetPx / rowStridePx)
+        .toInt()
+        .coerceIn(0, rows.lastIndex)
+    val lastVisibleIndex = ceil((scrollOffsetPx + viewportWidthPx) / rowStridePx)
+        .toInt()
+        .coerceIn(firstVisibleIndex, rows.lastIndex)
+    val visibleStartDate = rows[firstVisibleIndex].startDate
+    val visibleEndDate = rows[lastVisibleIndex].startDate
+    val scaleStartDate = visibleStartDate.minusDays(periodDays.toLong())
+    val scaleEndDate = visibleEndDate.plusDays(periodDays.toLong())
+
+    return rows
+        .filter { row -> row.startDate in scaleStartDate..scaleEndDate }
+        .ifEmpty { rows.subList(firstVisibleIndex, lastVisibleIndex + 1) }
+}
 
 private enum class StatsChartSheet {
     Steps,
