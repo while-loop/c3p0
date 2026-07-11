@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -71,6 +73,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -87,6 +92,7 @@ fun SessionDashboard(
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
     val isAutoSpeedEnabled by viewModel.isAutoSpeedEnabled.collectAsState()
+    val recoverableSession by viewModel.recoverableSession.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
     val age by viewModel.age.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
@@ -118,10 +124,13 @@ fun SessionDashboard(
         if (grants.values.all { it }) {
             if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
                 neverAskAgain = false
-                pendingSessionAction = SessionAction.Start
                 showInactiveDeviceSheet = true
             } else {
-                viewModel.startSession()
+                when (pendingSessionAction) {
+                    SessionAction.Start -> viewModel.startSession()
+                    SessionAction.Resume -> viewModel.resumeSession()
+                    SessionAction.Recover -> viewModel.resumeRecoveredSession()
+                }
             }
         }
     }
@@ -186,9 +195,38 @@ fun SessionDashboard(
                 when (pendingSessionAction) {
                     SessionAction.Start -> viewModel.startSession()
                     SessionAction.Resume -> viewModel.resumeSession()
+                    SessionAction.Recover -> viewModel.resumeRecoveredSession()
                 }
             },
             onDismiss = { showInactiveDeviceSheet = false }
+        )
+    }
+
+    recoverableSession?.takeIf { !isSessionActive && !showPermissionSheet && !showInactiveDeviceSheet }?.let { recovered ->
+        RecoveredSessionBottomSheet(
+            elapsedSeconds = recovered.checkpoint.elapsedSeconds,
+            distance = displayDistance(recovered.checkpoint.totalDistance, unitSystem),
+            steps = recovered.checkpoint.totalSteps,
+            checkpointTime = recovered.checkpoint.checkpointTime,
+            onResume = {
+                pendingSessionAction = SessionAction.Recover
+                if (!context.hasPermissions(permissions)) {
+                    showPermissionSheet = true
+                } else if (shouldWarnAboutInactiveDevices(
+                        connectionState,
+                        watchConnectionState,
+                        heartRateActive,
+                        skipInactiveDeviceWarning
+                    )
+                ) {
+                    neverAskAgain = false
+                    showInactiveDeviceSheet = true
+                } else {
+                    viewModel.resumeRecoveredSession()
+                }
+            },
+            onFinish = viewModel::finishRecoveredSession,
+            onDiscard = viewModel::discardRecoveredSession
         )
     }
 
@@ -341,6 +379,7 @@ fun SessionDashboard(
                 } else {
                     Button(
                         onClick = {
+                            pendingSessionAction = SessionAction.Start
                             if (context.hasPermissions(permissions)) {
                                 if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
                                     neverAskAgain = false
@@ -385,6 +424,70 @@ fun SessionDashboard(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecoveredSessionBottomSheet(
+    elapsedSeconds: Int,
+    distance: DisplayMeasurement,
+    steps: Int,
+    checkpointTime: Instant,
+    onResume: () -> Unit,
+    onFinish: () -> Unit,
+    onDiscard: () -> Unit
+) {
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val savedAt = remember(checkpointTime) {
+        checkpointTime.atZone(ZoneId.systemDefault()).format(
+            DateTimeFormatter.ofPattern("MMM d 'at' h:mm a", Locale.getDefault())
+        )
+    }
+
+    ModalBottomSheet(onDismissRequest = {}) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Recover session", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Saved $savedAt with ${formatElapsedTime(elapsedSeconds)}, " +
+                    "$steps steps, and ${String.format(Locale.US, "%.2f", distance.value)} ${distance.unit}."
+            )
+            Button(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Resume")
+            }
+            FilledTonalButton(onClick = onFinish, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.CloudUpload, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Finish and upload")
+            }
+            TextButton(onClick = { confirmDiscard = true }, modifier = Modifier.align(Alignment.End)) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Discard")
+            }
+        }
+    }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard saved session?") },
+            text = { Text("The saved session and its recorded metrics will be permanently removed.") },
+            confirmButton = {
+                TextButton(onClick = onDiscard) { Text("Discard") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -974,7 +1077,8 @@ private tailrec fun Context.findActivity(): Activity? =
 
 private enum class SessionAction {
     Start,
-    Resume
+    Resume,
+    Recover
 }
 
 @Composable

@@ -1,6 +1,7 @@
 package dev.whileloop.c3p0.data.repository
 
 import dev.whileloop.c3p0.data.dao.SessionDao
+import dev.whileloop.c3p0.data.entity.ActiveSessionCheckpointEntity
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import kotlinx.coroutines.flow.Flow
@@ -11,8 +12,8 @@ class SessionRepositoryImpl @Inject constructor(
     private val sessionDao: SessionDao
 ) : SessionRepository {
 
-    override suspend fun startSession(): Long {
-        val session = SessionEntity(startTime = Instant.now())
+    override suspend fun startSession(startTime: Instant): Long {
+        val session = SessionEntity(startTime = startTime)
         return sessionDao.insertSession(session)
     }
 
@@ -37,6 +38,23 @@ class SessionRepositoryImpl @Inject constructor(
 
     override suspend fun getSessionsBetween(startTime: Instant, endTime: Instant): List<SessionEntity> {
         return sessionDao.getSessionsBetween(startTime, endTime)
+    }
+
+    override suspend fun getSession(id: Long): SessionEntity? = sessionDao.getSessionById(id)
+
+    override suspend fun getRecoverableCheckpoint(): ActiveSessionCheckpointEntity? =
+        sessionDao.getRecoverableCheckpoint()
+
+    override suspend fun saveCheckpoint(checkpoint: ActiveSessionCheckpointEntity) {
+        sessionDao.upsertCheckpoint(checkpoint)
+    }
+
+    override suspend fun deleteCheckpoint(sessionId: Long) {
+        sessionDao.deleteCheckpoint(sessionId)
+    }
+
+    override suspend fun discardUnfinishedSession(sessionId: Long) {
+        sessionDao.deleteUnfinishedSession(sessionId)
     }
 
     override fun getMetricsForSession(sessionId: Long): Flow<List<SessionMetricEntity>> {

@@ -1,6 +1,7 @@
 package dev.whileloop.c3p0.data.dao
 
 import androidx.room.*
+import dev.whileloop.c3p0.data.entity.ActiveSessionCheckpointEntity
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,18 @@ interface SessionDao {
 
     @Query("SELECT * FROM sessions WHERE id = :id")
     suspend fun getSessionById(id: Long): SessionEntity?
+
+    @Query("SELECT * FROM active_session_checkpoints WHERE sessionId IN (SELECT id FROM sessions WHERE endTime IS NULL) ORDER BY checkpointTime DESC LIMIT 1")
+    suspend fun getRecoverableCheckpoint(): ActiveSessionCheckpointEntity?
+
+    @Upsert
+    suspend fun upsertCheckpoint(checkpoint: ActiveSessionCheckpointEntity)
+
+    @Query("DELETE FROM active_session_checkpoints WHERE sessionId = :sessionId")
+    suspend fun deleteCheckpoint(sessionId: Long)
+
+    @Query("DELETE FROM sessions WHERE id = :sessionId AND endTime IS NULL")
+    suspend fun deleteUnfinishedSession(sessionId: Long)
 
     @Insert
     suspend fun insertMetric(metric: SessionMetricEntity)

@@ -9,6 +9,7 @@ import dev.whileloop.c3p0.ble.manager.TreadmillManager
 import dev.whileloop.c3p0.ble.model.TreadmillMode
 import dev.whileloop.c3p0.data.model.SessionStartMode
 import dev.whileloop.c3p0.data.model.UnitSystem
+import dev.whileloop.c3p0.data.entity.ActiveSessionCheckpointEntity
 import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.manager.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +42,7 @@ class SessionViewModel @Inject constructor(
     private var speedCommandJob: Job? = null
     private var pendingManualSpeedKmh: Float? = null
     private var statsStarted = false
-    private var activeHeartRateTotal = 0
+    private var activeHeartRateTotal = 0L
     private var activeHeartRateSampleCount = 0
     private var sessionStartDistance = 0
     private var sessionStartSteps = 0
@@ -49,6 +50,11 @@ class SessionViewModel @Inject constructor(
     private var sessionStartPadTime = 0
     private var stepsToday: Int? = null
     private var stepGoalEtaSamples = emptyList<StepGoalEtaSample>()
+    private var pendingRecoveryCheckpoint: ActiveSessionCheckpointEntity? = null
+    private var sessionElapsedOffset = 0
+    private var sessionDistanceOffset = 0
+    private var sessionStepsOffset = 0
+    private var sessionCaloriesOffset = 0
 
     private val _sessionElapsedSeconds = MutableStateFlow(0)
     val sessionElapsedSeconds = _sessionElapsedSeconds.asStateFlow()
@@ -120,6 +126,12 @@ class SessionViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         sessionManager.isAutoSpeedEnabled.value
+    )
+
+    val recoverableSession = sessionManager.recoverableSession.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        sessionManager.recoverableSession.value
     )
 
     val unitSystem = settingsRepository.unitSystem.stateIn(
@@ -204,10 +216,10 @@ class SessionViewModel @Inject constructor(
             }.collect { (status, isActive) ->
                 if (isActive) {
                     val distanceDelta = counterDelta(sessionStartDistance, status.distance)
-                    _sessionElapsedSeconds.value = counterDelta(sessionStartPadTime, status.time)
-                    _sessionDistance.value = distanceDelta
-                    _sessionSteps.value = sessionStepDelta(status.hasStepCount, status.steps, distanceDelta)
-                    _sessionCalories.value = sessionCalorieDelta(status.calories)
+                    _sessionElapsedSeconds.value = sessionElapsedOffset + counterDelta(sessionStartPadTime, status.time)
+                    _sessionDistance.value = sessionDistanceOffset + distanceDelta
+                    _sessionSteps.value = sessionStepsOffset + sessionStepDelta(status.hasStepCount, status.steps, distanceDelta)
+                    _sessionCalories.value = sessionCaloriesOffset + sessionCalorieDelta(status.calories)
                     updateStepGoalEtaSamples(
                         elapsedSeconds = _sessionElapsedSeconds.value,
                         sessionSteps = _sessionSteps.value
@@ -283,6 +295,19 @@ class SessionViewModel @Inject constructor(
 
     fun resumeSession() {
         sessionManager.resumeSession()
+    }
+
+    fun resumeRecoveredSession() {
+        pendingRecoveryCheckpoint = sessionManager.recoverableSession.value?.checkpoint ?: return
+        sessionManager.resumeRecoveredSession()
+    }
+
+    fun finishRecoveredSession() {
+        sessionManager.finishRecoveredSession()
+    }
+
+    fun discardRecoveredSession() {
+        sessionManager.discardRecoveredSession()
     }
 
     fun updateSkipInactiveDeviceWarning(skip: Boolean) {
@@ -447,19 +472,29 @@ class SessionViewModel @Inject constructor(
 
     private fun startSessionStats(reset: Boolean) {
         if (reset) {
-            _sessionElapsedSeconds.value = 0
+            val recovery = pendingRecoveryCheckpoint
+            sessionElapsedOffset = recovery?.elapsedSeconds ?: 0
+            sessionDistanceOffset = recovery?.totalDistance ?: 0
+            sessionStepsOffset = recovery?.totalSteps ?: 0
+            sessionCaloriesOffset = recovery?.totalEnergy ?: 0
+            _sessionElapsedSeconds.value = sessionElapsedOffset
             _heartRateHistory.value = emptyList()
-            _averageHeartRate.value = 0
+            activeHeartRateTotal = recovery?.heartRateTotal ?: 0L
+            activeHeartRateSampleCount = recovery?.heartRateSampleCount ?: 0
+            _averageHeartRate.value = if (activeHeartRateSampleCount > 0) {
+                (activeHeartRateTotal / activeHeartRateSampleCount).toInt()
+            } else {
+                0
+            }
             sessionStartDistance = treadmillStatus.value.distance
             sessionStartSteps = treadmillStatus.value.steps
             sessionStartCalories = treadmillStatus.value.calories
             sessionStartPadTime = treadmillStatus.value.time
-            _sessionDistance.value = 0
-            _sessionSteps.value = 0
-            _sessionCalories.value = 0
+            _sessionDistance.value = sessionDistanceOffset
+            _sessionSteps.value = sessionStepsOffset
+            _sessionCalories.value = sessionCaloriesOffset
             stepGoalEtaSamples = emptyList()
-            activeHeartRateTotal = 0
-            activeHeartRateSampleCount = 0
+            pendingRecoveryCheckpoint = null
         }
 
         heartRateHistoryJob?.cancel()
@@ -472,7 +507,7 @@ class SessionViewModel @Inject constructor(
                 _heartRateHistory.value = updated
                 activeHeartRateTotal += heartRate
                 activeHeartRateSampleCount += 1
-                _averageHeartRate.value = activeHeartRateTotal / activeHeartRateSampleCount
+                _averageHeartRate.value = (activeHeartRateTotal / activeHeartRateSampleCount).toInt()
             }
         }
     }

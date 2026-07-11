@@ -42,6 +42,7 @@
 - [x] **Auto-Speed**: Implemented smooth Zone 2 adjustment algorithm with moving average smoothing and wired Zone 2 mode to enable it.
 - [x] **Data Persistence**: Room DB schema for sessions and time-series metrics.
 - [x] **Session Aggregates**: Persist session distance/steps as session deltas, plus calories, average HR, max HR, and real cadence.
+- [x] **Session Crash Recovery**: Checkpoint active sessions locally every minute and let users resume, finish and upload, or discard an interrupted session after restart.
 - [x] **Live Session Deltas**: Session-screen distance and steps use current-session deltas instead of lifetime WalkingPad counters.
 - [x] **Pad-Reported Elapsed Time**: Session elapsed time uses the WalkingPad running-time counter delta instead of an app-local timer, with fallback calorie estimates also preferring the pad-reported active duration.
 - [x] **Session Metrics UI**: Added elapsed time, calories, current HR, session average HR, and heart-rate history chart with y-axis labels and zone-colored line segments.
