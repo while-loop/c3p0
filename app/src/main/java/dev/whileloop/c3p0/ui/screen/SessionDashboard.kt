@@ -107,6 +107,7 @@ fun SessionDashboard(
     val sessionCalories by viewModel.sessionCalories.collectAsState()
     val stepsToGoal by viewModel.stepsToGoal.collectAsState()
     val estimatedSecondsToStepGoal by viewModel.estimatedSecondsToStepGoal.collectAsState()
+    val recentStepsPerMinute by viewModel.recentStepsPerMinute.collectAsState()
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showInactiveDeviceSheet by remember { mutableStateOf(false) }
     var pendingSessionAction by remember { mutableStateOf(SessionAction.Start) }
@@ -268,6 +269,7 @@ fun SessionDashboard(
                 tiles = listOf(
                     StatTile("Distance", String.format(Locale.US, "%.2f", displayedDistance.value), displayedDistance.unit),
                     StatTile("Steps", sessionSteps.toString(), ""),
+                    StatTile("Steps/min", recentStepsPerMinute?.roundToInt()?.toString() ?: "---", ""),
                     StatTile("Steps to goal", stepsToGoal?.toString() ?: "---", ""),
                     StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
                     StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
