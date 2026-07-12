@@ -2017,6 +2017,9 @@ private fun SessionDetailCard(
             StatLine("Duration", formatSessionDuration(session))
             StatLine("Distance", String.format(Locale.US, "%.2f %s", distance.value, distance.unit))
             StatLine("Steps", session.totalSteps.toString())
+            averageSessionStepsPerMinute(session)?.let {
+                StatLine("Avg steps/min", it.toString())
+            }
             StatLine("Calories", "${session.totalEnergy} kcal")
             StatLine("Avg HR", heartRateSummary(session.averageHeartRate, measuredHeartRates.averageOrNull()))
             StatLine("Max HR", heartRateSummary(session.maxHeartRate, measuredHeartRates.maxOrNull()?.toDouble()))
@@ -2071,6 +2074,13 @@ private fun formatSessionDuration(session: SessionEntity): String {
     } else {
         String.format(Locale.US, "%d:%02d", minutes, seconds)
     }
+}
+
+internal fun averageSessionStepsPerMinute(session: SessionEntity): Int? {
+    val endTime = session.endTime ?: return null
+    val elapsedSeconds = Duration.between(session.startTime, endTime).seconds
+    if (elapsedSeconds <= 0) return null
+    return (session.totalSteps / (elapsedSeconds / 60.0)).roundToInt().coerceAtLeast(0)
 }
 
 private fun heartRateSummary(storedValue: Int, fallbackValue: Double?): String {

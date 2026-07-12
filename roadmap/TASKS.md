@@ -50,6 +50,7 @@
 - [x] **Step Goal ETA Tile**: Added a session tile that estimates time to daily step goal from current-session steps per minute after enough step data exists.
 - [x] **Recent Step Goal ETA**: Estimate time to daily goal from the last 3 minutes of session steps instead of full-session average pace.
 - [x] **Recent Step Rate Tile**: Show live steps per minute from the same trailing 3-minute sample window used by the time-to-goal estimate.
+- [x] **Historical Step Rate**: Show completed-session average steps per minute in selected session details.
 - [x] **UI Implementation**: Dashboard, Stats, Profile, and Pairing screens.
 - [x] **Stats Details**: Added selected-session history details.
 - [x] **Historical Step History**: Added Health Connect daily step history using aggregate deduplicated totals.
