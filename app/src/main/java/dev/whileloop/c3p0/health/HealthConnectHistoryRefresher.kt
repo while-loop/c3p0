@@ -32,11 +32,11 @@ class HealthConnectHistoryRefresher @Inject constructor(
     suspend fun refreshSinceLastFetch() = coroutineScope {
         val steps = async {
             val lastFetch = stepCache.readLastFetchDate()
-            refreshSteps(lastFetch?.minusDays(REFRESH_OVERLAP_DAYS) ?: recentStepStartDate())
+            refreshSteps(lastFetch?.minusDays(REFRESH_OVERLAP_DAYS) ?: fullStepStartDate())
         }
         val weight = async {
             val lastFetch = weightCache.readLastFetchTime()
-            refreshWeight(lastFetch?.minus(Duration.ofDays(REFRESH_OVERLAP_DAYS)) ?: recentWeightStartTime())
+            refreshWeight(lastFetch?.minus(Duration.ofDays(REFRESH_OVERLAP_DAYS)) ?: fullWeightStartTime())
         }
         steps.await()
         weight.await()

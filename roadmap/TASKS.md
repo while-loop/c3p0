@@ -97,6 +97,7 @@
 - [x] **Weight Pinch Boundary Zoom**: Anchor pinch zoom to the visible start/end timestamp when the left/right finger is held, and dampen zoom sensitivity.
 - [x] **Weight Chart Control Contrast**: Keep a stable pinch boundary anchor for each gesture and tint selected range/grouping chips for better contrast.
 - [x] **Incremental Chart Refresh**: Refresh cached Health Connect chart data from the latest cached point plus a 7-day overlap on startup, while keeping manual refresh full-history.
+- [x] **Stats Resume Refresh**: Refresh step and weight data incrementally from the last fetch whenever the Stats destination resumes, while retaining cached charts and preventing overlapping lifecycle reads.
 - [x] **Chart Refresh Gestures**: Full-chart Refresh reads the latest week; long-press Refresh reads the retained full-history range.
 - [x] **Post-Session Health Refresh**: Successful Health Connect session exports refresh goal progress live and start an incremental step/weight cache refresh from the last fetch.
 - [x] **Live Zone 2 Speed Cap**: Apply Profile max-speed changes immediately to an active Zone 2 controller and every outgoing adjustment.
