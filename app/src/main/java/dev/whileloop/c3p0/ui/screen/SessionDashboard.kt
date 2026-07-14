@@ -93,6 +93,7 @@ fun SessionDashboard(
     val connectionState by viewModel.connectionState.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
     val isSessionActive by viewModel.isSessionActive.collectAsState()
+    val isSessionStarting by viewModel.isSessionStarting.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
     val isAutoSpeedEnabled by viewModel.isAutoSpeedEnabled.collectAsState()
     val recoverableSession by viewModel.recoverableSession.collectAsState()
@@ -399,11 +400,20 @@ fun SessionDashboard(
                                 showPermissionSheet = true
                             }
                         },
+                        enabled = !isSessionStarting,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Start")
+                        if (isSessionStarting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = LocalContentColor.current
+                            )
+                        } else {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Start")
+                        }
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Start")
+                        Text(if (isSessionStarting) "Starting…" else "Start")
                     }
                 }
 

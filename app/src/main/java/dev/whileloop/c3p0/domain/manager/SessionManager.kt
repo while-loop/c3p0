@@ -61,6 +61,9 @@ class SessionManager @Inject constructor(
     private val _isSessionActive = MutableStateFlow(false)
     val isSessionActive = _isSessionActive.asStateFlow()
 
+    private val _isSessionStarting = MutableStateFlow(false)
+    val isSessionStarting = _isSessionStarting.asStateFlow()
+
     private val _isSessionPaused = MutableStateFlow(false)
     val isSessionPaused = _isSessionPaused.asStateFlow()
 
@@ -98,10 +101,13 @@ class SessionManager @Inject constructor(
     }
 
     fun startSession() {
+        if (_isSessionActive.value || !_isSessionStarting.compareAndSet(expect = false, update = true)) return
         scope.launch {
             recoveryLoaded.await()
             if (_recoverableSession.value == null) {
                 launchSession(null)
+            } else {
+                _isSessionStarting.value = false
             }
         }
     }
@@ -240,7 +246,10 @@ class SessionManager @Inject constructor(
     }
 
     private fun launchSession(recovered: RecoverableSession?) {
-        if (sessionJob?.isActive == true) return
+        if (sessionJob?.isActive == true) {
+            _isSessionStarting.value = false
+            return
+        }
 
         val serviceIntent = Intent(context, dev.whileloop.c3p0.service.SessionService::class.java)
         try {
@@ -251,6 +260,7 @@ class SessionManager @Inject constructor(
             }
         } catch (e: SecurityException) {
             Timber.e(e, "Unable to start session service without required permissions")
+            _isSessionStarting.value = false
             return
         }
 
@@ -260,6 +270,7 @@ class SessionManager @Inject constructor(
                 if (!treadmillManager.start()) {
                     context.stopService(serviceIntent)
                     sessionJob = null
+                    _isSessionStarting.value = false
                     return@launch
                 }
 
@@ -282,6 +293,7 @@ class SessionManager @Inject constructor(
                 startPadTime = startStatus.time
                 lastCheckpointAt = null
                 _isSessionActive.value = true
+                _isSessionStarting.value = false
                 _isSessionPaused.value = false
                 _recoverableSession.value = null
                 saveCheckpoint(now, wasPaused = false)
@@ -420,6 +432,7 @@ class SessionManager @Inject constructor(
     }
 
     private fun resetInMemorySessionState() {
+        _isSessionStarting.value = false
         _isSessionActive.value = false
         _isSessionPaused.value = false
         disableAutoSpeed()

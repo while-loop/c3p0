@@ -83,6 +83,9 @@ class SessionViewModel @Inject constructor(
     private val _recentStepsPerMinute = MutableStateFlow<Float?>(null)
     val recentStepsPerMinute = _recentStepsPerMinute.asStateFlow()
 
+    private val _isSessionStarting = MutableStateFlow(false)
+    val isSessionStarting = _isSessionStarting.asStateFlow()
+
     val treadmillStatus = treadmillManager.status.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -288,9 +291,15 @@ class SessionViewModel @Inject constructor(
     }
 
     fun startSession() {
+        if (!_isSessionStarting.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            applyDefaultStartMode()
-            sessionManager.startSession()
+            try {
+                applyDefaultStartMode()
+                sessionManager.startSession()
+                sessionManager.isSessionStarting.first { isStarting -> !isStarting }
+            } finally {
+                _isSessionStarting.value = false
+            }
         }
     }
 
