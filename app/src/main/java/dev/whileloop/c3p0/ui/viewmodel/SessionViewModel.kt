@@ -245,15 +245,6 @@ class SessionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            while (true) {
-                delay(HEART_RATE_ZONE2_GUARD_INTERVAL_MS)
-                if (sessionManager.isAutoSpeedEnabled.value && !hasFreshHeartRateData()) {
-                    exitZone2ForMissingHeartRate()
-                }
-            }
-        }
-
-        viewModelScope.launch {
             settingsRepository.stepGoal.distinctUntilChanged().collect {
                 updateStepsToGoal()
             }
@@ -474,12 +465,6 @@ class SessionViewModel @Inject constructor(
         }
     }
 
-    private suspend fun exitZone2ForMissingHeartRate() {
-        sessionManager.disableAutoSpeed()
-        treadmillManager.setMode(TreadmillMode.MANUAL)
-        treadmillManager.setSpeed(MIN_SPEED_KMH)
-    }
-
     private fun hasFreshHeartRateData(nowElapsedMillis: Long = SystemClock.elapsedRealtime()): Boolean =
         currentHeartRate.value > 0 &&
             lastHeartRateReceivedAtMillis.value > 0L &&
@@ -570,7 +555,6 @@ class SessionViewModel @Inject constructor(
         private const val SPEED_APPLIED_TOLERANCE_KMH = 0.11f
         private const val PENDING_SPEED_TIMEOUT_MS = 3_000L
         private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
-        private const val HEART_RATE_ZONE2_GUARD_INTERVAL_MS = 1_000L
         private const val DEFAULT_STEP_GOAL = 10000
         internal const val STEP_GOAL_ETA_WINDOW_SECONDS = 180
         internal const val MIN_STEP_RATE_SAMPLE_SECONDS = 30

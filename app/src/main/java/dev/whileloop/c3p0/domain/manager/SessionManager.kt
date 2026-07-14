@@ -3,7 +3,9 @@ package dev.whileloop.c3p0.domain.manager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import dev.whileloop.c3p0.ble.manager.*
+import dev.whileloop.c3p0.ble.model.TreadmillMode
 import dev.whileloop.c3p0.data.entity.ActiveSessionCheckpointEntity
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
@@ -95,6 +97,22 @@ class SessionManager @Inject constructor(
                 autoSpeedController?.updateMaxSpeed(liveMax)
                 if (_isAutoSpeedEnabled.value && treadmillManager.status.value.speed > liveMax) {
                     treadmillManager.setSpeed(liveMax)
+                }
+            }
+        }
+        scope.launch {
+            while (isActive) {
+                delay(HEART_RATE_ZONE2_GUARD_INTERVAL_MS)
+                if (_isAutoSpeedEnabled.value && !isHeartRateFresh(
+                        heartRate = heartRateManager.heartRate.value,
+                        lastReceivedAtMillis = heartRateManager.lastHeartRateReceivedAtMillis.value,
+                        nowElapsedMillis = SystemClock.elapsedRealtime(),
+                        freshnessWindowMillis = HEART_RATE_FRESHNESS_WINDOW_MS
+                    )
+                ) {
+                    disableAutoSpeed()
+                    treadmillManager.setMode(TreadmillMode.MANUAL)
+                    treadmillManager.setSpeed(AUTO_SPEED_MIN_KMH)
                 }
             }
         }
@@ -475,6 +493,8 @@ class SessionManager @Inject constructor(
 
     companion object {
         private const val SESSION_CHECKPOINT_INTERVAL_MS = 60 * 1000L
+        private const val HEART_RATE_FRESHNESS_WINDOW_MS = 5_000L
+        private const val HEART_RATE_ZONE2_GUARD_INTERVAL_MS = 1_000L
         private const val SESSION_BACKUP_REQUEST_INTERVAL_MS = 5 * 60 * 1000L
         private const val ESTIMATED_STRIDE_LENGTH_METERS = 0.75
         private const val AUTO_SPEED_MIN_KMH = 1.60934f
@@ -482,6 +502,16 @@ class SessionManager @Inject constructor(
         private const val DEFAULT_ZONE2_MAX_SPEED_KMH = 3.5f * 1.60934f
     }
 }
+
+internal fun isHeartRateFresh(
+    heartRate: Int,
+    lastReceivedAtMillis: Long,
+    nowElapsedMillis: Long,
+    freshnessWindowMillis: Long = 5_000L
+): Boolean =
+    heartRate > 0 &&
+        lastReceivedAtMillis > 0L &&
+        nowElapsedMillis - lastReceivedAtMillis <= freshnessWindowMillis
 
 data class RecoverableSession(
     val session: SessionEntity,
