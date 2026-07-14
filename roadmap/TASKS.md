@@ -34,6 +34,7 @@
 - [x] **Active Session Keep Awake**: Added a profile setting to keep the phone awake only while a session is active and unpaused.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
+- [x] **Session Notification Navigation**: Make the ongoing session notification open C3P0 when tapped and use a dedicated monochrome robot status-bar icon.
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 2-second circular long press with a progress ring.
 - [x] **Session Control Haptics**: Added tap feedback to speed +/-, start, pause/resume, and stop-hold controls.
 - [x] **Session Start Single Flight**: Disable the Start button and show countdown loading feedback while the WalkingPad start command is in progress, with ViewModel and manager guards against duplicate requests.

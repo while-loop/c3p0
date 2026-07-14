@@ -3,6 +3,7 @@ package dev.whileloop.c3p0.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -11,6 +12,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import dev.whileloop.c3p0.R
+import dev.whileloop.c3p0.MainActivity
 import dev.whileloop.c3p0.domain.manager.SessionManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -28,10 +30,21 @@ class SessionService : Service() {
     }
 
     private fun startForeground() {
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(
+            this,
+            OPEN_APP_REQUEST_CODE,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Walking Session Active")
             .setContentText("C3P0 is tracking your workout")
-            .setSmallIcon(R.drawable.ic_home)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(openAppPendingIntent)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOngoing(true)
             .build()
 
@@ -67,5 +80,6 @@ class SessionService : Service() {
     companion object {
         private const val CHANNEL_ID = "session_channel"
         private const val NOTIFICATION_ID = 1
+        private const val OPEN_APP_REQUEST_CODE = 1
     }
 }
