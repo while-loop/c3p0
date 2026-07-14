@@ -37,8 +37,6 @@ class SettingsRepository @Inject constructor(
         val SESSION_START_MODE = stringPreferencesKey("session_start_mode")
         val ZONE2_MAX_SPEED_KMH = doublePreferencesKey("zone2_max_speed_kmh")
         val KEEP_SCREEN_ON_DURING_ACTIVE_SESSION = booleanPreferencesKey("keep_screen_on_during_active_session")
-        val NO_LOAD_STOP_ENABLED = booleanPreferencesKey("no_load_stop_enabled")
-        val NO_LOAD_STOP_TIMEOUT_SECONDS = intPreferencesKey("no_load_stop_timeout_seconds")
     }
 
     val treadmillAddress: Flow<String?> = context.dataStore.data.map { it[Keys.TREADMILL_ADDRESS] }
@@ -68,12 +66,6 @@ class SettingsRepository @Inject constructor(
     }
     val keepScreenOnDuringActiveSession: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.KEEP_SCREEN_ON_DURING_ACTIVE_SESSION] ?: false
-    }
-    val noLoadStopEnabled: Flow<Boolean> = context.dataStore.data.map {
-        it[Keys.NO_LOAD_STOP_ENABLED] ?: false
-    }
-    val noLoadStopTimeoutSeconds: Flow<Int> = context.dataStore.data.map {
-        sanitizeNoLoadStopTimeout(it[Keys.NO_LOAD_STOP_TIMEOUT_SECONDS])
     }
 
     suspend fun saveTreadmillAddress(address: String) {
@@ -138,14 +130,6 @@ class SettingsRepository @Inject constructor(
         requestBackupIfEnabled()
     }
 
-    suspend fun saveNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
-        context.dataStore.edit {
-            it[Keys.NO_LOAD_STOP_ENABLED] = enabled
-            it[Keys.NO_LOAD_STOP_TIMEOUT_SECONDS] = sanitizeNoLoadStopTimeout(timeoutSeconds)
-        }
-        requestBackupIfEnabled()
-    }
-
     suspend fun requestBackupIfEnabled(minIntervalMillis: Long = 0L) {
         val now = SystemClock.elapsedRealtime()
         if (
@@ -175,16 +159,11 @@ class SettingsRepository @Inject constructor(
         private const val MIN_ZONE2_MAX_SPEED_KMH = 1.60934f
         private const val DEFAULT_ZONE2_MAX_SPEED_KMH = 3.5f * 1.60934f
         private const val MAX_ZONE2_MAX_SPEED_KMH = 6.0f
-        private const val DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS = 30
-        private val NO_LOAD_STOP_TIMEOUT_OPTIONS = setOf(5, 15, 30, 45, 60)
 
         private fun sanitizeZone2MaxSpeedKmh(maxSpeedKmh: Float?): Float =
             maxSpeedKmh
                 ?.coerceIn(MIN_ZONE2_MAX_SPEED_KMH, MAX_ZONE2_MAX_SPEED_KMH)
                 ?: DEFAULT_ZONE2_MAX_SPEED_KMH
 
-        private fun sanitizeNoLoadStopTimeout(timeoutSeconds: Int?): Int =
-            timeoutSeconds?.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
-                ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
     }
 }

@@ -15,6 +15,7 @@ import dev.whileloop.c3p0.data.repository.WeightHistoryCacheRepository
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.domain.usecase.StepHistoryUseCase
 import dev.whileloop.c3p0.health.HealthConnectManager
+import dev.whileloop.c3p0.health.HealthConnectHistoryRefresher
 import dev.whileloop.c3p0.health.WeightHistoryRecord
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +37,8 @@ class StatsViewModel @Inject constructor(
     private val stepHistoryUseCase: StepHistoryUseCase,
     private val stepHistoryCacheRepository: StepHistoryCacheRepository,
     private val weightHistoryCacheRepository: WeightHistoryCacheRepository,
-    private val healthConnectManager: HealthConnectManager
+    private val healthConnectManager: HealthConnectManager,
+    private val healthConnectHistoryRefresher: HealthConnectHistoryRefresher
 ) : ViewModel() {
     private var selectedMetricsJob: Job? = null
 
@@ -85,6 +87,16 @@ class StatsViewModel @Inject constructor(
     init {
         loadCachedThenRefreshStepHistory()
         loadCachedThenRefreshWeightHistory()
+        viewModelScope.launch {
+            healthConnectHistoryRefresher.stepHistoryUpdates.collect { rows ->
+                _dailyStepHistory.value = rows.map { it.toDailyStepHistory() }
+            }
+        }
+        viewModelScope.launch {
+            healthConnectHistoryRefresher.weightHistoryUpdates.collect { records ->
+                _weightHistory.value = records.map { it.toWeightHistoryRecord() }
+            }
+        }
     }
 
     fun selectSession(session: SessionEntity) {
@@ -133,19 +145,55 @@ class StatsViewModel @Inject constructor(
 
     fun refreshStepHistory() {
         viewModelScope.launch {
-            refreshStepHistoryRange(
-                startDate = defaultStepHistoryStartDate(),
-                cachedHistory = stepHistoryCacheRepository.readDailyStepHistory()
-            )
+            refreshStepHistoryWith { healthConnectHistoryRefresher.refreshRecentSteps() }
+        }
+    }
+
+    fun refreshFullStepHistory() {
+        viewModelScope.launch {
+            refreshStepHistoryWith { healthConnectHistoryRefresher.refreshFullSteps() }
         }
     }
 
     fun refreshWeightHistory() {
         viewModelScope.launch {
-            refreshWeightHistoryRange(
-                startTime = defaultWeightHistoryStartTime(),
-                cachedHistory = weightHistoryCacheRepository.readWeightHistory()
-            )
+            refreshWeightHistoryWith { healthConnectHistoryRefresher.refreshRecentWeight() }
+        }
+    }
+
+    fun refreshFullWeightHistory() {
+        viewModelScope.launch {
+            refreshWeightHistoryWith { healthConnectHistoryRefresher.refreshFullWeight() }
+        }
+    }
+
+    private suspend fun refreshStepHistoryWith(
+        refresh: suspend () -> List<CachedDailyStepHistory>
+    ) {
+        _isStepHistoryLoading.value = true
+        try {
+            val canRead = stepHistoryUseCase.canReadStepHistory()
+            _canReadHealthConnectSteps.value = canRead
+            if (canRead) {
+                _dailyStepHistory.value = refresh().map { it.toDailyStepHistory() }
+            }
+        } finally {
+            _isStepHistoryLoading.value = false
+        }
+    }
+
+    private suspend fun refreshWeightHistoryWith(
+        refresh: suspend () -> List<CachedWeightHistoryRecord>
+    ) {
+        _isWeightHistoryLoading.value = true
+        try {
+            val canRead = healthConnectManager.hasWeightHistoryPermission()
+            _canReadHealthConnectWeight.value = canRead
+            if (canRead) {
+                _weightHistory.value = refresh().map { it.toWeightHistoryRecord() }
+            }
+        } finally {
+            _isWeightHistoryLoading.value = false
         }
     }
 

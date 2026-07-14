@@ -7,11 +7,6 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 internal object KingsmithFtmsProtocol {
-    data class NoLoadStopResponse(
-        val enabled: Boolean,
-        val timeoutSeconds: Int?
-    )
-
     val SERVICE_UUID: UUID = UUID.fromString("00001826-0000-1000-8000-00805f9b34fb")
     const val TREADMILL_DATA_CHAR = "00002acd"
     const val TRAINING_STATUS_CHAR = "00002ad3"
@@ -38,59 +33,12 @@ internal object KingsmithFtmsProtocol {
     val PAUSE_COMMAND = byteArrayOf(0x08, 0x02)
     val STOP_COMMAND = byteArrayOf(0x08, 0x01)
 
-    private const val SUPPLEMENT_HEADER_0 = 0x01
-    private const val SUPPLEMENT_HEADER_1 = 0x00
-    private const val SUPPLEMENT_SET_PROPERTY = 0x21
-    private const val SUPPLEMENT_PROPERTY_AUTO_STOP = 0x02
-
     fun setTargetSpeedCommand(speedKmh: Float): ByteArray {
         val raw = (speedKmh * 100).roundToInt().coerceIn(0, 0xFFFF)
         return byteArrayOf(
             0x02,
             (raw and 0xFF).toByte(),
             ((raw shr 8) and 0xFF).toByte()
-        )
-    }
-
-    fun noLoadStopCommands(enabled: Boolean, timeoutSeconds: Int): List<ByteArray> {
-        val value = if (enabled) 1 else 0
-        return listOf(
-            supplementPropertyCommand(
-                propertyId = SUPPLEMENT_PROPERTY_AUTO_STOP,
-                value = value
-            )
-        )
-    }
-
-    private fun supplementPropertyCommand(propertyId: Int, value: Int): ByteArray =
-        wrapSupplementCommand(
-            byteArrayOf(
-                SUPPLEMENT_SET_PROPERTY.toByte(),
-                propertyId.toByte(),
-                value.toByte()
-            )
-        )
-
-    private fun wrapSupplementCommand(body: ByteArray): ByteArray {
-        val checksum = body.fold(0) { sum, byte -> sum + (byte.toInt() and 0xFF) } and 0xFF
-        return byteArrayOf(
-            SUPPLEMENT_HEADER_0.toByte(),
-            SUPPLEMENT_HEADER_1.toByte(),
-            (body.size + 1).toByte(),
-            0x00
-        ) + body + checksum.toByte()
-    }
-
-    fun parseNoLoadStopResponse(data: ByteArray): NoLoadStopResponse? {
-        if (data.size < 6) return null
-        if (data.first() != 0x72.toByte() || data.last() != 0xF7.toByte()) return null
-        val propertyIndex = (3 until data.lastIndex).firstOrNull { index ->
-            (data[index].toInt() and 0xFF) == SUPPLEMENT_PROPERTY_AUTO_STOP
-        } ?: return null
-        val value = data.getOrNull(propertyIndex + 1)?.toInt()?.and(0xFF) ?: return null
-        return NoLoadStopResponse(
-            enabled = value > 0,
-            timeoutSeconds = null
         )
     }
 

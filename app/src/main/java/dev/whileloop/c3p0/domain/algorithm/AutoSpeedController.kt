@@ -8,15 +8,20 @@ class AutoSpeedController(
     private val zoneMinHr: Int = targetHr - DEFAULT_ZONE_HALF_WIDTH_BPM,
     private val zoneMaxHr: Int = targetHr + DEFAULT_ZONE_HALF_WIDTH_BPM,
     private val minSpeed: Float = 1.60934f,
-    private val maxSpeed: Float = 6.0f,
+    maxSpeed: Float = 6.0f,
     private val adjustmentIntervalSeconds: Int = 15,
     private val maxAdjustment: Float = MAX_ADJUSTMENT_KMH,
     private val memoryWindowMillis: Long = 5 * 60 * 1000L
 ) {
+    private var maxSpeed = maxSpeed.coerceAtLeast(minSpeed)
     private val samples = mutableListOf<Sample>()
     private val observations = mutableListOf<Observation>()
     private var lastAdjustmentTime = 0L
     private var lastZoneEdgeGuardTime = 0L
+
+    fun updateMaxSpeed(maxSpeed: Float) {
+        this.maxSpeed = maxSpeed.coerceAtLeast(minSpeed)
+    }
 
     fun addHrSample(hr: Int, speedKmh: Float, timestamp: Long) {
         samples.add(Sample(hr = hr, speedKmh = speedKmh.coerceIn(minSpeed, maxSpeed)))

@@ -66,6 +66,26 @@ class AutoSpeedControllerTest {
     }
 
     @Test
+    fun updatedMaxSpeedAppliesToNextLiveDecision() {
+        val adjustments = mutableListOf<Float>()
+        val controller = AutoSpeedController(
+            targetHr = 123,
+            zoneMinHr = 114,
+            zoneMaxHr = 133,
+            maxSpeed = 6.0f,
+            adjustmentIntervalSeconds = 30
+        ).apply {
+            onSpeedAdjustmentRequired = { adjustment -> adjustments += adjustment }
+        }
+
+        controller.updateMaxSpeed(4.0f)
+        controller.addHrSample(hr = 100, speedKmh = 4.0f, timestamp = 100)
+        controller.addHrSample(hr = 100, speedKmh = 4.0f, timestamp = 30_100)
+
+        assertTrue(adjustments.isEmpty())
+    }
+
+    @Test
     fun belowZoneUsesSmallerStepBandsBeforeMaxAdjustment() {
         assertEquals(0.1f * KM_PER_MILE, belowZoneAdjustmentFor(avgHr = 112), 0.0001f)
         assertEquals(0.2f * KM_PER_MILE, belowZoneAdjustmentFor(avgHr = 109), 0.0001f)

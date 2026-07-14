@@ -3,8 +3,10 @@ package dev.whileloop.c3p0.ui.screen
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -174,6 +176,7 @@ fun StatsScreen(
                         onExpandedChange = {},
                         onEnable = { showStepPermissionSheet = true },
                         onRefresh = { viewModel.refreshStepHistory() },
+                        onFullRefresh = { viewModel.refreshFullStepHistory() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(420.dp)
@@ -198,6 +201,7 @@ fun StatsScreen(
                         onVisibleEndTimeChange = { weightRightAnchorMillis = it },
                         onEnable = { showWeightPermissionSheet = true },
                         onRefresh = { viewModel.refreshWeightHistory() },
+                        onFullRefresh = { viewModel.refreshFullWeightHistory() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 360.dp)
@@ -532,6 +536,7 @@ private fun HealthConnectStepHistoryCard(
     onExpandedChange: (Boolean) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
+    onFullRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val chartRows = remember(rows, selectedGrouping, stepGoal) {
@@ -566,21 +571,13 @@ private fun HealthConnectStepHistoryCard(
                 } else {
                     Text("Health Connect steps", style = MaterialTheme.typography.titleMedium)
                 }
-                TextButton(
-                    onClick = if (canReadSteps) onRefresh else onEnable,
-                    enabled = !isLoading,
-                    modifier = Modifier.height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(if (canReadSteps) "Refresh" else "Enable")
-                    }
-                }
+                HistoryRefreshButton(
+                    canRead = canReadSteps,
+                    isLoading = isLoading,
+                    onEnable = onEnable,
+                    onRefresh = onRefresh,
+                    onFullRefresh = onFullRefresh
+                )
             }
             if (isExpanded) {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -626,6 +623,7 @@ private fun HealthConnectWeightHistoryCard(
     onVisibleEndTimeChange: (Long) -> Unit,
     onEnable: () -> Unit,
     onRefresh: () -> Unit,
+    onFullRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val chartPoints = remember(records, unitSystem, selectedGrouping) {
@@ -647,21 +645,13 @@ private fun HealthConnectWeightHistoryCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Weight trend", style = MaterialTheme.typography.titleMedium)
-                TextButton(
-                    onClick = if (canReadWeight) onRefresh else onEnable,
-                    enabled = !isLoading,
-                    modifier = Modifier.height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(if (canReadWeight) "Refresh" else "Enable")
-                    }
-                }
+                HistoryRefreshButton(
+                    canRead = canReadWeight,
+                    isLoading = isLoading,
+                    onEnable = onEnable,
+                    onRefresh = onRefresh,
+                    onFullRefresh = onFullRefresh
+                )
             }
             Spacer(modifier = Modifier.height(8.dp))
             WeightChartControls(
@@ -696,6 +686,43 @@ private fun HealthConnectWeightHistoryCard(
                     WeightChartLegend()
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HistoryRefreshButton(
+    canRead: Boolean,
+    isLoading: Boolean,
+    onEnable: () -> Unit,
+    onRefresh: () -> Unit,
+    onFullRefresh: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .height(36.dp)
+            .clip(MaterialTheme.shapes.small)
+            .combinedClickable(
+                enabled = !isLoading,
+                onClick = if (canRead) onRefresh else onEnable,
+                onLongClickLabel = if (canRead) "Refresh full history" else null,
+                onLongClick = if (canRead) onFullRefresh else null
+            )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text = if (canRead) "Refresh" else "Enable",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }

@@ -19,7 +19,6 @@
 - [x] **AIS Bus Prefix First**: Start the `5833ff02` AIS handshake with KS Fit's BLE sub-version 18 bus payload prefix, then toggle to unprefixed AIS only if the prefixed handshake does not answer.
 - [x] **KingSmith FTMS Supplement Route**: Prefer KS FTMS Control Point plus the ODM/supplement property-list preamble over `5833ff02` when `0x1826` and `24e2521c`/`d18d2c10` are present, and parse the KingSmith FTMS step extension.
 - [x] **FTMS Pause/Stop Split**: Send FTMS pause as `08 02` and final stop as `08 01` so the app matches KS Fit's pause-then-stop flow on FTMS WalkingPads.
-- [x] **FTMS No-Load Boolean Acknowledgement**: Decode the supplement `autoStop` on/off ACK, save FTMS no-load enablement only after a matching response, and avoid presenting timeout seconds as confirmed on FTMS pads until the timeout setter is decoded.
 - [x] **FTMS Supplement Notification Noise**: Keep unmatched FTMS supplement notifications in debug logs instead of surfacing them as user-visible Bluetooth errors.
 - [x] **Speed Apply Tolerance**: Verify set-speed commands against the treadmill's one-decimal reported speed resolution to avoid false errors from 0.1 km/h rounding.
 - [x] **Pause-Then-Stop Flow**: Split treadmill pause from final stop so session pause sends the pad pause command, the stop button only appears after pause, and final stop waits for the belt to coast to zero before stopping.
@@ -33,10 +32,10 @@
 - [x] **Zone 2 Controller Tests**: Added unit coverage for in-zone no-op behavior, learned speed bias, and trend-gated edge guard adjustments.
 - [x] **Default Session Mode Setting**: Added a Profile setting for Manual or Zone 2 cold-start defaults, with Zone 2 as the default and Manual fallbacks when prerequisites are unavailable.
 - [x] **Active Session Keep Awake**: Added a profile setting to keep the phone awake only while a session is active and unpaused.
-- [x] **No-Load Stop Setting**: Recovered KS Fit's `AuToStop`/`NoloadStop` encrypted-property keys and added Profile controls that send and save the no-load stop setting after the pad accepts it.
 - [x] **Garmin Support**: Implemented standard Heart Rate Service (HRS) integration.
 - [x] **Session Logic**: Created `SessionManager` and `SessionService` (Foreground) for ongoing tracking.
-- [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 3-second circular long press with a progress ring.
+- [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 2-second circular long press with a progress ring.
+- [x] **Session Control Haptics**: Added tap feedback to speed +/-, start, pause/resume, and stop-hold controls.
 - [x] **Session Control Commands**: Start, pause/resume, and stop now send WalkingPad control commands, not just app-local state changes.
 - [x] **Inactive Device Warning**: Added a bottom sheet before start/resume when the watch, live HR broadcast, or WalkingPad is inactive, including pair, continue, and never-ask-again controls.
 - [x] **Auto-Speed**: Implemented smooth Zone 2 adjustment algorithm with moving average smoothing and wired Zone 2 mode to enable it.
@@ -60,6 +59,7 @@
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
 - [x] **Sticky Bluetooth Error Clear**: Kept the clear-all Bluetooth error action visible while long error stacks scroll.
 - [x] **WalkingPad Profile Reconnect Controls**: Added inline Profile-row controls to connect saved WalkingPad Bluetooth and refresh the KS protocol handshake.
+- [x] **Watch Profile Reconnect Control**: Added an inline Profile-row Bluetooth reconnect action for the saved watch.
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.
 - [x] **Session Modes**: Show Manual and Zone 2 on the session page, keeping native WalkingPad automatic mode hidden from the user-facing controls.
 - [x] **Profile Persistence**: Persisted age and daily step goal through DataStore and backup.
@@ -94,6 +94,10 @@
 - [x] **Weight Pinch Boundary Zoom**: Anchor pinch zoom to the visible start/end timestamp when the left/right finger is held, and dampen zoom sensitivity.
 - [x] **Weight Chart Control Contrast**: Keep a stable pinch boundary anchor for each gesture and tint selected range/grouping chips for better contrast.
 - [x] **Incremental Chart Refresh**: Refresh cached Health Connect chart data from the latest cached point plus a 7-day overlap on startup, while keeping manual refresh full-history.
+- [x] **Chart Refresh Gestures**: Full-chart Refresh reads the latest week; long-press Refresh reads the retained full-history range.
+- [x] **Post-Session Health Refresh**: Successful Health Connect session exports refresh goal progress live and start an incremental step/weight cache refresh from the last fetch.
+- [x] **Live Zone 2 Speed Cap**: Apply Profile max-speed changes immediately to an active Zone 2 controller and every outgoing adjustment.
+- [x] **Remove No-Load Stop**: Removed the unsupported Profile control, persistence, manager API, protocol commands, and tests.
 - [x] **Full Chart Refresh Upserts**: Keep existing chart cache rows during manual full refresh and overwrite only matching Health Connect dates or timestamps.
 - [x] **Zone 2 HR Chart Guides**: Draw session chart Zone 2 min/max guides as dashed lines so they read as thresholds instead of data.
 - [x] **Health Connect Session Export**: Write completed walking sessions, steps, and distance to Health Connect; do not request or write heart-rate records.
@@ -112,5 +116,3 @@
 - [ ] **Elapsed vs Active Time**: Decide whether to display both wall-clock elapsed time and active/moving time. Current session timers pause with the session; many fitness apps keep elapsed wall-clock time separate from active time.
 - [ ] **Backup Restore Verification**: Manually verify Android Auto Backup restore behavior on a real signed install path; restore timing is controlled by Android and Google backup services.
 - [ ] **Unit Tests**: Continue expanding focused JVM coverage for session lifecycle, permissions, and BLE edge cases.
-- [ ] **FTMS No-Load Timeout Setter**: Sniff KS Fit BLE packets or decode the remaining supplement command map to identify the exact FTMS+supplement no-load timeout setter and readback.
-- [ ] **No-Load Stop Readback Polling**: Sniff KS Fit BLE packets or decode the remaining property map to identify the numeric `servers getProp` IDs for proactive no-load stop readback.

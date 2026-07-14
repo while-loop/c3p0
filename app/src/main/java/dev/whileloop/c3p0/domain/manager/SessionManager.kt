@@ -12,6 +12,7 @@ import dev.whileloop.c3p0.data.repository.SettingsRepository
 import dev.whileloop.c3p0.domain.algorithm.AutoSpeedController
 import dev.whileloop.c3p0.health.HealthConnectManager
 import dev.whileloop.c3p0.health.HealthConnectSpeedSample
+import dev.whileloop.c3p0.health.HealthConnectHistoryRefresher
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -30,7 +31,8 @@ class SessionManager @Inject constructor(
     private val heartRateManager: HeartRateManager,
     private val sessionRepository: SessionRepository,
     private val settingsRepository: SettingsRepository,
-    private val healthConnectManager: HealthConnectManager
+    private val healthConnectManager: HealthConnectManager,
+    private val healthConnectHistoryRefresher: HealthConnectHistoryRefresher
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var sessionJob: Job? = null
@@ -65,6 +67,9 @@ class SessionManager @Inject constructor(
     private val _recoverableSession = MutableStateFlow<RecoverableSession?>(null)
     val recoverableSession = _recoverableSession.asStateFlow()
 
+    private val _healthConnectSessionWrites = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val healthConnectSessionWrites = _healthConnectSessionWrites.asSharedFlow()
+
     private val zone2MaxSpeedKmh = settingsRepository.zone2MaxSpeedKmh.stateIn(
         scope,
         SharingStarted.Eagerly,
@@ -79,6 +84,15 @@ class SessionManager @Inject constructor(
                 refreshRecoverableSession()
             } finally {
                 recoveryLoaded.complete(Unit)
+            }
+        }
+        scope.launch {
+            zone2MaxSpeedKmh.collect { configuredMax ->
+                val liveMax = configuredMax.coerceIn(AUTO_SPEED_MIN_KMH, AUTO_SPEED_MAX_KMH)
+                autoSpeedController?.updateMaxSpeed(liveMax)
+                if (_isAutoSpeedEnabled.value && treadmillManager.status.value.speed > liveMax) {
+                    treadmillManager.setSpeed(liveMax)
+                }
             }
         }
     }
@@ -165,7 +179,7 @@ class SessionManager @Inject constructor(
             val sessionMetrics = sessionRepository.getMetricsForSessionSnapshot(id)
             
             // Write to Health Connect
-            healthConnectManager.writeSession(
+            val wasWrittenToHealthConnect = healthConnectManager.writeSession(
                 startTime = start,
                 endTime = end,
                 steps = totalSteps,
@@ -173,6 +187,10 @@ class SessionManager @Inject constructor(
                 activeCaloriesKcal = reportedCalories,
                 speedSamples = sessionMetrics.toHealthConnectSpeedSamples()
             )
+            if (wasWrittenToHealthConnect) {
+                _healthConnectSessionWrites.tryEmit(Unit)
+                scope.launch { healthConnectHistoryRefresher.refreshSinceLastFetch() }
+            }
             sessionRepository.deleteCheckpoint(id)
             settingsRepository.requestBackupIfEnabled()
             resetInMemorySessionState()
@@ -193,7 +211,7 @@ class SessionManager @Inject constructor(
                 completedSession
             )
             val metrics = sessionRepository.getMetricsForSessionSnapshot(checkpoint.sessionId)
-            healthConnectManager.writeSession(
+            val wasWrittenToHealthConnect = healthConnectManager.writeSession(
                 startTime = recovered.session.startTime,
                 endTime = end,
                 steps = checkpoint.totalSteps,
@@ -201,6 +219,10 @@ class SessionManager @Inject constructor(
                 activeCaloriesKcal = checkpoint.totalEnergy,
                 speedSamples = metrics.toHealthConnectSpeedSamples()
             )
+            if (wasWrittenToHealthConnect) {
+                _healthConnectSessionWrites.tryEmit(Unit)
+                scope.launch { healthConnectHistoryRefresher.refreshSinceLastFetch() }
+            }
             sessionRepository.deleteCheckpoint(checkpoint.sessionId)
             _recoverableSession.value = null
             settingsRepository.requestBackupIfEnabled()
@@ -380,9 +402,11 @@ class SessionManager @Inject constructor(
         ).apply {
             onSpeedAdjustmentRequired = { adjustment ->
                 scope.launch {
+                    val liveMaxSpeedKmh = zone2MaxSpeedKmh.value
+                        .coerceIn(AUTO_SPEED_MIN_KMH, AUTO_SPEED_MAX_KMH)
                     val currentSpeed = treadmillManager.status.value.speed
                     treadmillManager.setSpeed(
-                        (currentSpeed + adjustment).coerceIn(AUTO_SPEED_MIN_KMH, maxSpeedKmh)
+                        (currentSpeed + adjustment).coerceIn(AUTO_SPEED_MIN_KMH, liveMaxSpeedKmh)
                     )
                 }
             }

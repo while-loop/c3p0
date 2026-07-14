@@ -71,18 +71,6 @@ class ProfileViewModel @Inject constructor(
         false
     )
 
-    val noLoadStopEnabled = settingsRepository.noLoadStopEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        false
-    )
-
-    val noLoadStopTimeoutSeconds = settingsRepository.noLoadStopTimeoutSeconds.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        30
-    )
-
     val isGoogleDriveSyncEnabled = settingsRepository.googleDriveSyncEnabled.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -105,12 +93,6 @@ class ProfileViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         treadmillManager.connectionState.value
-    )
-
-    val treadmillStatus = treadmillManager.status.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        treadmillManager.status.value
     )
 
     val watchConnectionState = heartRateManager.connectionState.stateIn(
@@ -230,14 +212,12 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun updateNoLoadStop(enabled: Boolean, timeoutSeconds: Int) {
+    fun connectWatch() {
         viewModelScope.launch {
-            if (treadmillManager.setNoLoadStop(enabled, timeoutSeconds)) {
-                val confirmedStatus = treadmillManager.status.value
-                settingsRepository.saveNoLoadStop(
-                    enabled = confirmedStatus.noLoadStopEnabled ?: enabled,
-                    timeoutSeconds = confirmedStatus.noLoadStopTimeoutSeconds ?: noLoadStopTimeoutSeconds.value
-                )
+            watchAddress.value?.let { address ->
+                if (heartRateManager.connectionState.value == ConnectionState.DISCONNECTED) {
+                    heartRateManager.connect(address)
+                }
             }
         }
     }

@@ -14,8 +14,6 @@ internal object KingsmithEncryptedProtocol {
     const val MANUAL_MODE_COMMAND = "props ControlMode 1"
     const val STANDBY_MODE_COMMAND = "props ControlMode 2"
     const val POLL_PROPS_COMMAND = "servers getProp 1 2 3 4 5 7 9 12 13 16 17 23 24 31"
-    const val NO_LOAD_STOP_SWITCH_KEY = "AuToStop"
-    const val NO_LOAD_STOP_TIMEOUT_KEY = "NoloadStop"
     const val AIS_BUS_PREFIX: Byte = 1
 
     val characteristicPairs = listOf(
@@ -189,18 +187,9 @@ internal object KingsmithEncryptedProtocol {
             distance = runningDistanceMeters?.let { meters -> meters / 10 } ?: current.distance,
             steps = runningSteps ?: current.steps,
             calories = props["BurnCalories"]?.toFloatOrNull()?.toInt() ?: current.calories,
-            hasStepCount = runningSteps != null || current.hasStepCount,
-            noLoadStopEnabled = props[NO_LOAD_STOP_SWITCH_KEY]?.toBooleanInt() ?: current.noLoadStopEnabled,
-            noLoadStopTimeoutSeconds =
-                props[NO_LOAD_STOP_TIMEOUT_KEY]?.toIntOrNull() ?: current.noLoadStopTimeoutSeconds
+            hasStepCount = runningSteps != null || current.hasStepCount
         )
     }
-
-    fun noLoadStopSwitchCommand(enabled: Boolean): String =
-        "props $NO_LOAD_STOP_SWITCH_KEY ${if (enabled) 1 else 0}"
-
-    fun noLoadStopTimeoutCommand(timeoutSeconds: Int): String =
-        "props $NO_LOAD_STOP_TIMEOUT_KEY $timeoutSeconds"
 
     private fun isPlausibleText(text: String): Boolean {
         if (text.isBlank()) return true
@@ -232,13 +221,6 @@ internal object KingsmithEncryptedProtocol {
             0 -> TreadmillMode.AUTO
             1 -> TreadmillMode.MANUAL
             2 -> TreadmillMode.STANDBY
-            else -> null
-        }
-
-    private fun String.toBooleanInt(): Boolean? =
-        when (toIntOrNull()) {
-            0 -> false
-            1 -> true
             else -> null
         }
 

@@ -111,9 +111,9 @@ class HealthConnectManager @Inject constructor(
         distanceMeters: Double,
         activeCaloriesKcal: Int,
         speedSamples: List<HealthConnectSpeedSample>
-    ) {
-        if (!hasPermissions(WRITE_SESSION_PERMISSIONS)) return
-        if (!endTime.isAfter(startTime)) return
+    ): Boolean {
+        if (!hasPermissions(WRITE_SESSION_PERMISSIONS)) return false
+        if (!endTime.isAfter(startTime)) return false
 
         try {
             val device = Device(
@@ -187,8 +187,10 @@ class HealthConnectManager @Inject constructor(
                     distanceRecord
                 ) + listOfNotNull<Record>(calorieRecord, speedRecord)
             )
+            return true
         } catch (e: Exception) {
             Timber.e(e, "Error writing session to Health Connect")
+            return false
         }
     }
 

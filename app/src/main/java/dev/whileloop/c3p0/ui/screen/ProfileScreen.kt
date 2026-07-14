@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -48,21 +47,14 @@ fun ProfileScreen(
     val zone2MaxSpeedKmh by viewModel.zone2MaxSpeedKmh.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
-    val noLoadStopEnabled by viewModel.noLoadStopEnabled.collectAsState()
-    val noLoadStopTimeoutSeconds by viewModel.noLoadStopTimeoutSeconds.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
     val watchAddress by viewModel.watchAddress.collectAsState()
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
-    val treadmillStatus by viewModel.treadmillStatus.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
-    val isTreadmillConnected = treadmillConnectionState == ConnectionState.CONNECTED
     val hasTreadmillAddress = treadmillAddress != null
     val canConnectTreadmillBluetooth = hasTreadmillAddress && treadmillConnectionState == ConnectionState.DISCONNECTED
     val canRefreshTreadmillProtocol = hasTreadmillAddress && treadmillConnectionState != ConnectionState.DISCONNECTING
-    val noLoadStopTimeoutConfirmed =
-        !isTreadmillConnected ||
-            treadmillStatus.noLoadStopEnabled != noLoadStopEnabled ||
-            treadmillStatus.noLoadStopTimeoutSeconds != null
+    val canConnectWatchBluetooth = watchAddress != null && watchConnectionState == ConnectionState.DISCONNECTED
     val healthConnectPermissions = remember { healthConnectPermissions() }
     var showHealthConnectPermissionSheet by remember { mutableStateOf(false) }
     var launchHealthConnectPermissions by remember { mutableStateOf(false) }
@@ -183,53 +175,21 @@ fun ProfileScreen(
         ListItem(
             headlineContent = { Text("Watch") },
             supportingContent = {
-                Text(watchAddress ?: "No device selected")
+                Column {
+                    Text(watchAddress ?: "No device selected")
+                    Text(viewModel.connectionLabel(watchConnectionState))
+                }
             },
             trailingContent = {
-                Text(viewModel.connectionLabel(watchConnectionState))
+                TextButton(
+                    onClick = { viewModel.connectWatch() },
+                    enabled = canConnectWatchBluetooth,
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    Text("BT")
+                }
             }
         )
-        ListItem(
-            headlineContent = { Text("No-load stop") },
-            supportingContent = {
-                Text(
-                    if (noLoadStopEnabled) {
-                        if (noLoadStopTimeoutConfirmed) {
-                            "Stop after ${noLoadStopTimeoutSeconds}s without load"
-                        } else {
-                            "Idle shutdown is on; timeout unchanged on pad"
-                        }
-                    } else {
-                        "Idle shutdown is off"
-                    }
-                )
-            },
-            trailingContent = {
-                Switch(
-                    checked = noLoadStopEnabled,
-                    enabled = isTreadmillConnected,
-                    onCheckedChange = { enabled ->
-                        viewModel.updateNoLoadStop(enabled, noLoadStopTimeoutSeconds)
-                    }
-                )
-            }
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            NoLoadStopTimeoutOptions.forEach { timeoutSeconds ->
-                FilterChip(
-                    selected = noLoadStopTimeoutSeconds == timeoutSeconds,
-                    onClick = { viewModel.updateNoLoadStop(noLoadStopEnabled, timeoutSeconds) },
-                    enabled = isTreadmillConnected && noLoadStopEnabled && noLoadStopTimeoutConfirmed,
-                    label = { Text("${timeoutSeconds}s") }
-                )
-            }
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -493,4 +453,3 @@ private const val KM_PER_MILE = 1.60934f
 private const val MIN_ZONE2_MAX_SPEED_KMH = 1.60934f
 private const val MAX_ZONE2_MAX_SPEED_KMH = 6.0f
 private const val SPEED_DISPLAY_STEP = 0.1f
-private val NoLoadStopTimeoutOptions = listOf(5, 15, 30, 45, 60)

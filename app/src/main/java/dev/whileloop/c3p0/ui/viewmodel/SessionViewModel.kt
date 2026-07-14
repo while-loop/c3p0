@@ -257,6 +257,12 @@ class SessionViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            sessionManager.healthConnectSessionWrites.collect {
+                refreshStepsToGoal()
+            }
+        }
+
+        viewModelScope.launch {
             settingsRepository.treadmillAddress
                 .filterNotNull()
                 .distinctUntilChanged()

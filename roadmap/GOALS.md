@@ -10,6 +10,7 @@
 - [x] Deduplicate BLE scan results by device address and reveal qualified devices in a stable order after repeated scan events.
 - [x] Show selected and connected status in pairing/profile surfaces.
 - [x] Reconnect saved treadmill/watch addresses when opening session or profile screens.
+- [x] Expose direct reconnect controls for both saved WalkingPad and watch devices in Profile.
 
 ## Phase 2: Data Persistence & Health Connect [COMPLETED]
 - [x] Set up Room database for sessions, history, and settings.
@@ -47,6 +48,7 @@
 - [x] Surface the saved daily step goal in historical steps charts.
 - [x] Preserve chart context when changing weight trend time periods.
 - [x] Avoid repeated full-history Health Connect reads during normal chart startup refresh.
+- [x] Refresh one week from full-chart actions, reserve full-history reads for long press, and refresh caches after session export.
 
 ## Phase 5: Cloud Sync & Final Polish [COMPLETED]
 - [x] Integrate Google Drive via Android Auto Backup.
@@ -55,3 +57,4 @@
 - [x] Throttle session-progress backup requests without repeated DataStore reads.
 - [x] Implement Green/Gray connectivity status indicators in UI.
 - [x] Add GitHub Actions CI that builds debug APKs on every push and publishes the APK artifact.
+- [x] Add haptic confirmation to session controls, use a two-second stop hold, and remove the unsupported no-load setting.

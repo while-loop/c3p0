@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -86,6 +88,7 @@ fun SessionDashboard(
     onNavigateToPairing: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val status by viewModel.treadmillStatus.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val watchConnectionState by viewModel.watchConnectionState.collectAsState()
@@ -353,6 +356,7 @@ fun SessionDashboard(
                     ) {
                         Button(
                             onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (isSessionPaused) {
                                     if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
                                         neverAskAgain = false
@@ -381,6 +385,7 @@ fun SessionDashboard(
                 } else {
                     Button(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             pendingSessionAction = SessionAction.Start
                             if (context.hasPermissions(permissions)) {
                                 if (shouldWarnAboutInactiveDevices(connectionState, watchConnectionState, heartRateActive, skipInactiveDeviceWarning)) {
@@ -500,6 +505,7 @@ private fun SpeedAdjustButton(
     onStep: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val latestOnStep by rememberUpdatedState(onStep)
     val scope = rememberCoroutineScope()
     var repeatJob by remember { mutableStateOf<Job?>(null) }
@@ -516,6 +522,7 @@ private fun SpeedAdjustButton(
 
     fun startRepeating() {
         if (repeatJob != null) return
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         latestOnStep()
         val startedAt = SystemClock.elapsedRealtime()
         repeatJob = scope.launch {
@@ -528,6 +535,7 @@ private fun SpeedAdjustButton(
                     1
                 }
                 repeat(stepCount) { latestOnStep() }
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 delay(SPEED_HOLD_REPEAT_INTERVAL_MS)
             }
         }
@@ -547,6 +555,7 @@ private fun SpeedAdjustButton(
                 this.contentDescription = contentDescription
                 onClick {
                     if (!enabled) return@onClick false
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     latestOnStep()
                     true
                 }
@@ -584,6 +593,7 @@ private fun LongPressStopButton(
     onStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
     var isHolding by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableStateOf(0f) }
     val ringColor = MaterialTheme.colorScheme.onError
@@ -607,6 +617,7 @@ private fun LongPressStopButton(
                 holdProgress = (elapsed.toFloat() / STOP_HOLD_DURATION_MS).coerceIn(0f, 1f)
                 if (elapsed >= STOP_HOLD_DURATION_MS) {
                     isHolding = false
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onStop()
                     break
                 }
@@ -628,6 +639,7 @@ private fun LongPressStopButton(
             .pointerInput(onStop) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 isHolding = true
                 waitForUpOrCancellation()
                 isHolding = false
@@ -1207,7 +1219,7 @@ private val CHART_PADDING = 8.dp
 private val STAT_GRID_GAP = 10.dp
 private val MIN_STAT_TILE_WIDTH = 100.dp
 private val SESSION_FOOTER_RESERVED_HEIGHT = 180.dp
-private const val STOP_HOLD_DURATION_MS = 3_000L
+private const val STOP_HOLD_DURATION_MS = 2_000L
 private const val STOP_PROGRESS_FRAME_MS = 16L
 private const val STOP_HOLD_SCALE = 2f
 private const val STOP_HOLD_ANIMATION_MS = 160

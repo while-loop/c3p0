@@ -52,9 +52,6 @@ class WalkingPadManagerImpl @Inject constructor(
     private var lastCommandElapsedMillis = 0L
     private var lastStatusReceivedElapsedMillis = 0L
     private var lastRawNotificationHex: String? = null
-    private var lastKsFtmsSupplementNotificationHex: String? = null
-    private var lastKsFtmsSupplementNotificationSeq = 0L
-    private var lastKsFtmsNoLoadStopResponse: KingsmithFtmsProtocol.NoLoadStopResponse? = null
     private var connectionGeneration = 0
     private val protocolReady = MutableStateFlow(false)
     private val legacyProtocolReady = MutableStateFlow(false)
@@ -91,9 +88,6 @@ class WalkingPadManagerImpl @Inject constructor(
         resetKsEncryptedState()
         activeKsFtmsSupplementWriteCharSubstring = null
         activeKsFtmsSupplementNotifyCharSubstring = null
-        lastKsFtmsSupplementNotificationHex = null
-        lastKsFtmsSupplementNotificationSeq = 0L
-        lastKsFtmsNoLoadStopResponse = null
         _supportsNativeAutoMode.value = false
         _connectionState.value = ConnectionState.CONNECTING
         connection = BleConnection(
@@ -448,93 +442,6 @@ class WalkingPadManagerImpl @Inject constructor(
         desiredUnitSystem = unitSystem
         return applyUnitSystem(unitSystem)
     }
-
-    override suspend fun setNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean {
-        if (ksFtmsProtocolReady.value) {
-            return setKsFtmsNoLoadStop(enabled, timeoutSeconds)
-        }
-
-        if (!ksEncryptedProtocolReady.value) {
-            errorReporter.report(
-                "WalkingPad Bluetooth",
-                "No-load stop requires a KS WalkingPad protocol that exposes settings writes",
-                "enabled=$enabled timeoutSeconds=$timeoutSeconds connection=${connectionState.value} services=${connection?.serviceSummary() ?: "none"}"
-            )
-            return false
-        }
-
-        val timeout = timeoutSeconds.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
-            ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
-        val switchCommand = KingsmithEncryptedProtocol.noLoadStopSwitchCommand(enabled)
-        val timeoutCommand = KingsmithEncryptedProtocol.noLoadStopTimeoutCommand(timeout)
-        val commands = if (enabled) {
-            listOf(timeoutCommand, switchCommand)
-        } else {
-            listOf(switchCommand, timeoutCommand)
-        }
-
-        for (command in commands) {
-            if (!sendKsEncryptedTextCommand(command)) {
-                errorReporter.report(
-                    "WalkingPad Bluetooth",
-                    "WalkingPad did not accept no-load stop command",
-                    "command=$command enabled=$enabled timeoutSeconds=$timeout"
-                )
-                return false
-            }
-        }
-
-        _status.value = status.value.copy(
-            noLoadStopEnabled = enabled,
-            noLoadStopTimeoutSeconds = timeout
-        )
-        return true
-    }
-
-    private suspend fun setKsFtmsNoLoadStop(enabled: Boolean, timeoutSeconds: Int): Boolean {
-        val timeout = timeoutSeconds.takeIf { it in NO_LOAD_STOP_TIMEOUT_OPTIONS }
-            ?: DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS
-        val commands = KingsmithFtmsProtocol.noLoadStopCommands(enabled, timeout)
-        val previousSupplementNotificationSeq = lastKsFtmsSupplementNotificationSeq
-        for (command in commands) {
-            if (!sendKsFtmsSupplementCommand(command)) {
-                errorReporter.report(
-                    "WalkingPad Bluetooth",
-                    "WalkingPad did not accept KS FTMS no-load stop command",
-                    "command=${command.toHexString()} enabled=$enabled timeoutSeconds=$timeout write~=${activeKsFtmsSupplementWriteCharSubstring ?: "none"}"
-                )
-                return false
-            }
-        }
-
-        delay(FTMS_SUPPLEMENT_RESPONSE_WAIT_MS)
-        val response = lastKsFtmsNoLoadStopResponse
-        if (lastKsFtmsSupplementNotificationSeq > previousSupplementNotificationSeq &&
-            response != null &&
-            noLoadStopResponseMatches(response, enabled)
-        ) {
-            _status.value = status.value.copy(
-                noLoadStopEnabled = enabled,
-                noLoadStopTimeoutSeconds = response.timeoutSeconds ?: status.value.noLoadStopTimeoutSeconds
-            )
-            return true
-        }
-
-        errorReporter.report(
-            "WalkingPad Bluetooth",
-            "KS FTMS no-load command was not confirmed; setting was not saved",
-            "commands=${commands.joinToString(separator = ";") { it.toHexString() }} enabled=$enabled timeoutSeconds=$timeout " +
-                "write~=${activeKsFtmsSupplementWriteCharSubstring ?: "none"} notify~=${activeKsFtmsSupplementNotifyCharSubstring ?: "none"} " +
-                "response=$response latestNotify=${lastKsFtmsSupplementNotificationHex ?: "none"}"
-        )
-        return false
-    }
-
-    private fun noLoadStopResponseMatches(
-        response: KingsmithFtmsProtocol.NoLoadStopResponse,
-        enabled: Boolean
-    ): Boolean =
-        response.enabled == enabled
 
     private suspend fun applyUnitSystem(unitSystem: UnitSystem): Boolean {
         if (!legacyProtocolReady.value) {
@@ -1223,9 +1130,6 @@ class WalkingPadManagerImpl @Inject constructor(
         ksEncryptedProtocolReady.value = false
         activeKsFtmsSupplementWriteCharSubstring = null
         activeKsFtmsSupplementNotifyCharSubstring = null
-        lastKsFtmsSupplementNotificationHex = null
-        lastKsFtmsSupplementNotificationSeq = 0L
-        lastKsFtmsNoLoadStopResponse = null
         resetKsEncryptedState()
     }
 
@@ -1278,17 +1182,6 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     private fun handleKsFtmsSupplementNotification(data: ByteArray) {
-        lastKsFtmsSupplementNotificationHex = data.toHexString()
-        lastKsFtmsSupplementNotificationSeq += 1
-        KingsmithFtmsProtocol.parseNoLoadStopResponse(data)?.let { response ->
-            lastKsFtmsNoLoadStopResponse = response
-            _status.value = status.value.copy(
-                noLoadStopEnabled = response.enabled,
-                noLoadStopTimeoutSeconds = response.timeoutSeconds ?: status.value.noLoadStopTimeoutSeconds
-            )
-            return
-        }
-
         Timber.d(
             "KS FTMS supplement notification received: notify~=${activeKsFtmsSupplementNotifyCharSubstring ?: "unknown"} " +
                 "data=${data.toHexString()}"
@@ -1551,7 +1444,6 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val PROTOCOL_READY_WATCHDOG_MS = 8_000L
         private const val GATT_DESCRIPTOR_WRITE_DELAY_MS = 400L
         private const val FTMS_SUBSCRIPTION_STAGGER_MS = 200L
-        private const val FTMS_SUPPLEMENT_RESPONSE_WAIT_MS = 750L
         private const val KS_ENCRYPTED_STOP_APPLY_TIMEOUT_MS = 1_200L
         private const val KS_ENCRYPTED_WRITE_CHUNK_SIZE = 16
         private const val KS_ENCRYPTED_WRITE_CHUNK_DELAY_MS = 120L
@@ -1560,8 +1452,6 @@ class WalkingPadManagerImpl @Inject constructor(
         private const val KS_ENCRYPTED_HANDSHAKE_SPACING_MS = 150L
         private const val KS_ENCRYPTED_CANDIDATE_WRITE_SPACING_MS = 150L
         private const val KS_ENCRYPTED_LAST_HANDSHAKE_INDEX = 7
-        private const val DEFAULT_NO_LOAD_STOP_TIMEOUT_SECONDS = 30
-        private val NO_LOAD_STOP_TIMEOUT_OPTIONS = setOf(5, 15, 30, 45, 60)
     }
 
     private enum class WalkingPadProtocol {
