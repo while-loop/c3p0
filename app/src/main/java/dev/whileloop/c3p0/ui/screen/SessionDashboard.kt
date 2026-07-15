@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -310,6 +312,14 @@ fun SessionDashboard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
+                QuickSpeedAdjustButton(
+                    enabled = isPadReady && isSessionActive && !isSessionPaused && !isSessionFinalizing,
+                    contentDescription = "Decrease speed by 0.5 mph",
+                    onClick = viewModel::decrementSpeedQuick
+                ) {
+                    Icon(Icons.Default.FastRewind, contentDescription = null)
+                }
+
                 SpeedAdjustButton(
                     enabled = isPadReady && isSessionActive && !isSessionPaused && !isSessionFinalizing,
                     contentDescription = "Decrease speed",
@@ -338,6 +348,14 @@ fun SessionDashboard(
                     onStep = { viewModel.incrementSpeed() }
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
+                }
+
+                QuickSpeedAdjustButton(
+                    enabled = isPadReady && isSessionActive && !isSessionPaused && !isSessionFinalizing,
+                    contentDescription = "Increase speed by 0.5 mph",
+                    onClick = viewModel::incrementSpeedQuick
+                ) {
+                    Icon(Icons.Default.FastForward, contentDescription = null)
                 }
             }
         }
@@ -470,6 +488,27 @@ fun SessionDashboard(
             },
             confirmButton = {}
         )
+    }
+}
+
+@Composable
+private fun QuickSpeedAdjustButton(
+    enabled: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(40.dp)
+    ) {
+        Box(
+            modifier = Modifier.semantics { this.contentDescription = contentDescription },
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
     }
 }
 

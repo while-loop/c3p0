@@ -399,6 +399,14 @@ class SessionViewModel @Inject constructor(
         adjustManualSpeed(-manualSpeedStepKmh())
     }
 
+    fun incrementSpeedQuick() {
+        adjustManualSpeed(QUICK_SPEED_STEP_MPH * KM_PER_MILE)
+    }
+
+    fun decrementSpeedQuick() {
+        adjustManualSpeed(-QUICK_SPEED_STEP_MPH * KM_PER_MILE)
+    }
+
     private fun manualSpeedStepKmh(): Float =
         if (unitSystem.value == UnitSystem.Imperial) {
             SPEED_STEP_MPH * KM_PER_MILE
@@ -563,6 +571,7 @@ class SessionViewModel @Inject constructor(
         private const val MAX_HEART_RATE_SAMPLES = 180
         private const val SPEED_STEP_KMH = 0.1f
         private const val SPEED_STEP_MPH = 0.1f
+        private const val QUICK_SPEED_STEP_MPH = 0.5f
         private const val KM_PER_MILE = 1.60934f
         private const val MIN_SPEED_KMH = 1.60934f
         private const val MAX_SPEED_KMH = 6f
