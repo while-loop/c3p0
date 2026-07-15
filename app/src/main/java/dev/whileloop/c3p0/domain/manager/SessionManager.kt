@@ -71,6 +71,9 @@ class SessionManager @Inject constructor(
     private val _isSessionPaused = MutableStateFlow(false)
     val isSessionPaused = _isSessionPaused.asStateFlow()
 
+    private val _isSessionResuming = MutableStateFlow(false)
+    val isSessionResuming = _isSessionResuming.asStateFlow()
+
     private val _isSessionFinalizing = MutableStateFlow(false)
     val isSessionFinalizing = _isSessionFinalizing.asStateFlow()
 
@@ -156,18 +159,25 @@ class SessionManager @Inject constructor(
     }
 
     fun resumeSession() {
-        if (_isSessionActive.value.not() || _isSessionPaused.value.not()) return
+        if (_isSessionActive.value.not() || _isSessionPaused.value.not() || _isSessionFinalizing.value ||
+            !_isSessionResuming.compareAndSet(expect = false, update = true)
+        ) return
 
         scope.launch {
-            if (treadmillManager.start()) {
-                activeStartedAt = Instant.now()
-                _isSessionPaused.value = false
-                sessionSpeedCommandGate.allow()
+            try {
+                if (treadmillManager.start()) {
+                    activeStartedAt = Instant.now()
+                    _isSessionPaused.value = false
+                    sessionSpeedCommandGate.allow()
+                }
+            } finally {
+                _isSessionResuming.value = false
             }
         }
     }
 
     fun stopSession() {
+        if (_isSessionResuming.value) return
         if (!_isSessionFinalizing.compareAndSet(expect = false, update = true)) return
         sessionSpeedCommandGate.block()
         scope.launch {
@@ -488,6 +498,7 @@ class SessionManager @Inject constructor(
     private fun resetInMemorySessionState() {
         sessionSpeedCommandGate.block()
         _isSessionStarting.value = false
+        _isSessionResuming.value = false
         _isSessionActive.value = false
         _isSessionPaused.value = false
         disableAutoSpeed()

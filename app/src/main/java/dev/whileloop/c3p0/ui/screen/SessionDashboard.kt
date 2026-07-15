@@ -99,6 +99,7 @@ fun SessionDashboard(
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val isSessionStarting by viewModel.isSessionStarting.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
+    val isSessionResuming by viewModel.isSessionResuming.collectAsState()
     val isSessionFinalizing by viewModel.isSessionFinalizing.collectAsState()
     val isAutoSpeedEnabled by viewModel.isAutoSpeedEnabled.collectAsState()
     val recoverableSession by viewModel.recoverableSession.collectAsState()
@@ -395,18 +396,36 @@ fun SessionDashboard(
                                 } else {
                                     viewModel.pauseSession()
                                 }
-                            }
+                            },
+                            enabled = !isSessionResuming
                         ) {
-                            Icon(
-                                imageVector = if (isSessionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                contentDescription = if (isSessionPaused) "Resume" else "Pause"
-                            )
+                            if (isSessionResuming) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = LocalContentColor.current
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (isSessionPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                    contentDescription = if (isSessionPaused) "Resume" else "Pause"
+                                )
+                            }
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (isSessionPaused) "Resume" else "Pause")
+                            Text(
+                                when {
+                                    isSessionResuming -> "Resuming…"
+                                    isSessionPaused -> "Resume"
+                                    else -> "Pause"
+                                }
+                            )
                         }
                         if (isSessionPaused) {
                             Spacer(modifier = Modifier.width(12.dp))
-                            LongPressStopButton(onStop = { viewModel.stopSession() })
+                            LongPressStopButton(
+                                enabled = !isSessionResuming,
+                                onStop = { viewModel.stopSession() }
+                            )
                         }
                     }
                 } else {
@@ -669,6 +688,7 @@ private fun SpeedAdjustButton(
 @Composable
 private fun LongPressStopButton(
     onStop: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -714,7 +734,9 @@ private fun LongPressStopButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .pointerInput(onStop) {
+            .graphicsLayer { alpha = if (enabled) 1f else 0.38f }
+            .pointerInput(enabled, onStop) {
+            if (!enabled) return@pointerInput
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)

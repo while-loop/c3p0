@@ -41,6 +41,7 @@
 - [x] **Session Pause/Stop Safety**: Added pause/resume controls and made stop require a 2-second circular long press with a progress ring.
 - [x] **Session Control Haptics**: Added tap feedback to speed +/-, start, pause/resume, and stop-hold controls.
 - [x] **Session Start Single Flight**: Disable the Start button and show countdown loading feedback while the WalkingPad start command is in progress, with ViewModel and manager guards against duplicate requests.
+- [x] **Session Resume Single Flight**: Disable Resume and Stop and show Resume loading feedback throughout the WalkingPad hardware countdown, with manager guards against duplicate or conflicting requests.
 - [x] **Session Control Commands**: Start, pause/resume, and stop now send WalkingPad control commands, not just app-local state changes.
 - [x] **Inactive Device Warning**: Added a bottom sheet before start/resume when the watch, live HR broadcast, or WalkingPad is inactive, including pair, continue, and never-ask-again controls.
 - [x] **Auto-Speed**: Implemented smooth Zone 2 adjustment algorithm with moving average smoothing and wired Zone 2 mode to enable it.
