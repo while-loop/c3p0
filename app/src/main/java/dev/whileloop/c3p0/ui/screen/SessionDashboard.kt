@@ -516,8 +516,12 @@ private fun QuickSpeedAdjustButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     IconButton(
-        onClick = onClick,
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
         enabled = enabled,
         modifier = Modifier.size(40.dp)
     ) {

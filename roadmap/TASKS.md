@@ -25,6 +25,7 @@
 - [x] **Responsive WalkingPad Commands**: Removed repeated command preflights from user command paths, reduced command spacing, and coalesced rapid manual speed taps to the latest target.
 - [x] **Press-Hold Speed Controls**: Manual speed +/- buttons repeat every 0.5 seconds while held and accelerate to two steps per tick after 3 seconds.
 - [x] **Half-MPH Quick Speed Controls**: Add rewind/fast-forward controls beside +/- for one-tap 0.5 mph speed changes.
+- [x] **Quick Speed Haptics**: Add tap confirmation feedback to the rewind and fast-forward 0.5 mph controls.
 - [x] **Active-Session Speed Gate**: Disable manual speed controls and reject queued or programmatic speed writes unless a session is active and unpaused.
 - [x] **Zone 2 HR Guard**: Disabled Zone 2 without fresh HR data and automatically returned to Manual at 1 mph if HR goes stale while Zone 2 is active.
 - [x] **Screen-Independent HR Processing**: Keep Zone 2 HR processing and freshness enforcement in `SessionManager` so navigation away from Session cannot freeze timestamps or force a false 1 mph fallback.
