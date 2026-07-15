@@ -212,8 +212,7 @@ class SessionManager @Inject constructor(
                 speedSamples = sessionMetrics.toHealthConnectSpeedSamples()
             )
             if (wasWrittenToHealthConnect) {
-                _healthConnectSessionWrites.tryEmit(Unit)
-                scope.launch { healthConnectHistoryRefresher.refreshSinceLastFetch() }
+                finishHealthConnectSync()
             }
             sessionRepository.deleteCheckpoint(id)
             settingsRepository.requestBackupIfEnabled()
@@ -244,8 +243,7 @@ class SessionManager @Inject constructor(
                 speedSamples = metrics.toHealthConnectSpeedSamples()
             )
             if (wasWrittenToHealthConnect) {
-                _healthConnectSessionWrites.tryEmit(Unit)
-                scope.launch { healthConnectHistoryRefresher.refreshSinceLastFetch() }
+                finishHealthConnectSync()
             }
             sessionRepository.deleteCheckpoint(checkpoint.sessionId)
             _recoverableSession.value = null
@@ -261,6 +259,30 @@ class SessionManager @Inject constructor(
             _recoverableSession.value = null
             settingsRepository.requestBackupIfEnabled()
         }
+    }
+
+    private suspend fun finishHealthConnectSync() {
+        _healthConnectSessionWrites.tryEmit(Unit)
+        try {
+            healthConnectHistoryRefresher.refreshSinceLastFetch()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "Unable to refresh Health Connect history after session export")
+        }
+        openGarminConnect()
+    }
+
+    private fun openGarminConnect() {
+        val launchIntent = context.packageManager
+            .getLaunchIntentForPackage(GARMIN_CONNECT_PACKAGE)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (launchIntent == null) {
+            Timber.w("Garmin Connect is not installed or has no launch activity")
+            return
+        }
+        runCatching { context.startActivity(launchIntent) }
+            .onFailure { Timber.e(it, "Unable to open Garmin Connect after session sync") }
     }
 
     private fun launchSession(recovered: RecoverableSession?) {
@@ -500,6 +522,7 @@ class SessionManager @Inject constructor(
         private const val AUTO_SPEED_MIN_KMH = 1.60934f
         private const val AUTO_SPEED_MAX_KMH = 6.0f
         private const val DEFAULT_ZONE2_MAX_SPEED_KMH = 3.5f * 1.60934f
+        private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"
     }
 }
 

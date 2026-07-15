@@ -100,6 +100,7 @@
 - [x] **Stats Resume Refresh**: Refresh step and weight data incrementally from the last fetch whenever the Stats destination resumes, while retaining cached charts and preventing overlapping lifecycle reads.
 - [x] **Chart Refresh Gestures**: Full-chart Refresh reads the latest week; long-press Refresh reads the retained full-history range.
 - [x] **Post-Session Health Refresh**: Successful Health Connect session exports refresh goal progress live and start an incremental step/weight cache refresh from the last fetch.
+- [x] **Post-Session Garmin Sync Prompt**: After a successful Health Connect session export and incremental history refresh, open Garmin Connect so watch data can be synced.
 - [x] **Live Zone 2 Speed Cap**: Apply Profile max-speed changes immediately to an active Zone 2 controller and every outgoing adjustment.
 - [x] **Remove No-Load Stop**: Removed the unsupported Profile control, persistence, manager API, protocol commands, and tests.
 - [x] **Full Chart Refresh Upserts**: Keep existing chart cache rows during manual full refresh and overwrite only matching Health Connect dates or timestamps.
