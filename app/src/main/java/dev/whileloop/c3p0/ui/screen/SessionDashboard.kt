@@ -283,7 +283,7 @@ fun SessionDashboard(
                     StatTile("Steps", sessionSteps.toString(), ""),
                     StatTile("Steps/min", recentStepsPerMinute?.roundToInt()?.toString() ?: "---", ""),
                     StatTile("Steps to goal", stepsToGoal?.toString() ?: "---", ""),
-                    StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), "est"),
+                    StatTile("Time to goal", formatGoalEta(estimatedSecondsToStepGoal), ""),
                     StatTile("Elapsed", formatElapsedTime(sessionElapsedSeconds), ""),
                     StatTile("Calories", sessionCalories.toString(), "kcal"),
                     StatTile("Heart Rate", heartRateValue(currentHeartRate), "bpm"),
