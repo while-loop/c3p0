@@ -29,7 +29,8 @@ import kotlin.math.roundToInt
 
 class WalkingPadManagerImpl @Inject constructor(
     private val context: Context,
-    private val errorReporter: BleErrorReporter
+    private val errorReporter: BleErrorReporter,
+    private val sessionSpeedCommandGate: SessionSpeedCommandGate
 ) : TreadmillManager {
 
     private var connection: BleConnection? = null
@@ -284,21 +285,26 @@ class WalkingPadManagerImpl @Inject constructor(
     }
 
     override suspend fun setSpeed(speed: Float): Boolean {
+        if (!sessionSpeedCommandGate.isAllowed()) {
+            Timber.w("Ignoring speed command because no active, unpaused session allows it")
+            return false
+        }
         val targetSpeed = speed.coerceIn(MIN_MOVING_SPEED_KMH, MAX_SPEED_KMH)
         if (ksFtmsProtocolReady.value) {
-            return sendKsFtmsSpeed(targetSpeed)
+            return sendKsFtmsSpeed(targetSpeed, commandAllowed = sessionSpeedCommandGate::isAllowed)
         }
 
         if (ksEncryptedProtocolReady.value) {
-            return sendKsEncryptedSpeed(targetSpeed)
+            return sendKsEncryptedSpeed(targetSpeed, commandAllowed = sessionSpeedCommandGate::isAllowed)
         }
 
-        return sendLegacySpeed(targetSpeed)
+        return sendLegacySpeed(targetSpeed, commandAllowed = sessionSpeedCommandGate::isAllowed)
     }
 
     private suspend fun sendLegacySpeed(
         targetSpeed: Float,
-        verifyApplied: Boolean = true
+        verifyApplied: Boolean = true,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean {
         val s = (targetSpeed * 10).roundToInt().toByte()
         val cmd = byteArrayOf(0xF7.toByte(), 0xA2.toByte(), 0x01.toByte(), s, 0x00, 0xFD.toByte())
@@ -306,13 +312,15 @@ class WalkingPadManagerImpl @Inject constructor(
             targetSpeed = targetSpeed,
             cmd = cmd,
             protocol = WalkingPadProtocol.LegacyKingsmith,
-            verifyApplied = verifyApplied
+            verifyApplied = verifyApplied,
+            commandAllowed = commandAllowed
         )
     }
 
     private suspend fun sendKsEncryptedSpeed(
         targetSpeed: Float,
-        verifyApplied: Boolean = true
+        verifyApplied: Boolean = true,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean {
         val command = KingsmithEncryptedProtocol.speedCommand(targetSpeed)
         return if (verifyApplied) {
@@ -320,16 +328,22 @@ class WalkingPadManagerImpl @Inject constructor(
                 label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
                 command = command,
                 minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
+                commandAllowed = commandAllowed,
                 isApplied = { status -> speedMatchesTarget(status.speed, targetSpeed) }
             )
         } else {
-            sendKsEncryptedTextCommand(command, minCommandSpacingMs = SPEED_COMMAND_SPACING_MS)
+            sendKsEncryptedTextCommand(
+                command,
+                minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
+                commandAllowed = commandAllowed
+            )
         }
     }
 
     private suspend fun sendKsFtmsSpeed(
         targetSpeed: Float,
-        verifyApplied: Boolean = true
+        verifyApplied: Boolean = true,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean {
         val command = KingsmithFtmsProtocol.setTargetSpeedCommand(targetSpeed)
         return if (verifyApplied) {
@@ -337,10 +351,11 @@ class WalkingPadManagerImpl @Inject constructor(
                 label = "set speed %.1f km/h".format(Locale.US, targetSpeed),
                 command = command,
                 minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
+                commandAllowed = commandAllowed,
                 isApplied = { status -> speedMatchesTarget(status.speed, targetSpeed) }
             )
         } else {
-            sendKsFtmsControlPoint(command, SPEED_COMMAND_SPACING_MS)
+            sendKsFtmsControlPoint(command, SPEED_COMMAND_SPACING_MS, commandAllowed)
         }
     }
 
@@ -348,7 +363,8 @@ class WalkingPadManagerImpl @Inject constructor(
         targetSpeed: Float,
         cmd: ByteArray,
         protocol: WalkingPadProtocol,
-        verifyApplied: Boolean
+        verifyApplied: Boolean,
+        commandAllowed: () -> Boolean
     ): Boolean =
         if (verifyApplied) {
             sendControlCommand(
@@ -356,10 +372,11 @@ class WalkingPadManagerImpl @Inject constructor(
                 cmd = cmd,
                 protocol = protocol,
                 minCommandSpacingMs = SPEED_COMMAND_SPACING_MS,
+                commandAllowed = commandAllowed,
                 isApplied = { status -> speedMatchesTarget(status.speed, targetSpeed) }
             )
         } else {
-            sendCommand(cmd, protocol, SPEED_COMMAND_SPACING_MS)
+            sendCommand(cmd, protocol, SPEED_COMMAND_SPACING_MS, commandAllowed)
         }
 
     override suspend fun setMode(mode: TreadmillMode): Boolean {
@@ -528,7 +545,8 @@ class WalkingPadManagerImpl @Inject constructor(
     private suspend fun sendCommand(
         cmd: ByteArray,
         protocol: WalkingPadProtocol,
-        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean = commandMutex.withLock {
         if (!awaitProtocolReady(protocol)) {
             val fixed = fixCrc(cmd.copyOf())
@@ -544,6 +562,10 @@ class WalkingPadManagerImpl @Inject constructor(
         val elapsedSinceLastCommand = now - lastCommandElapsedMillis
         if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < minCommandSpacingMs) {
             delay(minCommandSpacingMs - elapsedSinceLastCommand)
+        }
+        if (!commandAllowed()) {
+            Timber.w("Dropping queued WalkingPad speed command because the session is not active and unpaused")
+            return@withLock false
         }
 
         val fixed = fixCrc(cmd.copyOf())
@@ -564,7 +586,8 @@ class WalkingPadManagerImpl @Inject constructor(
 
     private suspend fun sendKsFtmsControlPoint(
         cmd: ByteArray,
-        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS
+        minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean = commandMutex.withLock {
         if (!awaitProtocolReady(WalkingPadProtocol.KingsmithFtms)) {
             errorReporter.report(
@@ -579,6 +602,10 @@ class WalkingPadManagerImpl @Inject constructor(
         val elapsedSinceLastCommand = now - lastCommandElapsedMillis
         if (lastCommandElapsedMillis > 0L && elapsedSinceLastCommand < minCommandSpacingMs) {
             delay(minCommandSpacingMs - elapsedSinceLastCommand)
+        }
+        if (!commandAllowed()) {
+            Timber.w("Dropping queued KS FTMS speed command because the session is not active and unpaused")
+            return@withLock false
         }
 
         sendKsFtmsPreamble()
@@ -666,7 +693,8 @@ class WalkingPadManagerImpl @Inject constructor(
         writeCharSubstring: String,
         cmd: ByteArray,
         minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
-        requireReady: Boolean = true
+        requireReady: Boolean = true,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean = commandMutex.withLock {
         if (!isBleTransportActive()) {
             errorReporter.report(
@@ -692,6 +720,10 @@ class WalkingPadManagerImpl @Inject constructor(
             delay(minCommandSpacingMs - elapsedSinceLastCommand)
         }
         if (!isBleTransportActive()) {
+            return@withLock false
+        }
+        if (!commandAllowed()) {
+            Timber.w("Dropping queued encrypted KS speed command because the session is not active and unpaused")
             return@withLock false
         }
 
@@ -756,7 +788,8 @@ class WalkingPadManagerImpl @Inject constructor(
     private suspend fun sendKsEncryptedTextCommand(
         command: String,
         minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
-        requireReady: Boolean = true
+        requireReady: Boolean = true,
+        commandAllowed: () -> Boolean = { true }
     ): Boolean {
         val writeChar = activeKsEncryptedWriteCharSubstring ?: availableKsEncryptedWriteChars().firstOrNull()
         if (writeChar == null) {
@@ -776,7 +809,8 @@ class WalkingPadManagerImpl @Inject constructor(
                         writeCharSubstring = writeChar,
                         cmd = payload,
                         minCommandSpacingMs = candidateSpacingMs,
-                        requireReady = requireReady
+                        requireReady = requireReady,
+                        commandAllowed = commandAllowed
                     )
                 ) {
                     anySent = true
@@ -789,7 +823,8 @@ class WalkingPadManagerImpl @Inject constructor(
             writeCharSubstring = writeChar,
             cmd = payload,
             minCommandSpacingMs = minCommandSpacingMs,
-            requireReady = requireReady
+            requireReady = requireReady,
+            commandAllowed = commandAllowed
         )
     }
 
@@ -838,10 +873,11 @@ class WalkingPadManagerImpl @Inject constructor(
         cmd: ByteArray,
         protocol: WalkingPadProtocol,
         minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        commandAllowed: () -> Boolean = { true },
         isApplied: (TreadmillStatus) -> Boolean
     ): Boolean {
         val previousStatusAt = lastStatusReceivedElapsedMillis
-        val sent = sendCommand(cmd, protocol, minCommandSpacingMs)
+        val sent = sendCommand(cmd, protocol, minCommandSpacingMs, commandAllowed)
         if (sent) {
             val commandHex = fixCrc(cmd.copyOf()).toHexString()
             scope.launch {
@@ -869,10 +905,15 @@ class WalkingPadManagerImpl @Inject constructor(
         label: String,
         command: String,
         minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        commandAllowed: () -> Boolean = { true },
         isApplied: (TreadmillStatus) -> Boolean
     ): Boolean {
         val previousStatusAt = lastStatusReceivedElapsedMillis
-        val sent = sendKsEncryptedTextCommand(command, minCommandSpacingMs)
+        val sent = sendKsEncryptedTextCommand(
+            command,
+            minCommandSpacingMs,
+            commandAllowed = commandAllowed
+        )
         if (sent) {
             scope.launch {
                 delay(COMMAND_REPLY_TIMEOUT_MS)
@@ -899,10 +940,11 @@ class WalkingPadManagerImpl @Inject constructor(
         label: String,
         command: ByteArray,
         minCommandSpacingMs: Long = MIN_COMMAND_SPACING_MS,
+        commandAllowed: () -> Boolean = { true },
         isApplied: (TreadmillStatus) -> Boolean
     ): Boolean {
         val previousStatusAt = lastStatusReceivedElapsedMillis
-        val sent = sendKsFtmsControlPoint(command, minCommandSpacingMs)
+        val sent = sendKsFtmsControlPoint(command, minCommandSpacingMs, commandAllowed)
         if (sent) {
             scope.launch {
                 delay(COMMAND_REPLY_TIMEOUT_MS)

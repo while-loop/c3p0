@@ -34,7 +34,8 @@ class SessionManager @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val settingsRepository: SettingsRepository,
     private val healthConnectManager: HealthConnectManager,
-    private val healthConnectHistoryRefresher: HealthConnectHistoryRefresher
+    private val healthConnectHistoryRefresher: HealthConnectHistoryRefresher,
+    private val sessionSpeedCommandGate: SessionSpeedCommandGate
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var sessionJob: Job? = null
@@ -140,12 +141,15 @@ class SessionManager @Inject constructor(
 
     fun pauseSession() {
         if (_isSessionActive.value.not() || _isSessionPaused.value) return
+        sessionSpeedCommandGate.block()
 
         scope.launch {
             if (treadmillManager.pause()) {
                 accumulateActiveDuration()
                 _isSessionPaused.value = true
                 saveCheckpoint(Instant.now(), wasPaused = true)
+            } else if (_isSessionActive.value && !_isSessionPaused.value) {
+                sessionSpeedCommandGate.allow()
             }
         }
     }
@@ -157,12 +161,14 @@ class SessionManager @Inject constructor(
             if (treadmillManager.start()) {
                 activeStartedAt = Instant.now()
                 _isSessionPaused.value = false
+                sessionSpeedCommandGate.allow()
             }
         }
     }
 
     fun stopSession() {
         if (!_isSessionFinalizing.compareAndSet(expect = false, update = true)) return
+        sessionSpeedCommandGate.block()
         scope.launch {
             try {
                 if (!treadmillManager.stop()) {
@@ -348,6 +354,7 @@ class SessionManager @Inject constructor(
                 _isSessionActive.value = true
                 _isSessionStarting.value = false
                 _isSessionPaused.value = false
+                sessionSpeedCommandGate.allow()
                 _recoverableSession.value = null
                 saveCheckpoint(now, wasPaused = false)
 
@@ -406,6 +413,7 @@ class SessionManager @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Timber.e(e, "Session failed while starting or collecting metrics")
+                sessionSpeedCommandGate.block()
                 treadmillManager.pause()
                 runCatching { saveCheckpoint(Instant.now(), wasPaused = true) }
                     .onFailure { Timber.e(it, "Unable to save session recovery checkpoint") }
@@ -485,6 +493,7 @@ class SessionManager @Inject constructor(
     }
 
     private fun resetInMemorySessionState() {
+        sessionSpeedCommandGate.block()
         _isSessionStarting.value = false
         _isSessionActive.value = false
         _isSessionPaused.value = false

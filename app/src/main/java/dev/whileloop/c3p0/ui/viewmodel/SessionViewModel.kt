@@ -212,6 +212,9 @@ class SessionViewModel @Inject constructor(
                         statsStarted = true
                     }
                     else -> {
+                        speedCommandJob?.cancel()
+                        speedCommandJob = null
+                        pendingManualSpeedKmh = null
                         stopSessionStats()
                         if (!isActive) {
                             statsStarted = false
@@ -404,11 +407,16 @@ class SessionViewModel @Inject constructor(
         }
 
     private fun adjustManualSpeed(deltaKmh: Float) {
+        if (!sessionManager.isSessionActive.value || sessionManager.isSessionPaused.value) return
         val targetSpeed = ((pendingManualSpeedKmh ?: treadmillStatus.value.speed) + deltaKmh)
             .coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH)
         pendingManualSpeedKmh = targetSpeed
         speedCommandJob?.cancel()
         speedCommandJob = viewModelScope.launch {
+            if (!sessionManager.isSessionActive.value || sessionManager.isSessionPaused.value) {
+                pendingManualSpeedKmh = null
+                return@launch
+            }
             val sent = treadmillManager.setSpeed(targetSpeed)
             if (!sent) {
                 if (pendingManualSpeedKmh == targetSpeed) {

@@ -311,7 +311,7 @@ fun SessionDashboard(
                 horizontalArrangement = Arrangement.Center
             ) {
                 SpeedAdjustButton(
-                    enabled = isPadReady,
+                    enabled = isPadReady && isSessionActive && !isSessionPaused && !isSessionFinalizing,
                     contentDescription = "Decrease speed",
                     onStep = { viewModel.decrementSpeed() }
                 ) {
@@ -333,7 +333,7 @@ fun SessionDashboard(
                 }
 
                 SpeedAdjustButton(
-                    enabled = isPadReady,
+                    enabled = isPadReady && isSessionActive && !isSessionPaused && !isSessionFinalizing,
                     contentDescription = "Increase speed",
                     onStep = { viewModel.incrementSpeed() }
                 ) {
