@@ -69,6 +69,9 @@ class SessionManager @Inject constructor(
     private val _isSessionPaused = MutableStateFlow(false)
     val isSessionPaused = _isSessionPaused.asStateFlow()
 
+    private val _isSessionFinalizing = MutableStateFlow(false)
+    val isSessionFinalizing = _isSessionFinalizing.asStateFlow()
+
     private val _recoverableSession = MutableStateFlow<RecoverableSession?>(null)
     val recoverableSession = _recoverableSession.asStateFlow()
 
@@ -159,96 +162,106 @@ class SessionManager @Inject constructor(
     }
 
     fun stopSession() {
+        if (!_isSessionFinalizing.compareAndSet(expect = false, update = true)) return
         scope.launch {
-            if (!treadmillManager.stop()) {
-                return@launch
-            }
+            try {
+                if (!treadmillManager.stop()) {
+                    return@launch
+                }
 
-            sessionJob?.cancelAndJoin()
-            _isSessionActive.value = false
-            _isSessionPaused.value = false
-            disableAutoSpeed()
+                sessionJob?.cancelAndJoin()
+                _isSessionActive.value = false
+                _isSessionPaused.value = false
+                disableAutoSpeed()
 
-            context.stopService(Intent(context, dev.whileloop.c3p0.service.SessionService::class.java))
+                context.stopService(Intent(context, dev.whileloop.c3p0.service.SessionService::class.java))
 
-            val id = currentSessionId ?: return@launch
-            val start = startTime ?: return@launch
-            val end = Instant.now()
-            accumulateActiveDuration(end)
-            val finalStatus = treadmillManager.status.value
-            val totalDistance = restoredDistance + counterDelta(startDistance, finalStatus.distance)
-            val totalSteps = restoredSteps + if (finalStatus.hasStepCount) {
-                counterDelta(startSteps, finalStatus.steps)
-            } else {
-                estimateStepsFromDistance(counterDelta(startDistance, finalStatus.distance))
-            }
-            val distanceMeters = totalDistance * 10.0
-            val reportedCalories = restoredCalories + counterDelta(startCalories, finalStatus.calories)
-            val averageHeartRate = if (activeHeartRateSampleCount > 0) {
-                (activeHeartRateTotal / activeHeartRateSampleCount).toInt()
-            } else {
-                0
-            }
-            val sessionMaxHeartRate = maxHeartRate
-            val sessionStats = SessionEntity(
-                startTime = start,
-                endTime = end,
-                totalDistance = totalDistance,
-                totalSteps = totalSteps,
-                totalEnergy = reportedCalories,
-                averageHeartRate = averageHeartRate,
-                maxHeartRate = sessionMaxHeartRate
-            )
-            sessionRepository.endSession(id, sessionStats)
-            val sessionMetrics = sessionRepository.getMetricsForSessionSnapshot(id)
-            
-            // Write to Health Connect
-            val wasWrittenToHealthConnect = healthConnectManager.writeSession(
-                startTime = start,
-                endTime = end,
-                steps = totalSteps,
-                distanceMeters = distanceMeters,
-                activeCaloriesKcal = reportedCalories,
-                speedSamples = sessionMetrics.toHealthConnectSpeedSamples()
-            )
-            if (wasWrittenToHealthConnect) {
-                finishHealthConnectSync()
-            }
-            sessionRepository.deleteCheckpoint(id)
-            settingsRepository.requestBackupIfEnabled()
-            resetInMemorySessionState()
-            sessionJob = null
+                val id = currentSessionId ?: return@launch
+                val start = startTime ?: return@launch
+                val end = Instant.now()
+                accumulateActiveDuration(end)
+                val finalStatus = treadmillManager.status.value
+                val totalDistance = restoredDistance + counterDelta(startDistance, finalStatus.distance)
+                val totalSteps = restoredSteps + if (finalStatus.hasStepCount) {
+                    counterDelta(startSteps, finalStatus.steps)
+                } else {
+                    estimateStepsFromDistance(counterDelta(startDistance, finalStatus.distance))
+                }
+                val distanceMeters = totalDistance * 10.0
+                val reportedCalories = restoredCalories + counterDelta(startCalories, finalStatus.calories)
+                val averageHeartRate = if (activeHeartRateSampleCount > 0) {
+                    (activeHeartRateTotal / activeHeartRateSampleCount).toInt()
+                } else {
+                    0
+                }
+                val sessionMaxHeartRate = maxHeartRate
+                val sessionStats = SessionEntity(
+                    startTime = start,
+                    endTime = end,
+                    totalDistance = totalDistance,
+                    totalSteps = totalSteps,
+                    totalEnergy = reportedCalories,
+                    averageHeartRate = averageHeartRate,
+                    maxHeartRate = sessionMaxHeartRate
+                )
+                sessionRepository.endSession(id, sessionStats)
+                val sessionMetrics = sessionRepository.getMetricsForSessionSnapshot(id)
 
-            Timber.d("Session stopped and saved")
+                // Write to Health Connect
+                val wasWrittenToHealthConnect = healthConnectManager.writeSession(
+                    startTime = start,
+                    endTime = end,
+                    steps = totalSteps,
+                    distanceMeters = distanceMeters,
+                    activeCaloriesKcal = reportedCalories,
+                    speedSamples = sessionMetrics.toHealthConnectSpeedSamples()
+                )
+                if (wasWrittenToHealthConnect) {
+                    finishHealthConnectSync()
+                }
+                sessionRepository.deleteCheckpoint(id)
+                settingsRepository.requestBackupIfEnabled()
+                resetInMemorySessionState()
+                sessionJob = null
+
+                Timber.d("Session stopped and saved")
+            } finally {
+                _isSessionFinalizing.value = false
+            }
         }
     }
 
     fun finishRecoveredSession() {
         val recovered = _recoverableSession.value ?: return
+        if (!_isSessionFinalizing.compareAndSet(expect = false, update = true)) return
         scope.launch {
-            val checkpoint = recovered.checkpoint
-            val completedSession = recovered.toCompletedSession()
-            val end = completedSession.endTime!!
-            sessionRepository.endSession(
-                checkpoint.sessionId,
-                completedSession
-            )
-            val metrics = sessionRepository.getMetricsForSessionSnapshot(checkpoint.sessionId)
-            val wasWrittenToHealthConnect = healthConnectManager.writeSession(
-                startTime = recovered.session.startTime,
-                endTime = end,
-                steps = checkpoint.totalSteps,
-                distanceMeters = checkpoint.totalDistance * 10.0,
-                activeCaloriesKcal = checkpoint.totalEnergy,
-                speedSamples = metrics.toHealthConnectSpeedSamples()
-            )
-            if (wasWrittenToHealthConnect) {
-                finishHealthConnectSync()
+            try {
+                val checkpoint = recovered.checkpoint
+                val completedSession = recovered.toCompletedSession()
+                val end = completedSession.endTime!!
+                sessionRepository.endSession(
+                    checkpoint.sessionId,
+                    completedSession
+                )
+                val metrics = sessionRepository.getMetricsForSessionSnapshot(checkpoint.sessionId)
+                val wasWrittenToHealthConnect = healthConnectManager.writeSession(
+                    startTime = recovered.session.startTime,
+                    endTime = end,
+                    steps = checkpoint.totalSteps,
+                    distanceMeters = checkpoint.totalDistance * 10.0,
+                    activeCaloriesKcal = checkpoint.totalEnergy,
+                    speedSamples = metrics.toHealthConnectSpeedSamples()
+                )
+                if (wasWrittenToHealthConnect) {
+                    finishHealthConnectSync()
+                }
+                sessionRepository.deleteCheckpoint(checkpoint.sessionId)
+                _recoverableSession.value = null
+                settingsRepository.requestBackupIfEnabled()
+                Timber.d("Recovered session finished and saved")
+            } finally {
+                _isSessionFinalizing.value = false
             }
-            sessionRepository.deleteCheckpoint(checkpoint.sessionId)
-            _recoverableSession.value = null
-            settingsRepository.requestBackupIfEnabled()
-            Timber.d("Recovered session finished and saved")
         }
     }
 

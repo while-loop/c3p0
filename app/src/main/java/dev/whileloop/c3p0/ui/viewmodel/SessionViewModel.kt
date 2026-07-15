@@ -128,6 +128,12 @@ class SessionViewModel @Inject constructor(
         sessionManager.isSessionPaused.value
     )
 
+    val isSessionFinalizing = sessionManager.isSessionFinalizing.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        sessionManager.isSessionFinalizing.value
+    )
+
     val isAutoSpeedEnabled = sessionManager.isAutoSpeedEnabled.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),

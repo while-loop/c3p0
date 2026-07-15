@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.whileloop.c3p0.ble.manager.ConnectionState
 import dev.whileloop.c3p0.ble.model.TreadmillMode
@@ -95,6 +97,7 @@ fun SessionDashboard(
     val isSessionActive by viewModel.isSessionActive.collectAsState()
     val isSessionStarting by viewModel.isSessionStarting.collectAsState()
     val isSessionPaused by viewModel.isSessionPaused.collectAsState()
+    val isSessionFinalizing by viewModel.isSessionFinalizing.collectAsState()
     val isAutoSpeedEnabled by viewModel.isAutoSpeedEnabled.collectAsState()
     val recoverableSession by viewModel.recoverableSession.collectAsState()
     val unitSystem by viewModel.unitSystem.collectAsState()
@@ -145,7 +148,10 @@ fun SessionDashboard(
     val maxHeartRate = 220 - age
     val zone2MinHeartRate = (maxHeartRate * 0.60f).toInt()
     val zone2MaxHeartRate = (maxHeartRate * 0.70f).toInt()
-    val keepScreenAwake = keepScreenOnDuringActiveSession && isSessionActive && !isSessionPaused
+    val keepScreenAwake =
+        (keepScreenOnDuringActiveSession && isSessionActive && !isSessionPaused) || isSessionFinalizing
+
+    BackHandler(enabled = isSessionFinalizing) {}
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -207,7 +213,9 @@ fun SessionDashboard(
         )
     }
 
-    recoverableSession?.takeIf { !isSessionActive && !showPermissionSheet && !showInactiveDeviceSheet }?.let { recovered ->
+    recoverableSession?.takeIf {
+        !isSessionActive && !isSessionFinalizing && !showPermissionSheet && !showInactiveDeviceSheet
+    }?.let { recovered ->
         RecoveredSessionBottomSheet(
             elapsedSeconds = recovered.checkpoint.elapsedSeconds,
             distance = displayDistance(recovered.checkpoint.totalDistance, unitSystem),
@@ -441,6 +449,27 @@ fun SessionDashboard(
                 }
             }
         }
+    }
+
+    if (isSessionFinalizing) {
+        AlertDialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            ),
+            title = { Text("Finishing session") },
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    Text("Saving your workout, refreshing Health Connect, and opening Garmin Connect…")
+                }
+            },
+            confirmButton = {}
+        )
     }
 }
 
