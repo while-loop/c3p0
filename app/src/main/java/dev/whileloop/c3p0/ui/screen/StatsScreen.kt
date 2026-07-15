@@ -58,7 +58,9 @@ import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.health.WeightHistoryRecord
 import dev.whileloop.c3p0.integration.garminConnectIcon
+import dev.whileloop.c3p0.integration.googleFitIcon
 import dev.whileloop.c3p0.integration.openGarminConnect
+import dev.whileloop.c3p0.integration.openGoogleFit
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
 import dev.whileloop.c3p0.ui.permission.healthConnectStepHistoryPermissions
@@ -111,6 +113,9 @@ fun StatsScreen(
     val chartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val garminConnectIcon = remember(context) {
         context.garminConnectIcon()?.toBitmap()?.asImageBitmap()
+    }
+    val googleFitIcon = remember(context) {
+        context.googleFitIcon()?.toBitmap()?.asImageBitmap()
     }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -244,6 +249,18 @@ fun StatsScreen(
         ) {
             Text("History", style = MaterialTheme.typography.headlineMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
+                googleFitIcon?.let { icon ->
+                    IconButton(
+                        onClick = { context.openGoogleFit() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Image(
+                            bitmap = icon,
+                            contentDescription = "Open Google Fit",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
                 garminConnectIcon?.let { icon ->
                     IconButton(
                         onClick = { context.openGarminConnect() },

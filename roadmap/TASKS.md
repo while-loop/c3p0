@@ -104,6 +104,7 @@
 - [x] **Post-Session Health Refresh**: Successful Health Connect session exports refresh goal progress live and start an incremental step/weight cache refresh from the last fetch.
 - [x] **Post-Session Garmin Sync Prompt**: After a successful Health Connect session export and incremental history refresh, open Garmin Connect so watch data can be synced.
 - [x] **Stats Garmin Shortcut**: Show the installed Garmin Connect app icon as a compact launch button in the Stats header.
+- [x] **Stats Google Fit Shortcut**: Show the installed Google Fit app icon beside Garmin Connect in the Stats header.
 - [x] **Post-Session Progress**: Show a non-dismissible progress dialog and keep the screen awake while saving, exporting, refreshing Health Connect, and handing off to Garmin Connect.
 - [x] **Live Zone 2 Speed Cap**: Apply Profile max-speed changes immediately to an active Zone 2 controller and every outgoing adjustment.
 - [x] **Remove No-Load Stop**: Removed the unsupported Profile control, persistence, manager API, protocol commands, and tests.
