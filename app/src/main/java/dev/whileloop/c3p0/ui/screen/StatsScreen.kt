@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,11 +51,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.graphics.drawable.toBitmap
 import dev.whileloop.c3p0.data.entity.SessionEntity
 import dev.whileloop.c3p0.data.entity.SessionMetricEntity
 import dev.whileloop.c3p0.data.model.UnitSystem
 import dev.whileloop.c3p0.domain.usecase.DailyStepHistory
 import dev.whileloop.c3p0.health.WeightHistoryRecord
+import dev.whileloop.c3p0.integration.garminConnectIcon
+import dev.whileloop.c3p0.integration.openGarminConnect
 import dev.whileloop.c3p0.ui.permission.PermissionGuidanceBottomSheet
 import dev.whileloop.c3p0.ui.permission.PermissionRequestKind
 import dev.whileloop.c3p0.ui.permission.healthConnectStepHistoryPermissions
@@ -104,6 +109,9 @@ fun StatsScreen(
     val stepHistoryPermissions = remember { healthConnectStepHistoryPermissions() }
     val weightHistoryPermissions = remember { healthConnectWeightHistoryPermissions() }
     val chartSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val garminConnectIcon = remember(context) {
+        context.garminConnectIcon()?.toBitmap()?.asImageBitmap()
+    }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) {
@@ -231,12 +239,27 @@ fun StatsScreen(
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text("History", style = MaterialTheme.typography.headlineMedium)
-            if (selectedSession != null) {
-                TextButton(onClick = { viewModel.clearSelectedSession() }) {
-                    Text("All")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                garminConnectIcon?.let { icon ->
+                    IconButton(
+                        onClick = { context.openGarminConnect() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Image(
+                            bitmap = icon,
+                            contentDescription = "Open Garmin Connect",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+                if (selectedSession != null) {
+                    TextButton(onClick = { viewModel.clearSelectedSession() }) {
+                        Text("All")
+                    }
                 }
             }
         }

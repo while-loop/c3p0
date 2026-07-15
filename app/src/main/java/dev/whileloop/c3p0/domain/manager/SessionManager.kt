@@ -15,6 +15,7 @@ import dev.whileloop.c3p0.domain.algorithm.AutoSpeedController
 import dev.whileloop.c3p0.health.HealthConnectManager
 import dev.whileloop.c3p0.health.HealthConnectSpeedSample
 import dev.whileloop.c3p0.health.HealthConnectHistoryRefresher
+import dev.whileloop.c3p0.integration.openGarminConnect
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -293,15 +294,7 @@ class SessionManager @Inject constructor(
     }
 
     private fun openGarminConnect() {
-        val launchIntent = context.packageManager
-            .getLaunchIntentForPackage(GARMIN_CONNECT_PACKAGE)
-            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (launchIntent == null) {
-            Timber.w("Garmin Connect is not installed or has no launch activity")
-            return
-        }
-        runCatching { context.startActivity(launchIntent) }
-            .onFailure { Timber.e(it, "Unable to open Garmin Connect after session sync") }
+        context.openGarminConnect()
     }
 
     private fun launchSession(recovered: RecoverableSession?) {
@@ -544,7 +537,6 @@ class SessionManager @Inject constructor(
         private const val AUTO_SPEED_MIN_KMH = 1.60934f
         private const val AUTO_SPEED_MAX_KMH = 6.0f
         private const val DEFAULT_ZONE2_MAX_SPEED_KMH = 3.5f * 1.60934f
-        private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"
     }
 }
 
