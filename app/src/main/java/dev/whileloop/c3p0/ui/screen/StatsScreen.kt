@@ -94,7 +94,7 @@ fun StatsScreen(
     var showStepPermissionSheet by remember { mutableStateOf(false) }
     var showWeightPermissionSheet by remember { mutableStateOf(false) }
     var openChartSheet by remember { mutableStateOf<StatsChartSheet?>(null) }
-    var stepVisiblePeriod by remember { mutableStateOf(StepXAxisPeriod.Month) }
+    var stepVisiblePeriod by remember { mutableStateOf(StepXAxisPeriod.Week) }
     var stepGrouping by remember { mutableStateOf(StepChartGrouping.Day) }
     var weightVisibleDays by remember { mutableStateOf(WeightXAxisPeriod.Month.days.toFloat()) }
     var weightGrouping by remember { mutableStateOf(WeightChartGrouping.Day) }

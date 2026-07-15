@@ -72,6 +72,7 @@
 - [x] **Steps Chart Bars**: Match preview and full steps charts with single Health Connect step bars.
 - [x] **Steps Goal Chart State**: Draw matching day/week/month step-goal thresholds on preview and full steps charts, and tint only goal-met bars green.
 - [x] **Steps Chart Range Controls**: Added 1W/1M/3M/6M/1Y range chips plus Day/Week/Month grouping for Health Connect steps.
+- [x] **Steps Chart Default Range**: Open the full Health Connect steps chart on the one-week period by default.
 - [x] **Shared Chart Controls**: Extracted reusable period chips plus grouping dropdown controls for steps, weight, and future chart types.
 - [x] **Steps Chart Latest Bar Visibility**: Made full steps chart startup positioning use the actual viewport width so the latest bar is fully visible.
 - [x] **Steps Chart Goal Guide**: Draw the full-width steps goal guide with a y-axis goal label for grouped day/week/month views.
