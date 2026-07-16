@@ -82,6 +82,7 @@
 - [x] **Steps Chart Goal Guide**: Draw the full-width steps goal guide with a y-axis goal label for grouped day/week/month views.
 - [x] **Scrollable Steps History Window**: Full steps charts keep retained history scrollable while range chips control the visible viewport width, and step history now backfills a one-year cache for the 1Y option.
 - [x] **Steps Chart Local Y Scale**: Full steps charts scale bar height from the current viewport plus one selected period before and after, so old outlier days do not flatten the active view.
+- [x] **Lazy Steps Chart Bars**: Full steps charts lazily compose each visible bar and x-axis label as one item, avoiding eager duplicate composition of the retained history and keeping long daily views responsive.
 - [x] **PNG Launcher Icons**: Removed the adaptive icon override so Android resolves the launcher icon to the supplied density PNGs.
 - [x] **XML Adaptive Launcher Icon**: Converted the robot launcher art into an XML vector foreground over a solid blue adaptive icon background.
 - [x] **Launcher Icon Safe Area**: Scaled the adaptive icon foreground inside the mask-safe zone so Pixel Launcher no longer cuts off the robot.

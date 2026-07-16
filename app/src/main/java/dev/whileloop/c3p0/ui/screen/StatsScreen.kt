@@ -13,7 +13,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -1379,8 +1381,7 @@ private fun HealthConnectStepChart(
     grouping: StepChartGrouping,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
-    val density = LocalDensity.current
+    val listState = rememberLazyListState()
     val barColor = MaterialTheme.colorScheme.primary
     val goalBarColor = goalStepColor()
     val goalLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
@@ -1392,19 +1393,24 @@ private fun HealthConnectStepChart(
         val visibleBarSlots = visiblePeriod.visibleBarSlots(grouping)
         val barSlotWidth = stepChartBarSlotWidth(chartWidth, visibleBarSlots)
         val barWidth = stepChartBarWidth(barSlotWidth)
-        val interBarSpacingWidth = STEP_CHART_BAR_SPACING * rows.size.coerceAtLeast(0).toFloat()
-        val contentWidth = maxOf(
-            chartWidth,
-            (barSlotWidth * rows.size.toFloat()) + interBarSpacingWidth + STEP_CHART_EDGE_PADDING
-        )
-        val visibleRows = visibleStepRows(
-            rows = rows,
-            scrollOffsetPx = scrollState.value.toFloat(),
-            viewportWidthPx = with(density) { chartWidth.toPx() },
-            barSlotWidthPx = with(density) { barSlotWidth.toPx() },
-            barSpacingPx = with(density) { STEP_CHART_BAR_SPACING.toPx() },
-            periodDays = visiblePeriod.days
-        )
+        val visibleItemRange by remember(rows, listState, visibleBarSlots) {
+            derivedStateOf {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                if (visibleItems.isEmpty()) {
+                    (rows.size - visibleBarSlots).coerceAtLeast(0)..rows.lastIndex
+                } else {
+                    visibleItems.first().index..visibleItems.last().index
+                }
+            }
+        }
+        val visibleRows = remember(rows, visibleItemRange, visibleBarSlots) {
+            visibleStepRows(
+                rows = rows,
+                firstVisibleIndex = visibleItemRange.first,
+                lastVisibleIndex = visibleItemRange.last,
+                overscanBarSlots = visibleBarSlots
+            )
+        }
         val maxSteps = maxOf(
             visibleRows.maxOfOrNull { it.steps } ?: 0L,
             visibleRows.maxOfOrNull { it.goalSteps } ?: 0L
@@ -1412,9 +1418,9 @@ private fun HealthConnectStepChart(
         val goalGuideSteps = visibleRows.maxOfOrNull { it.goalSteps } ?: 0L
         val goalFraction = (goalGuideSteps.toFloat() / maxSteps.toFloat()).coerceIn(0f, 1f)
 
-        LaunchedEffect(rows.size, visibleBarSlots, contentWidth, chartWidth) {
+        LaunchedEffect(rows.size, visibleBarSlots, chartWidth) {
             withFrameNanos { }
-            scrollState.scrollTo(scrollState.maxValue)
+            listState.scrollToItem(rows.lastIndex)
         }
 
         Row(
@@ -1443,28 +1449,33 @@ private fun HealthConnectStepChart(
             }
 
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .width(contentWidth)
-                            .fillMaxHeight()
-                            .horizontalScroll(scrollState),
-                        horizontalArrangement = Arrangement.spacedBy(STEP_CHART_BAR_SPACING, Alignment.End),
-                        verticalAlignment = Alignment.Bottom
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyRow(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(end = STEP_CHART_EDGE_PADDING),
+                        horizontalArrangement = Arrangement.spacedBy(
+                            space = STEP_CHART_BAR_SPACING,
+                            alignment = Alignment.End
+                        ),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        rows.forEach { row ->
+                        items(
+                            items = rows,
+                            key = { row -> row.startDate }
+                        ) { row ->
                             val stepFraction = barFraction(row.steps, maxSteps)
                             val goalMet = row.steps >= row.goalSteps
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .width(barSlotWidth)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.BottomCenter
+                                    .fillParentMaxHeight(),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Box(
                                     modifier = Modifier
+                                        .weight(1f)
                                         .width(barWidth)
-                                        .fillMaxHeight()
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(trackColor),
                                     contentAlignment = Alignment.BottomCenter
@@ -1483,32 +1494,26 @@ private fun HealthConnectStepChart(
                                         modifier = Modifier.align(Alignment.BottomCenter)
                                     )
                                 }
+                                Text(
+                                    text = row.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(STEP_CHART_X_AXIS_LABEL_HEIGHT)
+                                        .wrapContentHeight(Alignment.CenterVertically)
+                                )
                             }
                         }
-                        Spacer(modifier = Modifier.width(STEP_CHART_EDGE_PADDING))
                     }
-                    Canvas(modifier = Modifier.matchParentSize()) {
+                    Canvas(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(bottom = STEP_CHART_X_AXIS_LABEL_HEIGHT)
+                    ) {
                         drawStepGoalLine(goalGuideSteps, maxSteps, goalLineColor)
                     }
-                }
-                Row(
-                    modifier = Modifier
-                        .width(contentWidth)
-                        .height(STEP_CHART_X_AXIS_LABEL_HEIGHT)
-                        .horizontalScroll(scrollState),
-                    horizontalArrangement = Arrangement.spacedBy(STEP_CHART_BAR_SPACING, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    rows.forEach { row ->
-                        Text(
-                            text = row.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.width(barSlotWidth)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(STEP_CHART_EDGE_PADDING))
                 }
             }
         }
@@ -1623,29 +1628,18 @@ private fun StepXAxisPeriod.visibleBarSlots(grouping: StepChartGrouping): Int =
 
 private fun visibleStepRows(
     rows: List<StepChartRow>,
-    scrollOffsetPx: Float,
-    viewportWidthPx: Float,
-    barSlotWidthPx: Float,
-    barSpacingPx: Float,
-    periodDays: Int
+    firstVisibleIndex: Int,
+    lastVisibleIndex: Int,
+    overscanBarSlots: Int
 ): List<StepChartRow> {
     if (rows.isEmpty()) return emptyList()
 
-    val rowStridePx = (barSlotWidthPx + barSpacingPx).coerceAtLeast(1f)
-    val firstVisibleIndex = floor(scrollOffsetPx / rowStridePx)
-        .toInt()
-        .coerceIn(0, rows.lastIndex)
-    val lastVisibleIndex = ceil((scrollOffsetPx + viewportWidthPx) / rowStridePx)
-        .toInt()
-        .coerceIn(firstVisibleIndex, rows.lastIndex)
-    val visibleStartDate = rows[firstVisibleIndex].startDate
-    val visibleEndDate = rows[lastVisibleIndex].startDate
-    val scaleStartDate = visibleStartDate.minusDays(periodDays.toLong())
-    val scaleEndDate = visibleEndDate.plusDays(periodDays.toLong())
-
-    return rows
-        .filter { row -> row.startDate in scaleStartDate..scaleEndDate }
-        .ifEmpty { rows.subList(firstVisibleIndex, lastVisibleIndex + 1) }
+    val safeFirstIndex = firstVisibleIndex.coerceIn(0, rows.lastIndex)
+    val safeLastIndex = lastVisibleIndex.coerceIn(safeFirstIndex, rows.lastIndex)
+    val overscan = overscanBarSlots.coerceAtLeast(0)
+    val scaleStartIndex = (safeFirstIndex - overscan).coerceAtLeast(0)
+    val scaleEndIndex = (safeLastIndex + overscan).coerceAtMost(rows.lastIndex)
+    return rows.subList(scaleStartIndex, scaleEndIndex + 1)
 }
 
 private enum class StatsChartSheet {
