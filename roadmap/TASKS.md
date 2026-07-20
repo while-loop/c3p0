@@ -66,6 +66,7 @@
 - [x] **Persistent Pairing**: Logic to save and remember BLE addresses across restarts.
 - [x] **BLE Pairing Polish**: Deduplicated scan results, delayed display until a device has multiple scan events, revealed qualified devices gradually in stable order, and surfaced selected/connected status in pairing and profile screens.
 - [x] **Sticky Bluetooth Error Clear**: Kept the clear-all Bluetooth error action visible while long error stacks scroll.
+- [x] **Bluetooth Debug Mode**: Added a persisted Profile toggle, off by default, that enables Bluetooth diagnostic error cards and clears/suppresses them when disabled.
 - [x] **WalkingPad Profile Reconnect Controls**: Added inline Profile-row controls to connect saved WalkingPad Bluetooth and refresh the KS protocol handshake.
 - [x] **Watch Profile Reconnect Control**: Added an inline Profile-row Bluetooth reconnect action for the saved watch.
 - [x] **Unit Settings**: Added imperial/metric settings, defaulted to imperial, and synchronized WalkingPad units from app storage on setting changes and session boundaries.

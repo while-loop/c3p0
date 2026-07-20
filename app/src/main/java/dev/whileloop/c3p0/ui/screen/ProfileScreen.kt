@@ -47,6 +47,7 @@ fun ProfileScreen(
     val zone2MaxSpeedKmh by viewModel.zone2MaxSpeedKmh.collectAsState()
     val skipInactiveDeviceWarning by viewModel.skipInactiveDeviceWarning.collectAsState()
     val keepScreenOnDuringActiveSession by viewModel.keepScreenOnDuringActiveSession.collectAsState()
+    val bluetoothDebugModeEnabled by viewModel.bluetoothDebugModeEnabled.collectAsState()
     val treadmillAddress by viewModel.treadmillAddress.collectAsState()
     val watchAddress by viewModel.watchAddress.collectAsState()
     val treadmillConnectionState by viewModel.treadmillConnectionState.collectAsState()
@@ -330,6 +331,20 @@ fun ProfileScreen(
             valueRange = minDisplaySpeed(unitSystem)..maxDisplaySpeed(unitSystem),
             steps = speedSliderSteps(unitSystem),
             modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text("Diagnostics", style = MaterialTheme.typography.titleMedium)
+        ListItem(
+            headlineContent = { Text("Bluetooth debug mode") },
+            supportingContent = { Text("Show Bluetooth error popups for troubleshooting") },
+            trailingContent = {
+                Switch(
+                    checked = bluetoothDebugModeEnabled,
+                    onCheckedChange = viewModel::updateBluetoothDebugModeEnabled
+                )
+            }
         )
 
         Spacer(modifier = Modifier.height(24.dp))

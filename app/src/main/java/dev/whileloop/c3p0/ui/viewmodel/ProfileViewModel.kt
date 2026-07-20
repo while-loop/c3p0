@@ -71,6 +71,12 @@ class ProfileViewModel @Inject constructor(
         false
     )
 
+    val bluetoothDebugModeEnabled = settingsRepository.bluetoothDebugModeEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
+    )
+
     val isGoogleDriveSyncEnabled = settingsRepository.googleDriveSyncEnabled.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -191,6 +197,12 @@ class ProfileViewModel @Inject constructor(
     fun updateKeepScreenOnDuringActiveSession(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.saveKeepScreenOnDuringActiveSession(enabled)
+        }
+    }
+
+    fun updateBluetoothDebugModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveBluetoothDebugModeEnabled(enabled)
         }
     }
 

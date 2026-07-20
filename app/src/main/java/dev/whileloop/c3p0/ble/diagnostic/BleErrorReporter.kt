@@ -13,15 +13,21 @@ class BleErrorReporter @Inject constructor() {
     private val _errors = MutableStateFlow<List<BleErrorMessage>>(emptyList())
     val errors: StateFlow<List<BleErrorMessage>> = _errors.asStateFlow()
     private val nextId = AtomicLong(1L)
+    @Volatile
+    private var enabled = false
 
     fun report(source: String, message: String, detail: String? = null) {
+        if (!enabled) return
+
         val error = BleErrorMessage(
             id = nextId.getAndIncrement(),
             source = source,
             message = message,
             detail = detail
         )
-        _errors.update { current -> (current + error).takeLast(MAX_ERRORS) }
+        _errors.update { current ->
+            if (enabled) (current + error).takeLast(MAX_ERRORS) else current
+        }
     }
 
     fun dismiss(id: Long) {
@@ -30,6 +36,13 @@ class BleErrorReporter @Inject constructor() {
 
     fun clear() {
         _errors.value = emptyList()
+    }
+
+    fun setEnabled(enabled: Boolean) {
+        this.enabled = enabled
+        if (!enabled) {
+            clear()
+        }
     }
 
     private companion object {

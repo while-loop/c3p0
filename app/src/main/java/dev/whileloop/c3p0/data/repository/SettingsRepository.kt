@@ -37,6 +37,7 @@ class SettingsRepository @Inject constructor(
         val SESSION_START_MODE = stringPreferencesKey("session_start_mode")
         val ZONE2_MAX_SPEED_KMH = doublePreferencesKey("zone2_max_speed_kmh")
         val KEEP_SCREEN_ON_DURING_ACTIVE_SESSION = booleanPreferencesKey("keep_screen_on_during_active_session")
+        val BLUETOOTH_DEBUG_MODE_ENABLED = booleanPreferencesKey("bluetooth_debug_mode_enabled")
     }
 
     val treadmillAddress: Flow<String?> = context.dataStore.data.map { it[Keys.TREADMILL_ADDRESS] }
@@ -66,6 +67,9 @@ class SettingsRepository @Inject constructor(
     }
     val keepScreenOnDuringActiveSession: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.KEEP_SCREEN_ON_DURING_ACTIVE_SESSION] ?: false
+    }
+    val bluetoothDebugModeEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.BLUETOOTH_DEBUG_MODE_ENABLED] ?: false
     }
 
     suspend fun saveTreadmillAddress(address: String) {
@@ -127,6 +131,11 @@ class SettingsRepository @Inject constructor(
 
     suspend fun saveKeepScreenOnDuringActiveSession(enabled: Boolean) {
         context.dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_ACTIVE_SESSION] = enabled }
+        requestBackupIfEnabled()
+    }
+
+    suspend fun saveBluetoothDebugModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BLUETOOTH_DEBUG_MODE_ENABLED] = enabled }
         requestBackupIfEnabled()
     }
 
