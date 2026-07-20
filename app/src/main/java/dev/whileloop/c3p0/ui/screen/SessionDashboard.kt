@@ -157,6 +157,7 @@ fun SessionDashboard(
     BackHandler(enabled = isSessionFinalizing) {}
 
     LaunchedEffect(Unit) {
+        viewModel.refreshStepsToGoal()
         while (true) {
             currentElapsedMillis = SystemClock.elapsedRealtime()
             delay(1000)
