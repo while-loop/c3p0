@@ -120,6 +120,7 @@
 - [x] **Health Connect Active Calorie And Speed Export**: Add active-calories and speed write permissions, export WalkingPad-reported kcal as active calories, and include speed samples with completed Health Connect walking sessions.
 - [x] **Health Connect Permissions**: Scoped runtime checks by operation, refreshed permission state on profile resume, and opened Health Connect settings when the user wants to revoke access.
 - [x] **Session Step Goal Refresh**: Refresh today's Health Connect steps whenever the Session dashboard is shown so returning from Stats updates Steps to goal.
+- [x] **Step Goal Streak**: Show the current consecutive daily-goal streak on the steps preview without treating an unfinished current day as a missed day.
 - [x] **Cloud Sync**: Configured Android Auto Backup rules for Google Drive, including Room DB files and DataStore preferences.
 - [x] **Backup Requests**: Persisted the backup toggle and request backups on app cold start, backup toggle enable, persisted settings changes, active session progress, and session completion.
 - [x] **Backup Throttling**: Avoid per-sample DataStore reads when a throttled backup request is too soon, while still allowing the first request after app start.

@@ -343,6 +343,7 @@ private fun StepHistoryPreviewCard(
 ) {
     val previewRows = remember(rows, stepGoal) { rows.toStepPreviewRows(stepGoal) }
     val latestSteps = previewRows.lastOrNull()?.steps
+    val goalStreak = remember(rows, stepGoal) { calculateStepGoalStreak(rows, stepGoal) }
 
     Card(
         modifier = modifier.clickable(onClick = onClick)
@@ -372,9 +373,38 @@ private fun StepHistoryPreviewCard(
                 )
             }
             HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
-            ChartPreviewValueRow(
-                value = latestSteps?.let { compactSteps(it) } ?: "--",
-                unit = "steps"
+            StepPreviewValueRow(
+                latestSteps = latestSteps,
+                goalStreak = goalStreak
+            )
+        }
+    }
+}
+
+@Composable
+private fun StepPreviewValueRow(
+    latestSteps: Long?,
+    goalStreak: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        ChartPreviewValueRow(
+            value = latestSteps?.let { compactSteps(it) } ?: "--",
+            unit = "steps"
+        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                goalStreak.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "day streak",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -1708,6 +1738,29 @@ private fun List<DailyStepHistory>.toStepPreviewRows(stepGoal: Int): List<StepCh
                 goalSteps = dailyGoal
             )
         }
+}
+
+internal fun calculateStepGoalStreak(
+    rows: List<DailyStepHistory>,
+    stepGoal: Int,
+    today: LocalDate = LocalDate.now(ZoneId.systemDefault())
+): Int {
+    if (stepGoal <= 0) return 0
+
+    val stepsByDate = rows
+        .filter { !it.date.isAfter(today) }
+        .associate { it.date to it.steps }
+    var date = if ((stepsByDate[today] ?: 0L) >= stepGoal.toLong()) {
+        today
+    } else {
+        today.minusDays(1)
+    }
+    var streak = 0
+    while ((stepsByDate[date] ?: 0L) >= stepGoal.toLong()) {
+        streak++
+        date = date.minusDays(1)
+    }
+    return streak
 }
 
 private fun List<StepChartRow>.dropLeadingEmptyRows(): List<StepChartRow> =
