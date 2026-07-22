@@ -395,18 +395,10 @@ private fun StepPreviewValueRow(
             value = latestSteps?.let { compactSteps(it) } ?: "--",
             unit = "steps"
         )
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                goalStreak.toString(),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                "day streak",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        ChartPreviewValueRow(
+            value = goalStreak.toString(),
+            unit = "d"
+        )
     }
 }
 
